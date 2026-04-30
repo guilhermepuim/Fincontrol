@@ -16,7 +16,7 @@ var OK = "#00A000";
 var ER = "#FD0000";
 var WN = "#F46B08";
 
-var DS = 0;
+var DS = 14000;
 var DP = { essenciais: 50, investimentos: 25, desejos: 25 };
 var GR = [
   { id: "essenciais", label: "Essenciais", color: "#0D9488" },
@@ -227,6 +227,79 @@ function ChartTip(props) {
         <span style={{ fontWeight: 700, color: BD }}>{"Saldo"}</span>
         <span style={{ fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</span>
       </div>
+
+      {/* ══ FLOATING AI CHAT ══ */}
+      <style>{`
+        @keyframes fadeInTab { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #1B72B840; } 50% { box-shadow: 0 0 0 8px #1B72B820; } }
+        .fc-tab-content { animation: fadeInTab 0.22s ease; }
+        .fc-chat-msg { animation: slideUp 0.18s ease; }
+      `}</style>
+
+      {/* Chat Panel */}
+      {chatOpen && (
+        <div style={{ position: "fixed", bottom: 88, right: 16, width: 320, maxHeight: 420, background: "#fff", borderRadius: 16, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BR, display: "flex", flexDirection: "column", zIndex: 1000, animation: "slideUp 0.2s ease" }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid " + BR, display: "flex", justifyContent: "space-between", alignItems: "center", background: BL, borderRadius: "16px 16px 0 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18 }}>{"✨"}</span>
+              <div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "'Montserrat',sans-serif" }}>{"Assistente"}</div>
+                <div style={{ color: "#ffffff90", fontSize: 10 }}>{"Digite um gasto ou crédito"}</div>
+              </div>
+            </div>
+            <span onClick={function() { sChatOpen(false); }} style={{ color: "#ffffff80", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>{"×"}</span>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, minHeight: 120, maxHeight: 260 }}>
+            {chatMsgs.length === 0 && (
+              <div style={{ textAlign: "center", padding: "16px 8px" }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>{"💬"}</div>
+                <div style={{ fontSize: 12, color: TM, lineHeight: 1.5 }}>{"Diga o que gastou ou recebeu em linguagem natural."}</div>
+                <div style={{ fontSize: 11, color: BR, marginTop: 8, fontStyle: "italic" }}>{"Ex: gastei 150 no mercado pix hoje"}</div>
+              </div>
+            )}
+            {chatMsgs.map(function(m, i) {
+              var isUser = m.role === "user";
+              return (
+                <div key={i} className="fc-chat-msg" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                  <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: isUser ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: isUser ? BL : "#F5F5F5", color: isUser ? "#fff" : TX, fontSize: 12, lineHeight: 1.5, fontWeight: isUser ? 500 : 400 }}>
+                    {m.text}
+                  </div>
+                </div>
+              );
+            })}
+            {chatLd && (
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <div style={{ padding: "8px 14px", borderRadius: "12px 12px 12px 2px", background: "#F5F5F5", fontSize: 12, color: TM }}>
+                  <span style={{ letterSpacing: 2 }}>{"···"}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ padding: "10px 12px", borderTop: "1px solid " + BR, display: "flex", gap: 6 }}>
+            <input
+              style={{ ...S.inp, flex: 1, fontSize: 12, borderRadius: 20, padding: "8px 14px" }}
+              placeholder="Ex: gastei 80 no ifood pix..."
+              value={chatInput}
+              onChange={function(e) { sChatIn(e.target.value); }}
+              onKeyDown={function(e) { if (e.key === "Enter") sendChat(); }}
+              disabled={chatLd}
+            />
+            <button onClick={sendChat} disabled={chatLd}
+              style={{ background: chatLd ? BR : BL, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: chatLd ? "default" : "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {"↑"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Button */}
+      <button onClick={function() { sChatOpen(!chatOpen); }}
+        style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, animation: "pulse 2s infinite", transition: "background 0.2s" }}>
+        {chatOpen ? "×" : "✨"}
+      </button>
+
     </div>
   );
 }
@@ -299,6 +372,11 @@ export default function App() {
   var [simAporte, sSimA] = useState("1000");
   var [simTaxa, sSimT] = useState("1");
   var [simTempo, sSimTp] = useState("60");
+  var [chatOpen, sChatOpen] = useState(false);
+  var [chatMsgs, sChatMsgs] = useState([]);
+  var [chatInput, sChatIn] = useState("");
+  var [chatLd, sChatLd] = useState(false);
+  var chatEndRef = useRef(null);
 
   var mK = tk(yr, mo);
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
@@ -593,6 +671,53 @@ export default function App() {
     sGf({ name: "", target: "", deadline: "", saved: "0" }); sSGl(false);
   };
 
+  var sendChat = function() {
+    var msg = chatInput.trim();
+    if (!msg || chatLd) return;
+    var userMsg = { role: "user", text: msg };
+    var newMsgs = chatMsgs.concat([userMsg]);
+    sChatMsgs(newMsgs);
+    sChatIn("");
+    sChatLd(true);
+    var catList = cats.map(function(c) { return c.id + " (" + c.name + ", grupo:" + c.group + ")"; }).join(", ");
+    var payList = PAYS.join(", ");
+    var today = new Date().toISOString().slice(0, 10);
+    var systemPrompt = "Você é um assistente financeiro. O usuário vai descrever um gasto ou crédito em linguagem natural. Retorne APENAS um JSON válido (sem markdown, sem explicação). Formatos possíveis:\n\nPara gasto: {\"type\":\"tx\",\"desc\":\"descrição\",\"amount\":123.45,\"cat\":\"id_categoria\",\"payment\":\"forma pagamento\",\"date\":\"YYYY-MM-DD\"}\n\nPara crédito: {\"type\":\"cr\",\"desc\":\"descrição\",\"amount\":123.45,\"crType\":\"Bônus\"}\n\nCategorias disponíveis: " + catList + "\n\nFormas de pagamento: " + payList + "\n\nData de hoje: " + today + ". Se o usuário não especificar data, use hoje. Se não especificar pagamento, use PIX para valores pequenos e Cartão Nubank para maiores. Escolha a categoria mais adequada ao contexto.";
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: "user", content: msg }]
+      })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      var raw = (data.content && data.content[0] && data.content[0].text) || "{}";
+      var parsed = null;
+      try { parsed = JSON.parse(raw.replace(/```json|```/g, "").trim()); } catch(e) {}
+      if (!parsed || !parsed.type) {
+        sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Não entendi. Tente: 'Gastei 150 no mercado pix hoje' ou 'Recebi bônus de 3k'." }]); });
+        sChatLd(false); return;
+      }
+      if (parsed.type === "tx") {
+        var cat2 = cats.find(function(c) { return c.id === parsed.cat; });
+        var newTx = { id: uid(), desc: parsed.desc, amount: parsed.amount, cat: parsed.cat, payment: parsed.payment || "PIX", splits: [], hasSplit: false, date: parsed.date ? new Date(parsed.date).toISOString() : new Date().toISOString(), received: false, reimbursed: false, note: "", src: "manual" };
+        saveMd({ ...md, tx: (md.tx || []).concat([newTx]) });
+        var catName = cat2 ? cat2.icon + " " + cat2.name : parsed.cat;
+        sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "✅ Gasto lançado! " + parsed.desc + " — " + fmt(parsed.amount) + " em " + catName + " (" + (parsed.payment || "PIX") + ")" }]); });
+      } else if (parsed.type === "cr") {
+        var newCr = { id: uid(), desc: parsed.desc, amount: parsed.amount, type: parsed.crType || "Bônus" };
+        saveMd({ ...md, cr: (md.cr || []).concat([newCr]) });
+        sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "✅ Crédito lançado! " + parsed.desc + " — " + fmt(parsed.amount) }]); });
+      }
+      sChatLd(false);
+    }).catch(function() {
+      sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Erro ao processar. Tente novamente." }]); });
+      sChatLd(false);
+    });
+  };
+
   var updGS = function(id, v) {
     var updated = goals.map(function(g) { return g.id === id ? { ...g, saved: v } : g; });
     saveCfg({ ...cfg, goals: updated });
@@ -782,7 +907,7 @@ export default function App() {
         })}
       </div>
 
-      <div style={{ padding: "14px 16px", maxWidth: 720, margin: "0 auto" }}>
+      <div key={tab} className="fc-tab-content" style={{ padding: "14px 16px", maxWidth: 720, margin: "0 auto" }}>
 
         {/* ═══ DASHBOARD ═══ */}
         {tab === "dash" && (
@@ -1253,7 +1378,7 @@ export default function App() {
                         onMouseEnter={function() { sHM(idx); }}
                         onMouseLeave={function() { sHM(null); }}>
                         <div style={{ position: "absolute", bottom: cH, left: 0, right: 0, height: 2, background: "#2563EB", borderRadius: 1, zIndex: 2 }} />
-                        <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", opacity: d.real ? 1 : 0.35, outline: isH ? "2px solid " + BL : "none", outlineOffset: 1 }}>
+                        <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", opacity: d.real ? 1 : 0.35, outline: isH ? "2px solid " + BL : "none", outlineOffset: 1, transformOrigin: "bottom", animation: "growBar 0.6s ease " + String(idx * 0.04) + "s both" }}>
                           <div style={{ height: eH, background: "#0D9488" }} />
                           <div style={{ height: iH, background: "#1A2B5F" }} />
                           <div style={{ height: dH, background: "#D97706" }} />
