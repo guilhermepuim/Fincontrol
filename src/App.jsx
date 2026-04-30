@@ -251,75 +251,6 @@ function LoginScreen({ onLogin }) {
         </button>
         <p style={{ color: "#BBBBBB", fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
       </div>
-
-      {/* ══ FLOATING AI CHAT ══ */}
-      <style>{`
-        @keyframes fadeInTab { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #1B72B840; } 50% { box-shadow: 0 0 0 8px #1B72B820; } }
-        .fc-tab-content { animation: fadeInTab 0.22s ease; }
-        .fc-chat-msg { animation: slideUp 0.18s ease; }
-      `}</style>
-
-      {chatOpen && (
-        <div style={{ position: "fixed", bottom: 88, right: 16, width: 320, maxHeight: 420, background: "#fff", borderRadius: 16, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BR, display: "flex", flexDirection: "column", zIndex: 1000, animation: "slideUp 0.2s ease" }}>
-          <div style={{ padding: "14px 16px", borderBottom: "1px solid " + BR, display: "flex", justifyContent: "space-between", alignItems: "center", background: BL, borderRadius: "16px 16px 0 0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>{"✨"}</span>
-              <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "'Montserrat',sans-serif" }}>{"Assistente"}</div>
-                <div style={{ color: "#ffffff90", fontSize: 10 }}>{"Digite um gasto ou crédito"}</div>
-              </div>
-            </div>
-            <span onClick={function() { sChatOpen(false); }} style={{ color: "#ffffff80", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>{"×"}</span>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, minHeight: 120, maxHeight: 260 }}>
-            {chatMsgs.length === 0 && (
-              <div style={{ textAlign: "center", padding: "16px 8px" }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>{"💬"}</div>
-                <div style={{ fontSize: 12, color: TM, lineHeight: 1.5 }}>{"Diga o que gastou ou recebeu em linguagem natural."}</div>
-                <div style={{ fontSize: 11, color: BR, marginTop: 8, fontStyle: "italic" }}>{"Ex: gastei 150 no mercado pix hoje"}</div>
-              </div>
-            )}
-            {chatMsgs.map(function(m, i) {
-              var isUser = m.role === "user";
-              return (
-                <div key={i} className="fc-chat-msg" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
-                  <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: isUser ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: isUser ? BL : "#F5F5F5", color: isUser ? "#fff" : TX, fontSize: 12, lineHeight: 1.5, fontWeight: isUser ? 500 : 400 }}>
-                    {m.text}
-                  </div>
-                </div>
-              );
-            })}
-            {chatLd && (
-              <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                <div style={{ padding: "8px 14px", borderRadius: "12px 12px 12px 2px", background: "#F5F5F5", fontSize: 12, color: TM }}>
-                  <span style={{ letterSpacing: 2 }}>{"···"}</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <div style={{ padding: "10px 12px", borderTop: "1px solid " + BR, display: "flex", gap: 6 }}>
-            <input style={{ ...S.inp, flex: 1, fontSize: 12, borderRadius: 20, padding: "8px 14px" }}
-              placeholder="Ex: gastei 80 no ifood pix..."
-              value={chatInput}
-              onChange={function(e) { sChatIn(e.target.value); }}
-              onKeyDown={function(e) { if (e.key === "Enter") sendChat(); }}
-              disabled={chatLd} />
-            <button onClick={sendChat} disabled={chatLd}
-              style={{ background: chatLd ? BR : BL, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: chatLd ? "default" : "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {"↑"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <button onClick={function() { sChatOpen(!chatOpen); }}
-        style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, animation: "pulse 2s infinite", transition: "background 0.2s" }}>
-        {chatOpen ? "×" : "✨"}
-      </button>
-
     </div>
   );
 }
@@ -965,11 +896,22 @@ export default function App() {
                     </div>
                   </div>
                   <PB value={s} max={b} color={g.color} noWarn={isInv} />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                    <span style={S.cap}>{pct(r)}</span>
-                    <span style={{ ...S.cap, color: r > 1 ? (isInv ? OK : ER) : TM }}>
-                      {r > 1 ? (isInv ? "Acima da meta! +" + fmt(s - b) : "Estourou " + fmt(s - b)) : "Restam " + fmt(b - s)}
-                    </span>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: r > 1 ? (isInv ? OK : ER) : T3 }}>{pct(r)}</span>
+                      <span style={S.cap}>{"utilizado"}</span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      {r > 1 ? (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: isInv ? OK : ER }}>
+                          {(isInv ? "✅ +" : "⚠️ +") + fmt(s - b) + " " + (isInv ? "acima da meta" : "estourado")}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 600, color: TM }}>
+                          {"disponível " + fmt(b - s) + " (" + pct(1 - r) + ")"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1131,23 +1073,7 @@ export default function App() {
                 <div><div style={S.cap}>{"Saldo atual"}</div><div style={{ fontSize: 22, fontWeight: 700, color: "#1A2B5F" }}>{fmt(nwBalance)}</div></div>
                 <div><div style={S.cap}>{"Investido este mês"}</div><div style={{ fontSize: 22, fontWeight: 700, color: BL }}>{fmt(invSp)}</div></div>
               </div>
-              <div style={S.lbl}>{"PROJEÇÃO 12 MESES"}</div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 80, marginTop: 6 }}>
-                {nwProjection.map(function(val, idx) {
-                  var h = nwMax > 0 ? (val / nwMax) * 70 : 0;
-                  var isCur = idx === mo;
-                  return (
-                    <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{ width: "100%", height: h, background: isCur ? BD : BL + "50", borderRadius: "2px 2px 0 0" }} />
-                      <div style={{ fontSize: 7, color: isCur ? BD : "#BBBBBB", marginTop: 2, fontWeight: isCur ? 700 : 400 }}>{MA[idx]}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, ...S.cap }}>
-                <span>{"Agora: " + fmt(nwBalance)}</span>
-                <span style={{ fontWeight: 700, color: BD }}>{"Em 12m: " + fmt(nwProjection[11])}</span>
-              </div>
+
               {nwHistory.length > 1 && (
                 <div style={{ marginTop: 8 }}>
                   <div style={S.lbl}>{"HISTÓRICO"}</div>
@@ -1876,6 +1802,75 @@ export default function App() {
         )}
 
       </div>
+
+      {/* ══ FLOATING AI CHAT ══ */}
+      <style>{`
+        @keyframes fadeInTab { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #1B72B840; } 50% { box-shadow: 0 0 0 8px #1B72B820; } }
+        .fc-tab-content { animation: fadeInTab 0.22s ease; }
+        .fc-chat-msg { animation: slideUp 0.18s ease; }
+      `}</style>
+
+      {chatOpen && (
+        <div style={{ position: "fixed", bottom: 88, right: 16, width: 320, maxHeight: 420, background: "#fff", borderRadius: 16, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BR, display: "flex", flexDirection: "column", zIndex: 1000, animation: "slideUp 0.2s ease" }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid " + BR, display: "flex", justifyContent: "space-between", alignItems: "center", background: BL, borderRadius: "16px 16px 0 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18 }}>{"✨"}</span>
+              <div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "'Montserrat',sans-serif" }}>{"Assistente FinControl"}</div>
+                <div style={{ color: "#ffffff90", fontSize: 10 }}>{"Diga o que gastou ou recebeu"}</div>
+              </div>
+            </div>
+            <span onClick={function() { sChatOpen(false); }} style={{ color: "#ffffff80", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>{"×"}</span>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, minHeight: 120, maxHeight: 260 }}>
+            {chatMsgs.length === 0 && (
+              <div style={{ textAlign: "center", padding: "20px 8px" }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>{"💬"}</div>
+                <div style={{ fontSize: 12, color: T2, lineHeight: 1.6, fontWeight: 500 }}>{"Diga o que gastou ou recebeu em linguagem natural."}</div>
+                <div style={{ fontSize: 11, color: TM, marginTop: 10, fontStyle: "italic" }}>{"Ex: gastei 150 no mercado pix hoje"}</div>
+              </div>
+            )}
+            {chatMsgs.map(function(m, ci) {
+              var isUser = m.role === "user";
+              return (
+                <div key={ci} className="fc-chat-msg" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                  <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: isUser ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: isUser ? BL : "#F0F4F8", color: isUser ? "#fff" : TX, fontSize: 12, lineHeight: 1.5 }}>
+                    {m.text}
+                  </div>
+                </div>
+              );
+            })}
+            {chatLd && (
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <div style={{ padding: "8px 14px", borderRadius: "12px 12px 12px 2px", background: "#F0F4F8", fontSize: 14, color: BL }}>
+                  <span style={{ letterSpacing: 3 }}>{"···"}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ padding: "10px 12px", borderTop: "1px solid " + BR, display: "flex", gap: 6 }}>
+            <input style={{ ...S.inp, flex: 1, fontSize: 12, borderRadius: 20, padding: "8px 14px" }}
+              placeholder="Ex: gastei 80 no ifood pix..."
+              value={chatInput}
+              onChange={function(e) { sChatIn(e.target.value); }}
+              onKeyDown={function(e) { if (e.key === "Enter") sendChat(); }}
+              disabled={chatLd} />
+            <button onClick={sendChat} disabled={chatLd}
+              style={{ background: chatLd ? BR : BL, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: chatLd ? "default" : "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {"↑"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button onClick={function() { sChatOpen(!chatOpen); }}
+        style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, transition: "background 0.2s", animation: chatOpen ? "none" : "pulse 2s infinite" }}>
+        {chatOpen ? "×" : "✨"}
+      </button>
+
     </div>
   );
 }
