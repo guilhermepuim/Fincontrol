@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { db, auth, googleProvider } from "./firebase";
 
 /* ══ SUNO BRANDBOOK AZUL ══ */
 var BL = "#1B72B8";
@@ -65,15 +66,18 @@ function myP(tx) { if (tx.reimbursed) return 0; return tx.amount - spt(tx); }
 function pi(d) { var m = d.match(/(\d+)\s*\/\s*(\d+)/); return m ? { c: +m[1], t: +m[2] } : null; }
 function nd(d) { return d.toLowerCase().replace(/\s*\d+\s*\/\s*\d+\s*/g, "").replace(/parcela\s*/gi, "").trim(); }
 
+var _uid = null;
 async function ld(k, fb) {
   try {
-    var snap = await getDoc(doc(db, "userdata", k));
+    var key = (_uid ? _uid + "__" : "") + k;
+    var snap = await getDoc(doc(db, "userdata", key));
     return snap.exists() ? JSON.parse(snap.data().value) : fb;
   } catch (e) { return fb; }
 }
 async function sv(k, d) {
   try {
-    await setDoc(doc(db, "userdata", k), { value: JSON.stringify(d) });
+    var key = (_uid ? _uid + "__" : "") + k;
+    await setDoc(doc(db, "userdata", key), { value: JSON.stringify(d) });
   } catch (e) { console.error(e); }
 }
 
@@ -228,8 +232,31 @@ function ChartTip(props) {
 }
 
 /* ══ MAIN APP ══ */
+
+/* ══ LOGIN SCREEN ══ */
+function LoginScreen({ onLogin }) {
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#FAFAFA", fontFamily: "'Inter',sans-serif" }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 40, border: "1px solid #DDDDDD", textAlign: "center", maxWidth: 320, width: "90%" }}>
+        <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+          <span style={{ color: "#212121" }}>{"Fin"}</span>
+          <span style={{ color: "#1B72B8" }}>{"Control"}</span>
+        </div>
+        <p style={{ color: "#666666", fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
+        <button onClick={onLogin}
+          style={{ background: "#1B72B8", border: "none", borderRadius: 8, padding: "13px 24px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center" }}>
+          <span style={{ fontSize: 18 }}>{"G"}</span>
+          {"Entrar com Google"}
+        </button>
+        <p style={{ color: "#BBBBBB", fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   var now = new Date();
+  var [user, sUser] = useState(undefined);
   var [yr, sYr] = useState(now.getFullYear());
   var [mo, sMo] = useState(now.getMonth());
   var [tab, sTab] = useState("dash");
@@ -277,6 +304,14 @@ export default function App() {
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
 
   useEffect(function() {
+    var unsub = onAuthStateChanged(auth, function(u) {
+      _uid = u ? u.uid : null;
+      sUser(u || null);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(function() {
     var active = true;
     (async function() {
       sLd(true);
@@ -308,6 +343,12 @@ export default function App() {
   var saveCfg = useCallback(function(c) { sCfg(c); sv("fc2-cfg", c); }, []);
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
 
+  if (user === undefined) {
+    return <div style={{ background: "#fff", color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
+  }
+  if (user === null) {
+    return <LoginScreen onLogin={function() { signInWithPopup(auth, googleProvider); }} />;
+  }
   if (loading || !cfg) {
     return <div style={{ background: "#fff", color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
   }
@@ -725,6 +766,7 @@ export default function App() {
           <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: BD, minWidth: 130, textAlign: "center" }}>{MS[mo] + " " + String(yr)}</span>
           <button style={{ background: "#F0F0F0", border: "none", borderRadius: 6, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goNext}>{"▶"}</button>
         </div>
+        <button onClick={function() { signOut(auth); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: TM, padding: "4px 6px" }} title="Sair">{"Sair"}</button>
       </div>
 
       {/* Tabs */}
