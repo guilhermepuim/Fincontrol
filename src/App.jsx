@@ -228,6 +228,30 @@ function ChartTip(props) {
         <span style={{ fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</span>
       </div>
 
+    </div>
+  );
+}
+
+/* ══ MAIN APP ══ */
+
+/* ══ LOGIN SCREEN ══ */
+function LoginScreen({ onLogin }) {
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#FAFAFA", fontFamily: "'Inter',sans-serif" }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 40, border: "1px solid #DDDDDD", textAlign: "center", maxWidth: 320, width: "90%" }}>
+        <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+          <span style={{ color: "#212121" }}>{"Fin"}</span>
+          <span style={{ color: "#1B72B8" }}>{"Control"}</span>
+        </div>
+        <p style={{ color: "#666666", fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
+        <button onClick={onLogin}
+          style={{ background: "#1B72B8", border: "none", borderRadius: 8, padding: "13px 24px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center" }}>
+          <span style={{ fontSize: 18 }}>{"G"}</span>
+          {"Entrar com Google"}
+        </button>
+        <p style={{ color: "#BBBBBB", fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
+      </div>
+
       {/* ══ FLOATING AI CHAT ══ */}
       <style>{`
         @keyframes fadeInTab { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -238,7 +262,6 @@ function ChartTip(props) {
         .fc-chat-msg { animation: slideUp 0.18s ease; }
       `}</style>
 
-      {/* Chat Panel */}
       {chatOpen && (
         <div style={{ position: "fixed", bottom: 88, right: 16, width: 320, maxHeight: 420, background: "#fff", borderRadius: 16, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", border: "1px solid " + BR, display: "flex", flexDirection: "column", zIndex: 1000, animation: "slideUp 0.2s ease" }}>
           <div style={{ padding: "14px 16px", borderBottom: "1px solid " + BR, display: "flex", justifyContent: "space-between", alignItems: "center", background: BL, borderRadius: "16px 16px 0 0" }}>
@@ -278,14 +301,12 @@ function ChartTip(props) {
             )}
           </div>
           <div style={{ padding: "10px 12px", borderTop: "1px solid " + BR, display: "flex", gap: 6 }}>
-            <input
-              style={{ ...S.inp, flex: 1, fontSize: 12, borderRadius: 20, padding: "8px 14px" }}
+            <input style={{ ...S.inp, flex: 1, fontSize: 12, borderRadius: 20, padding: "8px 14px" }}
               placeholder="Ex: gastei 80 no ifood pix..."
               value={chatInput}
               onChange={function(e) { sChatIn(e.target.value); }}
               onKeyDown={function(e) { if (e.key === "Enter") sendChat(); }}
-              disabled={chatLd}
-            />
+              disabled={chatLd} />
             <button onClick={sendChat} disabled={chatLd}
               style={{ background: chatLd ? BR : BL, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: chatLd ? "default" : "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {"↑"}
@@ -294,35 +315,11 @@ function ChartTip(props) {
         </div>
       )}
 
-      {/* Floating Button */}
       <button onClick={function() { sChatOpen(!chatOpen); }}
         style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, animation: "pulse 2s infinite", transition: "background 0.2s" }}>
         {chatOpen ? "×" : "✨"}
       </button>
 
-    </div>
-  );
-}
-
-/* ══ MAIN APP ══ */
-
-/* ══ LOGIN SCREEN ══ */
-function LoginScreen({ onLogin }) {
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#FAFAFA", fontFamily: "'Inter',sans-serif" }}>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 40, border: "1px solid #DDDDDD", textAlign: "center", maxWidth: 320, width: "90%" }}>
-        <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
-          <span style={{ color: "#212121" }}>{"Fin"}</span>
-          <span style={{ color: "#1B72B8" }}>{"Control"}</span>
-        </div>
-        <p style={{ color: "#666666", fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
-        <button onClick={onLogin}
-          style={{ background: "#1B72B8", border: "none", borderRadius: 8, padding: "13px 24px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center" }}>
-          <span style={{ fontSize: 18 }}>{"G"}</span>
-          {"Entrar com Google"}
-        </button>
-        <p style={{ color: "#BBBBBB", fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
-      </div>
     </div>
   );
 }
