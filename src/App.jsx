@@ -16,7 +16,7 @@ var OK = "#00A000";
 var ER = "#FD0000";
 var WN = "#F46B08";
 
-var DS = 14000;
+var DS = 0;
 var DP = { essenciais: 50, investimentos: 25, desejos: 25 };
 var GR = [
   { id: "essenciais", label: "Essenciais", color: "#0D9488" },
