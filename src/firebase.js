@@ -4,7 +4,7 @@ import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } 
  
 const firebaseConfig = {
   apiKey: "AIzaSyBZTu_ynlaQw70wR4KWVH4D8BTbt0gSNrk",
-  authDomain: "fincontrol-4f015.firebaseapp.com",
+  authDomain: "fincontrol-one-theta.vercel.app",
   projectId: "fincontrol-4f015",
   storageBucket: "fincontrol-4f015.firebasestorage.app",
   messagingSenderId: "995369986592",
@@ -15,7 +15,4 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
- 
-// Set persistence once at init — survives page reloads on mobile
 setPersistence(auth, browserLocalPersistence).catch(() => {});
- 
