@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
 
 /* ══ SUNO BRANDBOOK AZUL ══ */
@@ -310,6 +310,8 @@ export default function App() {
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
 
   useEffect(function() {
+    // Handle redirect result from mobile login
+    getRedirectResult(auth).catch(function() {});
     var unsub = onAuthStateChanged(auth, function(u) {
       _uid = u ? u.uid : null;
       sUser(u || null);
@@ -353,7 +355,11 @@ export default function App() {
     return <div style={{ background: "#fff", color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
   }
   if (user === null) {
-    return <LoginScreen onLogin={function() { signInWithPopup(auth, googleProvider); }} />;
+    return <LoginScreen onLogin={function() {
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) { signInWithRedirect(auth, googleProvider); }
+    else { signInWithPopup(auth, googleProvider); }
+  }} />;
   }
   if (loading || !cfg) {
     return <div style={{ background: "#fff", color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
