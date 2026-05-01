@@ -784,7 +784,7 @@ export default function App() {
   };
 
   var tabs = [
-    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "input", l: "Input" },
+    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "metas", l: "Metas" }, { id: "input", l: "Input" },
     { id: "fixas", l: "Fixas" }, { id: "monthly", l: "Mensal" }, { id: "deve", l: "Devedores" },
   ];
 
@@ -835,7 +835,7 @@ export default function App() {
         })}
       </div>
 
-      <div key={tab} className="fc-tab-content" style={{ padding: "14px 16px", maxWidth: 720, margin: "0 auto" }}>
+      <div key={tab} className="fc-tab-content fc-main" style={{ padding: "14px 16px", maxWidth: 960, margin: "0 auto" }}>
 
         {/* ═══ DASHBOARD ═══ */}
         {tab === "dash" && (
@@ -935,6 +935,57 @@ export default function App() {
               </div>
             </div>
 
+            {/* Score Mensal */}
+            {(function() {
+              var scoreS = Math.min(savR / 0.25, 1) * 40;
+              var limCats = cats.filter(function(c) { return catLimits[c.id]; });
+              var limOk = limCats.filter(function(c) { return (spC[c.id] || 0) <= catLimits[c.id]; }).length;
+              var scoreL = limCats.length > 0 ? (limOk / limCats.length) * 30 : 30;
+              var goalsDone = goals.filter(function(g) { return (g.saved || 0) >= g.target; }).length;
+              var goalsTotal = goals.length;
+              var avgGP = goalsTotal > 0 ? goals.reduce(function(a, g) { return a + Math.min((g.saved || 0) / g.target, 1); }, 0) / goalsTotal : 1;
+              var scoreG = avgGP * 30;
+              var score = Math.round(scoreS + scoreL + scoreG);
+              var scoreColor = score >= 80 ? OK : score >= 60 ? WN : score >= 40 ? "#F59E0B" : ER;
+              var scoreLbl = score >= 80 ? "Excelente 🏆" : score >= 60 ? "Bom 👍" : score >= 40 ? "Regular ⚠️" : "Atenção 🚨";
+              var circumference = 2 * Math.PI * 36;
+              var dashOffset = circumference * (1 - score / 100);
+              return (
+                <div style={{ ...S.card, background: "linear-gradient(135deg, #fff 0%, " + BG + " 100%)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ position: "relative", width: 88, height: 88, flexShrink: 0 }}>
+                      <svg width="88" height="88" viewBox="0 0 88 88">
+                        <circle cx="44" cy="44" r="36" fill="none" stroke="#F0F0F0" strokeWidth="8" />
+                        <circle cx="44" cy="44" r="36" fill="none" stroke={scoreColor} strokeWidth="8"
+                          strokeDasharray={String(circumference)} strokeDashoffset={String(dashOffset)}
+                          strokeLinecap="round" transform="rotate(-90 44 44)"
+                          style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+                        <text x="44" y="48" textAnchor="middle" fontSize="18" fontWeight="700" fill={scoreColor} fontFamily="'Montserrat',sans-serif">{String(score)}</text>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={S.lbl}>{"SCORE FINANCEIRO DO MÊS"}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: scoreColor, fontFamily: "'Montserrat',sans-serif", marginBottom: 6 }}>{scoreLbl}</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
+                          <span>{"💰 Taxa de poupança"}</span>
+                          <span style={{ fontWeight: 700, color: scoreS >= 35 ? OK : ER }}>{String(Math.round(scoreS)) + "/40"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
+                          <span>{"🎯 Limites respeitados"}</span>
+                          <span style={{ fontWeight: 700, color: scoreL >= 25 ? OK : WN }}>{String(Math.round(scoreL)) + "/30"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
+                          <span>{"🏆 Progresso de metas"}</span>
+                          <span style={{ fontWeight: 700, color: scoreG >= 25 ? OK : WN }}>{String(Math.round(scoreG)) + "/30"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Pie */}
             <div style={S.card}>
               <div style={S.lbl}>{"DISTRIBUIÇÃO POR CATEGORIA"}</div>
@@ -984,66 +1035,6 @@ export default function App() {
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
           <div>
-            {/* Metas */}
-            <div style={S.cardA("#7C3AED")}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={S.lbl}>{"METAS"}</div>
-                <button style={S.btn("#7C3AED")} onClick={function() { sSGl(!showGoal); }}>{showGoal ? "Cancelar" : "+ Meta"}</button>
-              </div>
-              {showGoal && (
-                <div style={{ background: BG, borderRadius: 8, padding: 12, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <input style={S.inp} placeholder="Nome da meta" value={gf.name} onChange={function(e) { sGf({ ...gf, name: e.target.value }); }} />
-                  <div style={S.g2}>
-                    <input style={S.inp} placeholder="Valor alvo (R$)" value={gf.target} inputMode="decimal" onChange={function(e) { sGf({ ...gf, target: e.target.value }); }} />
-                    <input style={S.inp} placeholder="Já guardou" value={gf.saved} inputMode="decimal" onChange={function(e) { sGf({ ...gf, saved: e.target.value }); }} />
-                  </div>
-                  <input style={S.inp} type="date" value={gf.deadline} onChange={function(e) { sGf({ ...gf, deadline: e.target.value }); }} />
-                  <button style={S.btn("#7C3AED")} onClick={addGoal}>{"Salvar"}</button>
-                </div>
-              )}
-              {goals.length === 0 && !showGoal && <p style={{ ...S.cap, textAlign: "center", padding: 8 }}>{"Nenhuma meta."}</p>}
-              {goals.map(function(g) {
-                var r = g.target > 0 ? (g.saved || 0) / g.target : 0;
-                var remain = g.target - (g.saved || 0);
-                var mL = 0;
-                if (g.deadline) {
-                  var dl = new Date(g.deadline); var td2 = new Date();
-                  mL = Math.max(0, (dl.getFullYear() - td2.getFullYear()) * 12 + (dl.getMonth() - td2.getMonth()));
-                }
-                var mN = mL > 0 && remain > 0 ? remain / mL : 0;
-                return (
-                  <div key={g.id} style={{ padding: "12px 0", borderBottom: "1px solid #F0F0F0" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: TX }}>{g.name}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                          <span style={S.cap}>{"Prazo:"}</span>
-                          <input type="date" value={g.deadline || ""} onChange={function(e) { updGD(g.id, e.target.value); }}
-                            style={{ background: "#FAFAFA", border: "1px solid " + BR, borderRadius: 4, padding: "2px 6px", color: T3, fontSize: 11, outline: "none" }} />
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: TX }}>{fmt(g.saved || 0) + " / " + fmt(g.target)}</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: r >= 1 ? OK : "#A78BFA" }}>{pct(r)}</div>
-                      </div>
-                    </div>
-                    <PB value={g.saved || 0} max={g.target} color="#7C3AED" />
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, ...S.cap }}>
-                      <span>{"Falta " + fmt(remain)}</span>
-                      {mL > 0 && remain > 0 && <span style={{ color: "#7C3AED", fontWeight: 700 }}>{fmt(mN) + "/mês (" + String(mL) + "m)"}</span>}
-                      {mL === 0 && remain > 0 && <span style={{ color: ER, fontWeight: 700 }}>{"Prazo vencido"}</span>}
-                      {remain <= 0 && <span style={{ color: OK, fontWeight: 700 }}>{"✅ Atingida!"}</span>}
-                    </div>
-                    <div style={{ display: "flex", gap: 5, marginTop: 6, alignItems: "center" }}>
-                      <input style={{ ...S.inp, width: 100, fontSize: 12 }} placeholder="Atualizar R$" id={"g-" + g.id} inputMode="decimal" />
-                      <button onClick={function() { var el = document.getElementById("g-" + g.id); var v2 = parseFloat((el.value || "").replace(",", ".")); if (!isNaN(v2)) { updGS(g.id, v2); el.value = ""; } }} style={S.btn("#7C3AED")}>{"💾"}</button>
-                      <span onClick={function() { rmG(g.id); }} style={{ cursor: "pointer", color: "#BBBBBB" }}>{"×"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
             {/* Taxa de poupança */}
             <div style={S.cardA(BL)}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1075,15 +1066,44 @@ export default function App() {
               </div>
 
               {nwHistory.length > 1 && (
-                <div style={{ marginTop: 8 }}>
-                  <div style={S.lbl}>{"HISTÓRICO"}</div>
-                  {nwHistory.slice(-4).reverse().map(function(h, idx) {
+                <div style={{ marginTop: 10 }}>
+                  <div style={S.lbl}>{"EVOLUÇÃO DO PATRIMÔNIO"}</div>
+                  {(function() {
+                    var hist = nwHistory.slice(-12);
+                    var maxV = Math.max.apply(null, hist.map(function(h) { return h.balance; }).concat([1]));
+                    var minV = Math.min.apply(null, hist.map(function(h) { return h.balance; }));
+                    var range = maxV - minV || 1;
                     return (
-                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", ...S.cap, padding: "2px 0" }}>
-                        <span>{sd(h.date)}</span><span style={{ fontWeight: 600, color: TX }}>{fmt(h.balance)}</span>
+                      <div style={{ marginTop: 6 }}>
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 70 }}>
+                          {hist.map(function(h, idx) {
+                            var barH = ((h.balance - minV) / range) * 60 + 10;
+                            var isLast = idx === hist.length - 1;
+                            var isUp = idx > 0 && h.balance >= hist[idx-1].balance;
+                            return (
+                              <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <div style={{ width: "100%", height: barH, background: isLast ? BD : (isUp ? OK + "80" : ER + "60"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
+                                <div style={{ fontSize: 7, color: isLast ? BD : TM, marginTop: 2, fontWeight: isLast ? 700 : 400 }}>{sd(h.date).slice(0,5)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, ...S.cap }}>
+                          <span>{"Mín: " + fmt(minV)}</span>
+                          <span style={{ fontWeight: 700, color: BD }}>{"Atual: " + fmt(nwBalance)}</span>
+                          <span>{"Máx: " + fmt(maxV)}</span>
+                        </div>
+                        {hist.length >= 2 && (
+                          <div style={{ marginTop: 6, padding: "6px 10px", background: (nwBalance > hist[0].balance ? "#F0FDF4" : "#FEF2F2"), borderRadius: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: nwBalance > hist[0].balance ? OK : ER }}>
+                              {nwBalance > hist[0].balance ? "▲ +" : "▼ "}
+                              {fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0,5) + " (" + pct(Math.abs((nwBalance - hist[0].balance) / hist[0].balance)) + ")"}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
-                  })}
+                  })()}
                 </div>
               )}
             </div>
@@ -1209,6 +1229,173 @@ export default function App() {
                         })}
                       </div>
                     </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Renda Passiva */}
+            {(function() {
+              var rpTaxa = 0.007;
+              var rpMensal = nwBalance * rpTaxa;
+              var fxTotal = fxd.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+              var coverPct = fxTotal > 0 ? rpMensal / fxTotal : 0;
+              var milestones = fxd.slice().sort(function(a, b) { return a.amount - b.amount; });
+              var coveredFx = [];
+              var remaining2 = rpMensal;
+              milestones.forEach(function(f) {
+                var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
+                if (remaining2 >= myA) { coveredFx.push(f); remaining2 -= myA; }
+              });
+              return (
+                <div style={S.cardA("#7C3AED")}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <div style={S.lbl}>{"RENDA PASSIVA DO PL"}</div>
+                      <div style={{ ...S.cap, marginTop: 2 }}>{"PL atual × 0,7% a.m. (padrão conservador)"}</div>
+                    </div>
+                    <span style={{ fontSize: 20 }}>{"🏦"}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
+                      <div style={S.cap}>{"Renda passiva/mês"}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: BD, fontFamily: "'Montserrat',sans-serif" }}>{fmt(rpMensal)}</div>
+                    </div>
+                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
+                      <div style={S.cap}>{"Cobre " + pct(Math.min(coverPct, 1)) + " das fixas"}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: coverPct >= 1 ? OK : "#7C3AED", fontFamily: "'Montserrat',sans-serif" }}>{fmt(fxTotal)}</div>
+                    </div>
+                  </div>
+                  <PB value={rpMensal} max={Math.max(fxTotal, 1)} color="#7C3AED" noWarn={true} />
+                  {fxd.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={S.lbl}>{"CONTAS QUE JÁ CONSEGUIRIA PAGAR"}</div>
+                      {coveredFx.length === 0 ? (
+                        <div style={{ ...S.cap, marginTop: 6, color: ER }}>{"Ainda não cobre nenhuma conta fixa. Continue investindo!"}</div>
+                      ) : (
+                        <div style={{ marginTop: 6 }}>
+                          {coveredFx.map(function(f) {
+                            var cat2 = cats.find(function(c) { return c.id === f.cat; });
+                            var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
+                            return (
+                              <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid #F0F0F0" }}>
+                                <span style={{ color: OK, fontSize: 12 }}>{"✅"}</span>
+                                <span style={{ fontSize: 12, color: T3, flex: 1 }}>{cat2 ? cat2.icon + " " : ""}{f.name}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(myA)}</span>
+                              </div>
+                            );
+                          })}
+                          <div style={{ marginTop: 8, padding: "8px 10px", background: "#F0FDF4", borderRadius: 6, border: "1px solid #86EFAC" }}>
+                            <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>
+                              {"💡 Com " + fmt(nwBalance) + " investido você já paga " + String(coveredFx.length) + " conta" + (coveredFx.length > 1 ? "s" : "") + " fixa" + (coveredFx.length > 1 ? "s" : "") + " todo mês — sem trabalhar."}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {coveredFx.length < fxd.length && (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={S.lbl}>{"PRÓXIMA META: PAGAR TAMBÉM"}</div>
+                          {fxd.filter(function(f) { return coveredFx.indexOf(f) < 0; }).slice(0, 2).map(function(f) {
+                            var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
+                            var plNeeded = Math.ceil(myA / rpTaxa);
+                            var faltaPL = Math.max(0, plNeeded - nwBalance);
+                            return (
+                              <div key={f.id} style={{ padding: "6px 0", borderBottom: "1px solid #F0F0F0" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                                  <span style={{ fontSize: 12, color: T3 }}>{f.name + " (" + fmt(myA) + "/mês)"}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED" }}>{"PL: " + fmt(plNeeded)}</span>
+                                </div>
+                                <div style={{ ...S.cap, color: ER }}>{"Falta acumular " + fmt(faltaPL) + " no PL"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {fxd.length === 0 && (
+                    <div style={{ ...S.cap, textAlign: "center", padding: 12, color: TM }}>{"Cadastre contas fixas para ver quais o seu PL já consegue pagar."}</div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Termômetro de Liberdade Financeira */}
+            {(function() {
+              var rpTaxa2 = 0.007;
+              var rpMensal2 = nwBalance * rpTaxa2;
+              var totalExp = totDb > 0 ? totDb : totalInc * 0.75;
+              var fiPct = totalExp > 0 ? Math.min(rpMensal2 / totalExp, 1) : 0;
+              var plFor100 = totalExp > 0 ? Math.ceil(totalExp / rpTaxa2) : 0;
+              var plFor25 = Math.ceil(plFor100 * 0.25);
+              var plFor50 = Math.ceil(plFor100 * 0.5);
+              var milestones2 = [
+                { pct: 0.25, label: "25% IF", desc: "Renda passiva cobre 1/4 dos gastos", color: "#60A5FA" },
+                { pct: 0.50, label: "50% IF", desc: "Meio caminho andado", color: WN },
+                { pct: 0.75, label: "75% IF", desc: "Quase lá!", color: "#A78BFA" },
+                { pct: 1.00, label: "🏆 IF Total", desc: "Liberdade financeira completa", color: OK },
+              ];
+              var nextMilestone = milestones2.find(function(m) { return fiPct < m.pct; }) || milestones2[3];
+              var plToNext = Math.max(0, Math.ceil((nextMilestone.pct * totalExp) / rpTaxa2) - nwBalance);
+              return (
+                <div style={S.cardA(OK)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <div style={S.lbl}>{"TERMÔMETRO DE LIBERDADE FINANCEIRA"}</div>
+                      <div style={{ ...S.cap, marginTop: 2 }}>{"Quanto da sua vida o PL já financia"}</div>
+                    </div>
+                    <span style={{ fontSize: 20 }}>{"🌡️"}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: fiPct >= 1 ? OK : fiPct >= 0.5 ? WN : BL }}>
+                      {pct(fiPct)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: TX }}>{"de Independência Financeira"}</div>
+                      <div style={S.cap}>{"Renda passiva " + fmt(rpMensal2) + " / Gastos " + fmt(totalExp)}</div>
+                    </div>
+                  </div>
+                  <div style={{ position: "relative", height: 20, background: "#F0F0F0", borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pct(fiPct), background: fiPct >= 1 ? OK : "linear-gradient(90deg, " + BL + ", #7C3AED)", borderRadius: 10, transition: "width 0.8s ease" }} />
+                    {milestones2.map(function(m) {
+                      return (
+                        <div key={m.label} style={{ position: "absolute", left: pct(m.pct), top: 0, bottom: 0, width: 2, background: "#ffffff60" }} />
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                    {milestones2.map(function(m) {
+                      var reached = fiPct >= m.pct;
+                      return (
+                        <div key={m.label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: reached ? m.color : TM }}>{m.label}</div>
+                          {reached && <div style={{ fontSize: 9, color: OK }}>{"✅"}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {fiPct < 1 && (
+                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: BD, marginBottom: 4 }}>{"Próximo marco: " + nextMilestone.label}</div>
+                      <div style={S.cap}>{nextMilestone.desc}</div>
+                      <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between" }}>
+                        <span style={S.cap}>{"PL necessário"}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{fmt(Math.ceil(nextMilestone.pct * totalExp / rpTaxa2))}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={S.cap}>{"Falta acumular"}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: ER }}>{fmt(plToNext)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {fiPct >= 1 && (
+                    <div style={{ background: "#F0FDF4", borderRadius: 8, padding: "12px", border: "1px solid #86EFAC", textAlign: "center" }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#166534" }}>{"🏆 Parabéns! Você atingiu a Independência Financeira!"}</div>
+                      <div style={{ ...S.cap, color: "#166534", marginTop: 4 }}>{"Sua renda passiva cobre 100% dos seus gastos."}</div>
+                    </div>
+                  )}
+                  {plFor100 > 0 && fiPct < 1 && (
+                    <div style={{ marginTop: 10, ...S.cap, textAlign: "center", color: TM }}>{"IF Total: PL de " + fmt(plFor100) + " gerando " + fmt(totalExp) + "/mês"}</div>
                   )}
                 </div>
               );
@@ -1360,6 +1547,126 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ═══ METAS ═══ */}
+        {tab === "metas" && (
+          <div>
+            {/* Metas */}}
+            <div style={S.cardA("#7C3AED")}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={S.lbl}>{"METAS"}</div>
+                <button style={S.btn("#7C3AED")} onClick={function() { sSGl(!showGoal); }}>{showGoal ? "Cancelar" : "+ Meta"}</button>
+              </div>
+              {showGoal && (
+                <div style={{ background: BG, borderRadius: 8, padding: 12, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
+                  <input style={S.inp} placeholder="Nome da meta" value={gf.name} onChange={function(e) { sGf({ ...gf, name: e.target.value }); }} />
+                  <div style={S.g2}>
+                    <input style={S.inp} placeholder="Valor alvo (R$)" value={gf.target} inputMode="decimal" onChange={function(e) { sGf({ ...gf, target: e.target.value }); }} />
+                    <input style={S.inp} placeholder="Já guardou" value={gf.saved} inputMode="decimal" onChange={function(e) { sGf({ ...gf, saved: e.target.value }); }} />
+                  </div>
+                  <input style={S.inp} type="date" value={gf.deadline} onChange={function(e) { sGf({ ...gf, deadline: e.target.value }); }} />
+                  <button style={S.btn("#7C3AED")} onClick={addGoal}>{"Salvar"}</button>
+                </div>
+              )}
+              {goals.length === 0 && !showGoal && <p style={{ ...S.cap, textAlign: "center", padding: 8 }}>{"Nenhuma meta."}</p>}
+              {goals.map(function(g) {
+                var r = g.target > 0 ? (g.saved || 0) / g.target : 0;
+                var remain = g.target - (g.saved || 0);
+                var mL = 0;
+                if (g.deadline) {
+                  var dl = new Date(g.deadline); var td2 = new Date();
+                  mL = Math.max(0, (dl.getFullYear() - td2.getFullYear()) * 12 + (dl.getMonth() - td2.getMonth()));
+                }
+                var mN = mL > 0 && remain > 0 ? remain / mL : 0;
+                return (
+                  <div key={g.id} style={{ padding: "12px 0", borderBottom: "1px solid #F0F0F0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: TX }}>{g.name}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                          <span style={S.cap}>{"Prazo:"}</span>
+                          <input type="date" value={g.deadline || ""} onChange={function(e) { updGD(g.id, e.target.value); }}
+                            style={{ background: "#FAFAFA", border: "1px solid " + BR, borderRadius: 4, padding: "2px 6px", color: T3, fontSize: 11, outline: "none" }} />
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: TX }}>{fmt(g.saved || 0) + " / " + fmt(g.target)}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: r >= 1 ? OK : "#A78BFA" }}>{pct(r)}</div>
+                      </div>
+                    </div>
+                    <PB value={g.saved || 0} max={g.target} color="#7C3AED" />
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, ...S.cap }}>
+                      <span>{"Falta " + fmt(remain)}</span>
+                      {mL > 0 && remain > 0 && <span style={{ color: "#7C3AED", fontWeight: 700 }}>{fmt(mN) + "/mês (" + String(mL) + "m)"}</span>}
+                      {mL === 0 && remain > 0 && <span style={{ color: ER, fontWeight: 700 }}>{"Prazo vencido"}</span>}
+                      {remain <= 0 && <span style={{ color: OK, fontWeight: 700 }}>{"✅ Atingida!"}</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 5, marginTop: 6, alignItems: "center" }}>
+                      <input style={{ ...S.inp, width: 100, fontSize: 12 }} placeholder="Atualizar R$" id={"g-" + g.id} inputMode="decimal" />
+                      <button onClick={function() { var el = document.getElementById("g-" + g.id); var v2 = parseFloat((el.value || "").replace(",", ".")); if (!isNaN(v2)) { updGS(g.id, v2); el.value = ""; } }} style={S.btn("#7C3AED")}>{"💾"}</button>
+                      <span onClick={function() { rmG(g.id); }} style={{ cursor: "pointer", color: "#BBBBBB" }}>{"×"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Limites de gastos por categoria */}
+            <div style={S.cardA(BL)}>
+              <div style={S.lbl}>{"LIMITES POR CATEGORIA"}</div>
+              <div style={{ ...S.cap, marginBottom: 10, marginTop: 2 }}>{"Defina limites mensais e acompanhe o progresso"}</div>
+              {GR.map(function(g) {
+                var catsWithLim = cats.filter(function(c) { return c.group === g.id && catLimits[c.id]; });
+                var catsNoLim = cats.filter(function(c) { return c.group === g.id && !catLimits[c.id] && (spC[c.id] || 0) > 0; });
+                if (catsWithLim.length === 0 && catsNoLim.length === 0) return null;
+                return (
+                  <div key={g.id} style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: g.color, marginBottom: 6, textTransform: "uppercase" }}>{g.label}</div>
+                    {cats.filter(function(c) { return c.group === g.id && ((spC[c.id] || 0) > 0 || catLimits[c.id]); }).map(function(cat2) {
+                      var lim = catLimits[cat2.id];
+                      var spent2 = spC[cat2.id] || 0;
+                      var isEditLim2 = editLimId === cat2.id;
+                      return (
+                        <div key={cat2.id} style={{ padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: lim ? 4 : 0 }}>
+                            <span>{cat2.icon}</span>
+                            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: TX }}>{cat2.name}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: lim && spent2 > lim ? ER : TX }}>{fmt(spent2)}</span>
+                            <button onClick={function() { sELimId(isEditLim2 ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
+                              style={{ background: lim ? BG : "#F5F5F5", border: "1px solid " + (lim ? BL : BR), borderRadius: 4, padding: "3px 8px", fontSize: 10, fontWeight: 600, color: lim ? BL : TM, cursor: "pointer" }}>
+                              {lim ? "🎯 " + fmt(lim) : "+ Limite"}
+                            </button>
+                          </div>
+                          {lim && (
+                            <div>
+                              <PB value={spent2} max={lim} color={g.color} noWarn={g.id === "investimentos"} />
+                              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+                                <span style={S.cap}>{pct(Math.min(spent2 / lim, 1)) + " utilizado"}</span>
+                                {spent2 > lim ? (
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: ER }}>{"⚠️ +" + fmt(spent2 - lim) + " estourado"}</span>
+                                ) : (
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: OK }}>{"✅ sobram " + fmt(lim - spent2)}</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {isEditLim2 && (
+                            <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
+                              <input style={{ ...S.inp, flex: 1, fontSize: 12 }} placeholder="Limite mensal (R$)" value={editLimV} inputMode="decimal"
+                                onChange={function(e) { sELimV(e.target.value); }} />
+                              <button style={S.btn(BL)} onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
+                              {lim && <button style={{ ...S.btnO, padding: "8px 10px", fontSize: 12 }} onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1616,9 +1923,20 @@ export default function App() {
                             <div style={{ flex: 1 }}>
                               <span style={{ fontSize: 12, color: isAc ? BD : T3, fontWeight: isAc ? 700 : 400 }}>{cat2.name}</span>
                               {lim && (
-                                <div style={{ marginTop: 2 }}>
+                                <div style={{ marginTop: 3 }}>
                                   <PB value={spC[cat2.id] || 0} max={lim} color={g.color} noWarn={g.id === "investimentos"} />
-                                  <div style={{ ...S.cap, marginTop: 1 }}>{fmt(spC[cat2.id] || 0) + " / limite " + fmt(lim)}</div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+                                    <span style={{ ...S.cap }}>{fmt(spC[cat2.id] || 0) + " / " + fmt(lim)}</span>
+                                    {(spC[cat2.id] || 0) > lim ? (
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: g.id === "investimentos" ? OK : ER }}>
+                                        {"⚠️ +" + fmt((spC[cat2.id] || 0) - lim) + " (" + pct((spC[cat2.id] || 0) / lim) + ")"}
+                                      </span>
+                                    ) : (
+                                      <span style={{ fontSize: 10, fontWeight: 600, color: TM }}>
+                                        {"sobram " + fmt(lim - (spC[cat2.id] || 0)) + " (" + pct((spC[cat2.id] || 0) / lim) + " usado)"}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -1811,6 +2129,8 @@ export default function App() {
         @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #1B72B840; } 50% { box-shadow: 0 0 0 8px #1B72B820; } }
         .fc-tab-content { animation: fadeInTab 0.22s ease; }
         .fc-chat-msg { animation: slideUp 0.18s ease; }
+        @media (min-width: 768px) { .fc-main { max-width: 100% !important; padding: 16px 32px !important; } }
+        @media (min-width: 1200px) { .fc-main { padding: 16px 80px !important; } }
       `}</style>
 
       {chatOpen && (
