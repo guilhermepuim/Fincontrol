@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, signOut } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
 
 /* ══ SUNO BRANDBOOK AZUL ══ */
@@ -310,8 +310,10 @@ export default function App() {
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
 
   useEffect(function() {
-    // Handle redirect result from mobile login
-    getRedirectResult(auth).catch(function() {});
+    setPersistence(auth, browserLocalPersistence).catch(function() {});
+    getRedirectResult(auth).then(function(result) {
+      if (result && result.user) { _uid = result.user.uid; sUser(result.user); }
+    }).catch(function() {});
     var unsub = onAuthStateChanged(auth, function(u) {
       _uid = u ? u.uid : null;
       sUser(u || null);
@@ -356,9 +358,13 @@ export default function App() {
   }
   if (user === null) {
     return <LoginScreen onLogin={function() {
-    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) { signInWithRedirect(auth, googleProvider); }
-    else { signInWithPopup(auth, googleProvider); }
+    setPersistence(auth, browserLocalPersistence).then(function() {
+      return signInWithPopup(auth, googleProvider);
+    }).catch(function(err) {
+      if (err && err.code && (err.code === "auth/popup-blocked" || err.code === "auth/cancelled-popup-request")) {
+        signInWithRedirect(auth, googleProvider);
+      }
+    });
   }} />;
   }
   if (loading || !cfg) {
@@ -2193,10 +2199,4 @@ export default function App() {
       )}
 
       <button onClick={function() { sChatOpen(!chatOpen); }}
-        style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, transition: "background 0.2s", animation: chatOpen ? "none" : "pulse 2s infinite" }}>
-        {chatOpen ? "×" : "✨"}
-      </button>
-
-    </div>
-  );
-}
+        style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "
