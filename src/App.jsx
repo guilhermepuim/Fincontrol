@@ -3,25 +3,30 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
 
-/* ══ SUNO BRANDBOOK AZUL ══ */
-var BL = "#1B72B8";
-var BD = "#154F82";
-var BG = "#E8F2FA";
-var TX = "#212121";
-var T2 = "#4B4B4B";
-var T3 = "#666666";
-var TM = "#999999";
-var BR = "#DDDDDD";
-var OK = "#00A000";
-var ER = "#FD0000";
-var WN = "#F46B08";
+/* ══ PRUMO BRANDBOOK — AZUL ══ */
+var BL = "#1A3A5C";
+var BD = "#0F2540";
+var BG = "#E8F0FA";
+var TX = "#0F2540";
+var T2 = "#1A3A5C";
+var T3 = "#2A5A8C";
+var TM = "#6A90B8";
+var BR = "#D8E8F4";
+var OK = "#2D7A3E";
+var ER = "#C0392B";
+var WN = "#9A7420";
+var TEAL = "#1B5FAA";
+var AMB = "#9A7420";
+var PETR = "#003F5D";
+var CARD = "#FDFAF5";
+var BGMAIN = "#F5F0E8";
 
 var DS = 14000;
 var DP = { essenciais: 50, investimentos: 25, desejos: 25 };
 var GR = [
-  { id: "essenciais", label: "Essenciais", color: "#0D9488" },
-  { id: "investimentos", label: "Investimentos", color: "#1A2B5F" },
-  { id: "desejos", label: "Desejos", color: "#D97706" },
+  { id: "essenciais", label: "Essenciais", color: "#1B5FAA" },
+  { id: "investimentos", label: "Investimentos", color: "#1A3A5C" },
+  { id: "desejos", label: "Não Essenciais", color: "#9A7420" },
 ];
 var DC = [
   { id: "moradia", name: "Moradia", icon: "🏠", group: "essenciais" },
@@ -46,7 +51,7 @@ var DC = [
 var PAYS = ["Cartão Nubank", "PIX", "Boleto", "Dinheiro", "Cartão Porto", "Cartão Itaú", "Cartão Inter"];
 var MS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 var MA = MS.map(function(m) { return m.slice(0, 3); });
-var PC = ["#0D9488","#1A2B5F","#D97706","#0D6E8A","#60A5FA","#A78BFA","#EC4899","#00A000","#06B6D4","#7C3AED"];
+var PC = ["#1B5FAA","#1A3A5C","#9A7420","#003F5D","#4E97D1","#C9A84C","#7BB4E3","#2D7A3E","#0F2540","#6A90B8"];
 
 /* ══ HELPERS ══ */
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
@@ -110,14 +115,14 @@ function calcSpent(mData, cats, fxd) {
 
 /* ══ STYLES ══ */
 var S = {
-  card: { background: "#fff", borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR },
-  cardA: function(c) { return { background: "#fff", borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
-  inp: { background: "#FAFAFA", border: "1px solid " + BR, borderRadius: 6, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
+  card: { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR },
+  cardA: function(c) { return { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
+  inp: { background: BG, border: "1px solid " + BR, borderRadius: 6, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
   btn: function(c) { return { background: c, border: "none", borderRadius: 6, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
-  btnO: { background: "#fff", border: "1px solid " + BR, borderRadius: 6, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
-  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: c + "12", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
+  btnO: { background: CARD, border: "1px solid " + BR, borderRadius: 6, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
+  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: c + "20", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
   g2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
-  ck: { accentColor: BL, width: 16, height: 16, cursor: "pointer" },
+  ck: { accentColor: OK, width: 16, height: 16, cursor: "pointer" },
   lbl: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: TM, textTransform: "uppercase", marginBottom: 4 },
   h2: { fontFamily: "'Montserrat',sans-serif", fontSize: 14, fontWeight: 700, color: BD },
   data: function(c) { return { fontSize: 28, fontWeight: 700, color: c || TX, fontFamily: "'Inter',sans-serif", lineHeight: 1.1 }; },
@@ -237,11 +242,17 @@ function ChartTip(props) {
 /* ══ LOGIN SCREEN ══ */
 function LoginScreen({ onLogin }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#FAFAFA", fontFamily: "'Inter',sans-serif" }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BGMAIN, fontFamily: "'Inter',sans-serif" }}>
       <div style={{ background: "#fff", borderRadius: 12, padding: 40, border: "1px solid #DDDDDD", textAlign: "center", maxWidth: 320, width: "90%" }}>
-        <div style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
-          <span style={{ color: "#212121" }}>{"Fin"}</span>
-          <span style={{ color: "#1B72B8" }}>{"Control"}</span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14, height: 26 }}>
+              <div style={{ width: 5, height: 5, background: "#C9A84C", borderRadius: "50%" }} />
+              <div style={{ width: 2, background: BD, flex: 1, marginTop: 3 }} />
+              <div style={{ width: 10, height: 11, background: BD, clipPath: "polygon(50% 100%,0 0,100% 0)" }} />
+            </div>
+            <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 28, color: BD, letterSpacing: "0.5px" }}>{"Prumo"}</span>
+          </div>
         </div>
         <p style={{ color: "#666666", fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
         <button onClick={onLogin}
@@ -300,7 +311,10 @@ export default function App() {
   var [simAporte, sSimA] = useState("1000");
   var [simTaxa, sSimT] = useState("1");
   var [simTempo, sSimTp] = useState("60");
+  var [rollover, setRollover] = useState({});
   var [chatOpen, sChatOpen] = useState(false);
+  var [aiInsight, sAiInsight] = useState("");
+  var [aiLoading, sAiLoading] = useState(false);
   var [chatMsgs, sChatMsgs] = useState([]);
   var [chatInput, sChatIn] = useState("");
   var [chatLd, sChatLd] = useState(false);
@@ -323,12 +337,13 @@ export default function App() {
       sLd(true);
       var c = await ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } });
       var m = await ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] });
+      var rv = await ld("fc2-rollover", {});
       var mp = await ld("fc2-maps", {});
       var pMo = mo === 0 ? 11 : mo - 1;
       var pYr = mo === 0 ? yr - 1 : yr;
       var pm = await ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} });
       if (!active) return;
-      sCfg(c); sMd(m); sMp(mp); sPv(pm); sSI(String(c.salary)); sLd(false);
+      sCfg(c); sMd(m); sMp(mp); sPv(pm); sSI(String(c.salary)); setRollover(rv); sLd(false);
     })();
     return function() { active = false; };
   }, [yr, mo]);
@@ -350,13 +365,13 @@ export default function App() {
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
 
   if (user === undefined) {
-    return <div style={{ background: "#fff", color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
+    return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
   }
   if (user === null) {
     return <LoginScreen onLogin={function() { signInWithPopup(auth, googleProvider); }} />;
   }
   if (loading || !cfg) {
-    return <div style={{ background: "#fff", color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
+    return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
   }
 
   var sal = cfg.salary || DS;
@@ -380,6 +395,42 @@ export default function App() {
   var totDbP = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] !== "paid"; })
     .reduce(function(a, f) { return a + (fs[f.id + "_p"] || []).reduce(function(a2, p) { return a2 + p.amount; }, 0); }, 0);
   var totDb = totDbTx + totDbFx + totDbP;
+
+  /* ── Rollover calculation ── */
+  var saveRollover = function(rv) { setRollover(rv); sv("fc2-rollover", rv); };
+  var prevKey = tk(mo === 0 ? yr - 1 : yr, mo === 0 ? 11 : mo - 1);
+  var rvCredit = {};
+  GR.forEach(function(g) {
+    var prevBud = totalInc * ((cfg.pcts[g.id] || 0) / 100);
+    var prevSpentG = prevSp ? prevSp[g.id] : 0;
+    var leftover = prevBud - prevSpentG;
+    var existing = (rollover[prevKey] || {})[g.id] || 0;
+    rvCredit[g.id] = existing || (leftover > 0 && g.id !== "investimentos" ? Math.round(leftover) : 0);
+  });
+  var budWithRollover = {};
+  GR.forEach(function(g) { budWithRollover[g.id] = bud[g.id] + (rvCredit[g.id] || 0); });
+
+  /* ── Anomaly detection ── */
+  var anomalies = [];
+  if (yrD) {
+    cats.forEach(function(cat2) {
+      var hist = [];
+      yrD.forEach(function(mDt, idx) {
+        if (idx === mo) return;
+        var mTxs = mDt.tx || [];
+        var total = mTxs.filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+          .reduce(function(a, t) { return a + myP(t); }, 0);
+        if (total > 0) hist.push(total);
+      });
+      if (hist.length < 2) return;
+      var avg = hist.reduce(function(a, v) { return a + v; }, 0) / hist.length;
+      var cur2 = spC[cat2.id] || 0;
+      if (avg > 50 && cur2 > avg * 1.5) {
+        anomalies.push({ cat: cat2, cur: cur2, avg: avg, delta: cur2 - avg, pct: (cur2 - avg) / avg });
+      }
+    });
+    anomalies.sort(function(a, b) { return b.delta - a.delta; });
+  }
 
   var debtors = {};
   function addD(p, it) {
@@ -607,43 +658,8 @@ export default function App() {
     sChatMsgs(newMsgs);
     sChatIn("");
     sChatLd(true);
-    var catList = cats.map(function(c) { return c.id + " (" + c.name + ", grupo:" + c.group + ")"; }).join(", ");
-    var payList = PAYS.join(", ");
-    var today = new Date().toISOString().slice(0, 10);
-    var systemPrompt = "Você é um assistente financeiro. O usuário vai descrever um gasto ou crédito em linguagem natural. Retorne APENAS um JSON válido (sem markdown, sem explicação). Formatos possíveis:\n\nPara gasto: {\"type\":\"tx\",\"desc\":\"descrição\",\"amount\":123.45,\"cat\":\"id_categoria\",\"payment\":\"forma pagamento\",\"date\":\"YYYY-MM-DD\"}\n\nPara crédito: {\"type\":\"cr\",\"desc\":\"descrição\",\"amount\":123.45,\"crType\":\"Bônus\"}\n\nCategorias disponíveis: " + catList + "\n\nFormas de pagamento: " + payList + "\n\nData de hoje: " + today + ". Se o usuário não especificar data, use hoje. Se não especificar pagamento, use PIX para valores pequenos e Cartão Nubank para maiores. Escolha a categoria mais adequada ao contexto.";
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: [{ role: "user", content: msg }]
-      })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      var raw = (data.content && data.content[0] && data.content[0].text) || "{}";
-      var parsed = null;
-      try { parsed = JSON.parse(raw.replace(/```json|```/g, "").trim()); } catch(e) {}
-      if (!parsed || !parsed.type) {
-        sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Não entendi. Tente: 'Gastei 150 no mercado pix hoje' ou 'Recebi bônus de 3k'." }]); });
-        sChatLd(false); return;
-      }
-      if (parsed.type === "tx") {
-        var cat2 = cats.find(function(c) { return c.id === parsed.cat; });
-        var newTx = { id: uid(), desc: parsed.desc, amount: parsed.amount, cat: parsed.cat, payment: parsed.payment || "PIX", splits: [], hasSplit: false, date: parsed.date ? new Date(parsed.date).toISOString() : new Date().toISOString(), received: false, reimbursed: false, note: "", src: "manual" };
-        saveMd({ ...md, tx: (md.tx || []).concat([newTx]) });
-        var catName = cat2 ? cat2.icon + " " + cat2.name : parsed.cat;
-        sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "✅ Gasto lançado! " + parsed.desc + " — " + fmt(parsed.amount) + " em " + catName + " (" + (parsed.payment || "PIX") + ")" }]); });
-      } else if (parsed.type === "cr") {
-        var newCr = { id: uid(), desc: parsed.desc, amount: parsed.amount, type: parsed.crType || "Bônus" };
-        saveMd({ ...md, cr: (md.cr || []).concat([newCr]) });
-        sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "✅ Crédito lançado! " + parsed.desc + " — " + fmt(parsed.amount) }]); });
-      }
-      sChatLd(false);
-    }).catch(function() {
-      sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Erro ao processar. Tente novamente." }]); });
-      sChatLd(false);
-    });
+    sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "🔜 Assistente financeiro em breve! Esta funcionalidade estará disponível em breve." }]); });
+    sChatLd(false);
   };
 
   var updGS = function(id, v) {
@@ -784,7 +800,7 @@ export default function App() {
   };
 
   var tabs = [
-    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "metas", l: "Metas" }, { id: "input", l: "Input" },
+    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "analise", l: "Análise" }, { id: "metas", l: "Metas" }, { id: "input", l: "Input" },
     { id: "fixas", l: "Fixas" }, { id: "monthly", l: "Mensal" }, { id: "deve", l: "Devedores" },
   ];
 
@@ -805,14 +821,18 @@ export default function App() {
   });
 
   return (
-    <div style={{ fontFamily: "'Inter',sans-serif", background: "#FAFAFA", color: TX, minHeight: "100vh" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <div style={{ fontFamily: "'Inter',sans-serif", background: BGMAIN, color: TX, minHeight: "100vh" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
 
       {/* Header */}
-      <div style={{ background: "#fff", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid " + BR }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 18, fontWeight: 700, color: T2 }}>{"Fin"}</span>
-          <span style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 18, fontWeight: 700, color: BL }}>{"Control"}</span>
+      <div style={{ background: CARD, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid " + BR }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 12, height: 22 }}>
+            <div style={{ width: 4, height: 4, background: "#C9A84C", borderRadius: "50%", position: "relative", zIndex: 1 }} />
+            <div style={{ width: 1.5, background: BD, flex: 1, marginTop: 3 }} />
+            <div style={{ width: 8, height: 9, background: BD, clipPath: "polygon(50% 100%,0 0,100% 0)" }} />
+          </div>
+          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: BD, letterSpacing: "0.5px" }}>{"Prumo"}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button style={{ background: "#F0F0F0", border: "none", borderRadius: 6, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goPrev}>{"◀"}</button>
@@ -823,7 +843,7 @@ export default function App() {
       </div>
 
       {/* Tabs */}
-      <div style={{ background: "#fff", display: "flex", borderBottom: "1px solid " + BR, overflowX: "auto" }}>
+      <div style={{ background: CARD, display: "flex", borderBottom: "1px solid " + BR, overflowX: "auto" }}>
         {tabs.map(function(t) {
           var ac = tab === t.id;
           return (
@@ -887,7 +907,7 @@ export default function App() {
                       <div style={S.data(g.color)}>{fmt(s)}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={S.cap}>{"Meta " + fmt(b)}</div>
+                      <div style={S.cap}>{"Meta " + fmt(b) + (rvCredit[g.id] > 0 ? " + " + fmt(rvCredit[g.id]) + " rollover" : "")}</div>
                       {diff !== null && (
                         <div style={{ fontSize: 11, fontWeight: 700, color: (isInv ? diff > 0 : diff < 0) ? OK : ER, marginTop: 2 }}>
                           {(diff > 0 ? "▲ " : "▼ ") + fmt(Math.abs(diff))}
@@ -895,23 +915,18 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  <PB value={s} max={b} color={g.color} noWarn={isInv} />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: r > 1 ? (isInv ? OK : ER) : T3 }}>{pct(r)}</span>
-                      <span style={S.cap}>{"utilizado"}</span>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      {r > 1 ? (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: isInv ? OK : ER }}>
-                          {(isInv ? "✅ +" : "⚠️ +") + fmt(s - b) + " " + (isInv ? "acima da meta" : "estourado")}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 12, fontWeight: 600, color: TM }}>
-                          {"disponível " + fmt(b - s) + " (" + pct(1 - r) + ")"}
-                        </span>
-                      )}
-                    </div>
+                  <PB value={s} max={budWithRollover[g.id] || b} color={g.color} noWarn={isInv} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, alignItems: "center" }}>
+                    <div style={S.data(isInv ? (s > 0 ? OK : TX) : (r > 1 ? ER : r > 0.85 ? WN : OK))}>{fmt(s)}</div>
+                    {r > 1 ? (
+                      isInv
+                        ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ Acima da meta"}</span>
+                        : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: ER + "18", color: ER }}>{"⚠ +" + fmt(s - b)}</span>
+                    ) : r > 0.85 ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: WN + "18", color: WN }}>{"⚡ " + pct(r) + " usado"}</span>
+                    ) : (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ " + pct(r) + " usado"}</span>
+                    )}
                   </div>
                 </div>
               );
@@ -1031,6 +1046,31 @@ export default function App() {
             )}
           </div>
         )}
+
+            {/* Anomalias */}
+            {anomalies.length > 0 && (
+              <div style={S.cardA(ER)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={S.lbl}>{"⚡ ALERTAS DE GASTO"}</div>
+                  <span style={{ fontSize: 11, color: TM }}>{String(anomalies.length) + " categoria" + (anomalies.length > 1 ? "s" : "")}</span>
+                </div>
+                {anomalies.slice(0, 3).map(function(an) {
+                  return (
+                    <div key={an.cat.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid " + BR }}>
+                      <span style={{ fontSize: 18 }}>{an.cat.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{an.cat.name}</div>
+                        <div style={S.cap}>{"Média histórica: " + fmt(an.avg)}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(an.cur)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{"+" + pct(an.pct) + " acima"}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
@@ -1182,12 +1222,12 @@ export default function App() {
                     </div>
                     <div style={S.lbl}>{"COMPOSIÇÃO DO PATRIMÔNIO FINAL"}</div>
                     <div style={{ height: 10, borderRadius: 5, overflow: "hidden", display: "flex", marginTop: 4 }}>
-                      <div style={{ width: String(simFV > 0 ? (nwBalance / simFV) * 100 : 0) + "%", background: "#1A2B5F", transition: "width 0.4s" }} />
-                      <div style={{ width: String(simFV > 0 ? (simTotalAport / simFV) * 100 : 0) + "%", background: BL, transition: "width 0.4s" }} />
-                      <div style={{ flex: 1, background: OK, transition: "width 0.4s" }} />
+                      <div style={{ width: String(simFV > 0 ? (nwBalance / simFV) * 100 : 0) + "%", background: "#003F5D", transition: "width 0.4s" }} />
+                      <div style={{ width: String(simFV > 0 ? (simTotalAport / simFV) * 100 : 0) + "%", background: "#A3CEEF", transition: "width 0.4s" }} />
+                      <div style={{ flex: 1, background: "#006DB2", transition: "width 0.4s" }} />
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
-                      {[["#1A2B5F", "Patrimônio atual"], [BL, "Aportes"], [OK, "Juros (" + pct(jurosRatio) + ")"]].map(function(it) {
+                      {[["#003F5D", "Patrimônio atual"], ["#A3CEEF", "Aportes"], ["#006DB2", "Juros (" + pct(jurosRatio) + ")"]].map(function(it) {
                         return (
                           <div key={it[1]} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                             <div style={{ width: 8, height: 8, borderRadius: 2, background: it[0] }} />
@@ -1547,6 +1587,160 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ═══ ANÁLISE ANUAL ═══ */}
+        {tab === "analise" && (
+          <div>
+            {/* Comparativo mensal por grupo */}
+            {chD.length > 0 && (
+              <div style={S.card}>
+                <div style={{ ...S.h2, marginBottom: 4 }}>{"Comparativo Anual " + String(yr)}</div>
+                <div style={{ ...S.cap, marginBottom: 12 }}>{"Todos os meses lado a lado"}</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%", minWidth: 500 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid " + BR }}>
+                        <th style={{ padding: "6px 8px", textAlign: "left", color: TM, fontWeight: 600 }}>{"Mês"}</th>
+                        {["Essenciais","Invest.","N.Essenc.","Crédito","Saldo"].map(function(h) {
+                          return <th key={h} style={{ padding: "6px 8px", textAlign: "right", color: TM, fontWeight: 600 }}>{h}</th>;
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chD.map(function(d, idx) {
+                        var isCur = idx === mo;
+                        var rowBg = isCur ? BG : "transparent";
+                        var prevD = idx > 0 ? chD[idx - 1] : null;
+                        return (
+                          <tr key={idx} style={{ background: rowBg, borderBottom: "1px solid " + BR }}>
+                            <td style={{ padding: "6px 8px", fontWeight: isCur ? 700 : 500, color: isCur ? BD : T2 }}>
+                              {d.mes}{isCur ? " ◀" : ""}
+                            </td>
+                            {[
+                              { v: d.e, prev: prevD ? prevD.e : null, color: "#1B5FAA" },
+                              { v: d.i, prev: prevD ? prevD.i : null, color: "#1A3A5C" },
+                              { v: d.d, prev: prevD ? prevD.d : null, color: "#9A7420" },
+                              { v: d.cr, prev: prevD ? prevD.cr : null, color: OK },
+                              { v: d.s, prev: prevD ? prevD.s : null, color: d.s >= 0 ? OK : ER },
+                            ].map(function(cell, ci) {
+                              var diff = cell.prev !== null ? cell.v - cell.prev : null;
+                              return (
+                                <td key={ci} style={{ padding: "6px 8px", textAlign: "right" }}>
+                                  <div style={{ fontWeight: isCur ? 700 : 400, color: cell.color, fontSize: 11 }}>{fK(cell.v)}</div>
+                                  {diff !== null && Math.abs(diff) > 50 && (
+                                    <div style={{ fontSize: 9, color: diff > 0 ? ER : OK, fontWeight: 600 }}>
+                                      {(diff > 0 ? "▲" : "▼") + fK(Math.abs(diff))}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: "2px solid " + BR, background: BG }}>
+                        <td style={{ padding: "6px 8px", fontWeight: 700, color: BD }}>{"Total"}</td>
+                        {[
+                          chD.reduce(function(a, d) { return a + d.e; }, 0),
+                          chD.reduce(function(a, d) { return a + d.i; }, 0),
+                          chD.reduce(function(a, d) { return a + d.d; }, 0),
+                          chD.reduce(function(a, d) { return a + d.cr; }, 0),
+                          chD.reduce(function(a, d) { return a + d.s; }, 0),
+                        ].map(function(total, ci) {
+                          return <td key={ci} style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: ci === 4 ? (total >= 0 ? OK : ER) : TX, fontSize: 11 }}>{fK(total)}</td>;
+                        })}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Categoria que mais variou */}
+            {yrD && (
+              <div style={S.cardA(TEAL)}>
+                <div style={S.lbl}>{"DESTAQUES POR CATEGORIA"}</div>
+                <div style={{ ...S.cap, marginBottom: 10, marginTop: 2 }}>{"Maiores variações no ano"}</div>
+                {(function() {
+                  var catStats = cats.map(function(cat2) {
+                    var months = yrD.map(function(mDt) {
+                      return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+                        .reduce(function(a, t) { return a + myP(t); }, 0);
+                    }).filter(function(v) { return v > 0; });
+                    if (months.length < 3) return null;
+                    var avg2 = months.reduce(function(a, v) { return a + v; }, 0) / months.length;
+                    var max2 = Math.max.apply(null, months);
+                    var min2 = Math.min.apply(null, months);
+                    var variance = max2 - min2;
+                    var maxMo = yrD.findIndex(function(mDt) {
+                      return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+                        .reduce(function(a, t) { return a + myP(t); }, 0) === max2;
+                    });
+                    return { cat: cat2, avg: avg2, max: max2, min: min2, variance: variance, maxMo: maxMo };
+                  }).filter(Boolean).sort(function(a, b) { return b.variance - a.variance; });
+
+                  return catStats.slice(0, 5).map(function(cs) {
+                    var grp = GR.find(function(g) { return g.id === cs.cat.group; });
+                    return (
+                      <div key={cs.cat.id} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 16 }}>{cs.cat.icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: TX }}>{cs.cat.name}</span>
+                            <span style={{ ...S.tag(grp ? grp.color : TM), marginLeft: 6 }}>{grp ? grp.label : ""}</span>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: TX }}>{"Média: " + fmt(cs.avg)}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <div style={{ flex: 1, background: OK + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
+                            <div style={{ ...S.cap }}>{"Mín"}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: OK }}>{fmt(cs.min)}</div>
+                          </div>
+                          <div style={{ flex: 1, background: ER + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
+                            <div style={{ ...S.cap }}>{"Máx (" + (cs.maxMo >= 0 ? MA[cs.maxMo] : "-") + ")"}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{fmt(cs.max)}</div>
+                          </div>
+                          <div style={{ flex: 1, background: WN + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
+                            <div style={{ ...S.cap }}>{"Variação"}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: WN }}>{fmt(cs.variance)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+
+            {/* AI Insights */}
+            <div style={S.cardA(BD)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div>
+                  <div style={S.lbl}>{"✨ INSIGHTS COM IA"}</div>
+                  <div style={{ ...S.cap, marginTop: 2 }}>{"Análise do seu padrão financeiro anual"}</div>
+                </div>
+                <button
+                  onClick={function() {
+                  sAiLoading(false);
+                }}
+                style={{ ...S.btn(TM), padding: "8px 14px", fontSize: 12, opacity: 0.5, cursor: "not-allowed" }}
+                disabled={true}
+              >
+                {"🧠 Gerar análise"}
+              </button>
+            </div>
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{"🧠"}</div>
+              <div style={{ fontSize: 12, color: TM, lineHeight: 1.6 }}>{"Análise inteligente do seu padrão financeiro anual."}</div>
+              <div style={{ marginTop: 8, fontSize: 11, color: WN, fontWeight: 600, background: WN + "15", display: "inline-block", padding: "4px 12px", borderRadius: 12 }}>{"🔜 Em breve"}</div>
+            </div>
+            </div>
           </div>
         )}
 
