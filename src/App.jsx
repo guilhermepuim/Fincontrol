@@ -311,6 +311,8 @@ export default function App() {
   var [simAporte, sSimA] = useState("1000");
   var [simTaxa, sSimT] = useState("1");
   var [simTempo, sSimTp] = useState("60");
+  var [ifTarget, sIfTarget] = useState("");
+  var [showIfEdit, sShowIfEdit] = useState(false);
   var [rollover, setRollover] = useState({});
   var [chatOpen, sChatOpen] = useState(false);
   var [aiInsight, sAiInsight] = useState("");
@@ -916,16 +918,16 @@ export default function App() {
                     </div>
                   </div>
                   <PB value={s} max={budWithRollover[g.id] || b} color={g.color} noWarn={isInv} />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, alignItems: "center" }}>
-                    <div style={S.data(isInv ? (s > 0 ? OK : TX) : (r > 1 ? ER : r > 0.85 ? WN : OK))}>{fmt(s)}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, alignItems: "center" }}>
+                    <span style={S.cap}>{pct(r) + " utilizado"}</span>
                     {r > 1 ? (
                       isInv
                         ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ Acima da meta"}</span>
-                        : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: ER + "18", color: ER }}>{"⚠ +" + fmt(s - b)}</span>
+                        : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: ER + "18", color: ER }}>{"⚠ +" + fmt(s - b) + " estourado"}</span>
                     ) : r > 0.85 ? (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: WN + "18", color: WN }}>{"⚡ " + pct(r) + " usado"}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: WN + "18", color: WN }}>{"⚡ " + fmt(b - s) + " restam"}</span>
                     ) : (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ " + pct(r) + " usado"}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ " + fmt(b - s) + " disponível"}</span>
                     )}
                   </div>
                 </div>
@@ -938,10 +940,15 @@ export default function App() {
                 <div><div style={S.lbl}>{"CRÉDITOS"}</div><div style={S.data(OK)}>{fmt(totCr)}</div></div>
                 <div><div style={S.lbl}>{"DÉBITOS"}</div><div style={S.data(ER)}>{fmt(totDb)}</div></div>
               </div>
-              <div style={{ borderTop: "1px solid #F0F0F0", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ borderTop: "1px solid " + BR, paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={S.lbl}>{"SALDO"}</div>
                   <div style={S.data(totCr - totDb + dRcv >= 0 ? OK : ER)}>{fmt(totCr - totDb + dRcv)}</div>
+                  {dRcv > 0 && (
+                    <div style={{ ...S.cap, marginTop: 2 }}>
+                      {fmt(totCr - totDb) + " + " + fmt(dRcv) + " a receber"}
+                    </div>
+                  )}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={S.lbl}>{"TAXA POUPANÇA"}</div>
@@ -1047,31 +1054,6 @@ export default function App() {
           </div>
         )}
 
-            {/* Anomalias */}
-            {anomalies.length > 0 && (
-              <div style={S.cardA(ER)}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={S.lbl}>{"⚡ ALERTAS DE GASTO"}</div>
-                  <span style={{ fontSize: 11, color: TM }}>{String(anomalies.length) + " categoria" + (anomalies.length > 1 ? "s" : "")}</span>
-                </div>
-                {anomalies.slice(0, 3).map(function(an) {
-                  return (
-                    <div key={an.cat.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid " + BR }}>
-                      <span style={{ fontSize: 18 }}>{an.cat.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{an.cat.name}</div>
-                        <div style={S.cap}>{"Média histórica: " + fmt(an.avg)}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(an.cur)}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{"+" + pct(an.pct) + " acima"}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
           <div>
@@ -1134,13 +1116,31 @@ export default function App() {
                           <span>{"Máx: " + fmt(maxV)}</span>
                         </div>
                         {hist.length >= 2 && (
-                          <div style={{ marginTop: 6, padding: "6px 10px", background: (nwBalance > hist[0].balance ? "#F0FDF4" : "#FEF2F2"), borderRadius: 6 }}>
+                          <div style={{ marginTop: 6, padding: "6px 10px", background: nwBalance > hist[0].balance ? OK + "12" : ER + "12", borderRadius: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: nwBalance > hist[0].balance ? OK : ER }}>
                               {nwBalance > hist[0].balance ? "▲ +" : "▼ "}
                               {fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0,5) + " (" + pct(Math.abs((nwBalance - hist[0].balance) / hist[0].balance)) + ")"}
                             </span>
                           </div>
                         )}
+                        <div style={{ marginTop: 10 }}>
+                          <div style={S.lbl}>{"GERENCIAR HISTÓRICO"}</div>
+                          {nwHistory.slice().reverse().map(function(h2, idx2) {
+                            return (
+                              <div key={idx2} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid " + BR }}>
+                                <div>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(h2.balance)}</span>
+                                  <span style={{ ...S.cap, marginLeft: 8 }}>{sd(h2.date)}</span>
+                                </div>
+                                <span onClick={function() {
+                                  var newHist = nwHistory.filter(function(x) { return x.date !== h2.date; });
+                                  var newBal = newHist.length > 0 ? newHist[newHist.length - 1].balance : 0;
+                                  saveCfg({ ...cfg, netWorth: { balance: newBal, history: newHist } });
+                                }} style={{ cursor: "pointer", color: ER, fontSize: 16, padding: "0 6px", fontWeight: 700 }} title="Remover entrada">{"×"}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })()}
@@ -1334,21 +1334,43 @@ export default function App() {
                       )}
                       {coveredFx.length < fxd.length && (
                         <div style={{ marginTop: 8 }}>
-                          <div style={S.lbl}>{"PRÓXIMA META: PAGAR TAMBÉM"}</div>
-                          {fxd.filter(function(f) { return coveredFx.indexOf(f) < 0; }).slice(0, 2).map(function(f) {
-                            var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
-                            var plNeeded = Math.ceil(myA / rpTaxa);
-                            var faltaPL = Math.max(0, plNeeded - nwBalance);
-                            return (
-                              <div key={f.id} style={{ padding: "6px 0", borderBottom: "1px solid #F0F0F0" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                                  <span style={{ fontSize: 12, color: T3 }}>{f.name + " (" + fmt(myA) + "/mês)"}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED" }}>{"PL: " + fmt(plNeeded)}</span>
+                          <div style={S.lbl}>{"🎮 PRÓXIMAS CONQUISTAS"}</div>
+                          <div style={{ ...S.cap, marginBottom: 8 }}>{"Da menor para a maior — tangibilize o caminho"}</div>
+                          {(function() {
+                            var uncovered = fxd.filter(function(f) { return coveredFx.indexOf(f) < 0; })
+                              .map(function(f2) {
+                                var myA2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
+                                return { f: f2, myA: myA2, plNeeded: Math.ceil(myA2 / rpTaxa) };
+                              }).sort(function(a, b) { return a.myA - b.myA; });
+                            return uncovered.slice(0, 4).map(function(item) {
+                              var faltaPL = Math.max(0, item.plNeeded - nwBalance);
+                              var progressPct = Math.min(nwBalance / item.plNeeded, 1);
+                              var cat3 = cats.find(function(c) { return c.id === item.f.cat; });
+                              return (
+                                <div key={item.f.id} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <span style={{ fontSize: 16 }}>{cat3 ? cat3.icon : "💳"}</span>
+                                      <div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: TX }}>{item.f.name}</div>
+                                        <div style={S.cap}>{fmt(item.myA) + "/mês"}</div>
+                                      </div>
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: PETR }}>{"PL: " + fmt(item.plNeeded)}</div>
+                                      {faltaPL > 0
+                                        ? <div style={{ ...S.cap, color: ER }}>{"falta " + fmt(faltaPL)}</div>
+                                        : <div style={{ fontSize: 11, fontWeight: 700, color: OK }}>{"✓ Desbloqueado!"}</div>
+                                      }
+                                    </div>
+                                  </div>
+                                  <div style={{ height: 6, background: BR, borderRadius: 3, overflow: "hidden" }}>
+                                    <div style={{ width: pct(progressPct), height: "100%", background: faltaPL === 0 ? OK : TEAL, borderRadius: 3, transition: "width 0.5s" }} />
+                                  </div>
                                 </div>
-                                <div style={{ ...S.cap, color: ER }}>{"Falta acumular " + fmt(faltaPL) + " no PL"}</div>
-                              </div>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
                       )}
                     </div>
@@ -1364,7 +1386,8 @@ export default function App() {
             {(function() {
               var rpTaxa2 = 0.007;
               var rpMensal2 = nwBalance * rpTaxa2;
-              var totalExp = totDb > 0 ? totDb : totalInc * 0.75;
+              var ifTargetVal = parseFloat(String(ifTarget).replace(",", ".")) || 0;
+              var totalExp = ifTargetVal > 0 ? ifTargetVal : (totDb > 0 ? totDb : totalInc * 0.75);
               var fiPct = totalExp > 0 ? Math.min(rpMensal2 / totalExp, 1) : 0;
               var plFor100 = totalExp > 0 ? Math.ceil(totalExp / rpTaxa2) : 0;
               var plFor25 = Math.ceil(plFor100 * 0.25);
@@ -1384,8 +1407,24 @@ export default function App() {
                       <div style={S.lbl}>{"TERMÔMETRO DE LIBERDADE FINANCEIRA"}</div>
                       <div style={{ ...S.cap, marginTop: 2 }}>{"Quanto da sua vida o PL já financia"}</div>
                     </div>
-                    <span style={{ fontSize: 20 }}>{"🌡️"}</span>
+                    <button onClick={function() { sShowIfEdit(!showIfEdit); }}
+                      style={{ ...S.btnO, padding: "5px 10px", fontSize: 11 }}>
+                      {showIfEdit ? "Fechar" : "🎯 Definir meta"}
+                    </button>
                   </div>
+                  {showIfEdit && (
+                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginBottom: 12, border: "1px solid " + BR }}>
+                      <div style={S.lbl}>{"GASTO MENSAL DESEJADO NA IF (R$)"}</div>
+                      <div style={{ ...S.cap, marginBottom: 8 }}>{"Quanto você quer gastar por mês quando atingir a independência financeira"}</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input style={{ ...S.inp, flex: 1 }} placeholder="Ex: 15000" value={ifTarget} inputMode="decimal"
+                          onChange={function(e) { sIfTarget(e.target.value); }} />
+                        <button style={S.btn(BD)} onClick={function() { sShowIfEdit(false); }}>{"OK"}</button>
+                        {ifTarget && <button style={S.btnO} onClick={function() { sIfTarget(""); }}>{"Limpar"}</button>}
+                      </div>
+                      {!ifTarget && <div style={{ ...S.cap, marginTop: 6, color: WN }}>{"Sem meta definida — usando gastos do mês atual como referência"}</div>}
+                    </div>
+                  )}
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                     <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: fiPct >= 1 ? OK : fiPct >= 0.5 ? WN : BL }}>
                       {pct(fiPct)}
@@ -1657,6 +1696,32 @@ export default function App() {
                     </tfoot>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Anomalias */}
+            {anomalies.length > 0 && (
+              <div style={S.cardA(ER)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={S.lbl}>{"⚡ ALERTAS DE GASTO"}</div>
+                  <span style={{ fontSize: 11, color: TM }}>{String(anomalies.length) + " categoria" + (anomalies.length > 1 ? "s" : "")}</span>
+                </div>
+                <div style={{ ...S.cap, marginBottom: 8 }}>{"Categorias com gasto acima de 50% da média histórica"}</div>
+                {anomalies.slice(0, 5).map(function(an) {
+                  return (
+                    <div key={an.cat.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid " + BR }}>
+                      <span style={{ fontSize: 18 }}>{an.cat.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{an.cat.name}</div>
+                        <div style={S.cap}>{"Média: " + fmt(an.avg)}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(an.cur)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{"+" + pct(an.pct) + " acima"}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
