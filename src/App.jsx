@@ -503,7 +503,9 @@ export default function App() {
       var catBk = {};
       function aCB(cid, val) { if (!catBk[cid]) catBk[cid] = 0; catBk[cid] += val; }
       var hasRT = mTx.some(function(t2) { return t2.src !== "proj"; });
-      var hasR = hasRT || Object.keys(mFs).length > 0;
+      var hasRFs = Object.keys(mFs).filter(function(k) { return !k.endsWith("_p") && !k.endsWith("_r"); }).length > 0;
+      var hasR = hasRT || hasRFs;
+      var isPastNoData = ci < mo && !hasR;
       mTx.forEach(function(t2) {
         var ct = cR.find(function(c2) { return c2.id === t2.cat; });
         if (ct && !t2.reimbursed) {
@@ -514,7 +516,7 @@ export default function App() {
           aCB(ct.id, v2);
         }
       });
-      if (hasR) {
+      if (hasR && !isPastNoData) {
         fR.forEach(function(f2) {
           if (mFs[f2.id] === "paid" && (f2.mode || "budget") === "budget") {
             var ct = cR.find(function(c2) { return c2.id === f2.cat; });
@@ -527,7 +529,7 @@ export default function App() {
             }
           }
         });
-      } else {
+      } else if (!isPastNoData && ci >= mo) {
         fR.forEach(function(f2) {
           var ct = cR.find(function(c2) { return c2.id === f2.cat; });
           if (ct) {
@@ -1340,10 +1342,16 @@ export default function App() {
                             var uncovered = fxd.filter(function(f) { return coveredFx.indexOf(f) < 0; })
                               .map(function(f2) {
                                 var myA2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
-                                return { f: f2, myA: myA2, plNeeded: Math.ceil(myA2 / rpTaxa) };
-                              }).sort(function(a, b) { return a.myA - b.myA; });
-                            return uncovered.slice(0, 4).map(function(item) {
-                              var faltaPL = Math.max(0, item.plNeeded - nwBalance);
+                                var plNeeded2 = Math.ceil(myA2 / rpTaxa);
+                                return { f: f2, myA: myA2, plNeeded: plNeeded2, rpGerada: plNeeded2 * rpTaxa };
+                              })
+                              .filter(function(item) { return item.plNeeded > nwBalance; })
+                              .sort(function(a, b) { return a.myA - b.myA; });
+                            if (uncovered.length === 0) return (
+                              <div style={{ textAlign: "center", padding: "12px 0", color: OK, fontSize: 12, fontWeight: 600 }}>{"🏆 Você já cobre todas as contas fixas com sua renda passiva!"}</div>
+                            );
+                            return uncovered.slice(0, 5).map(function(item) {
+                              var faltaPL = item.plNeeded - nwBalance;
                               var progressPct = Math.min(nwBalance / item.plNeeded, 1);
                               var cat3 = cats.find(function(c) { return c.id === item.f.cat; });
                               return (
@@ -1358,14 +1366,16 @@ export default function App() {
                                     </div>
                                     <div style={{ textAlign: "right" }}>
                                       <div style={{ fontSize: 11, fontWeight: 700, color: PETR }}>{"PL: " + fmt(item.plNeeded)}</div>
-                                      {faltaPL > 0
-                                        ? <div style={{ ...S.cap, color: ER }}>{"falta " + fmt(faltaPL)}</div>
-                                        : <div style={{ fontSize: 11, fontWeight: 700, color: OK }}>{"✓ Desbloqueado!"}</div>
-                                      }
+                                      <div style={{ fontSize: 10, color: TEAL, fontWeight: 600 }}>{"→ gera " + fmt(item.rpGerada) + "/mês"}</div>
+                                      <div style={{ ...S.cap, color: ER }}>{"falta " + fmt(faltaPL) + " no PL"}</div>
                                     </div>
                                   </div>
                                   <div style={{ height: 6, background: BR, borderRadius: 3, overflow: "hidden" }}>
-                                    <div style={{ width: pct(progressPct), height: "100%", background: faltaPL === 0 ? OK : TEAL, borderRadius: 3, transition: "width 0.5s" }} />
+                                    <div style={{ width: pct(progressPct), height: "100%", background: TEAL, borderRadius: 3, transition: "width 0.5s" }} />
+                                  </div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+                                    <span style={{ fontSize: 9, color: TM }}>{fmt(nwBalance) + " atual"}</span>
+                                    <span style={{ fontSize: 9, color: TM }}>{pct(progressPct) + " do caminho"}</span>
                                   </div>
                                 </div>
                               );
@@ -1457,13 +1467,22 @@ export default function App() {
                     <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: BD, marginBottom: 4 }}>{"Próximo marco: " + nextMilestone.label}</div>
                       <div style={S.cap}>{nextMilestone.desc}</div>
-                      <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between" }}>
-                        <span style={S.cap}>{"PL necessário"}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{fmt(Math.ceil(nextMilestone.pct * totalExp / rpTaxa2))}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={S.cap}>{"Falta acumular"}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: ER }}>{fmt(plToNext)}</span>
+                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={S.cap}>{"PL necessário"}</span>
+                          <div style={{ textAlign: "right" }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{fmt(Math.ceil(nextMilestone.pct * totalExp / rpTaxa2))}</span>
+                            <span style={{ fontSize: 10, color: TEAL, fontWeight: 600, marginLeft: 6 }}>{"→ " + fmt(Math.ceil(nextMilestone.pct * totalExp / rpTaxa2) * rpTaxa2) + "/mês"}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={S.cap}>{"Falta acumular"}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: ER }}>{fmt(plToNext)}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={S.cap}>{"Renda passiva atual"}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{fmt(rpMensal2) + "/mês"}</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1632,98 +1651,97 @@ export default function App() {
         {/* ═══ ANÁLISE ANUAL ═══ */}
         {tab === "analise" && (
           <div>
-            {/* Comparativo mensal por grupo */}
-            {chD.length > 0 && (
-              <div style={S.card}>
-                <div style={{ ...S.h2, marginBottom: 4 }}>{"Comparativo Anual " + String(yr)}</div>
-                <div style={{ ...S.cap, marginBottom: 12 }}>{"Todos os meses lado a lado"}</div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%", minWidth: 500 }}>
-                    <thead>
-                      <tr style={{ borderBottom: "2px solid " + BR }}>
-                        <th style={{ padding: "6px 8px", textAlign: "left", color: TM, fontWeight: 600 }}>{"Mês"}</th>
-                        {["Essenciais","Invest.","N.Essenc.","Crédito","Saldo"].map(function(h) {
-                          return <th key={h} style={{ padding: "6px 8px", textAlign: "right", color: TM, fontWeight: 600 }}>{h}</th>;
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {chD.map(function(d, idx) {
-                        var isCur = idx === mo;
-                        var rowBg = isCur ? BG : "transparent";
-                        var prevD = idx > 0 ? chD[idx - 1] : null;
+            {/* Comparativo visual mensal */}
+            {chD.length > 0 && (function() {
+              var realMonths = chD.filter(function(d) { return d.real || d.td > 0 || d.cr > 0; });
+              if (realMonths.length === 0) return null;
+              var allMax = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
+              var groups = [
+                { key: "e", label: "Essenciais", color: TEAL },
+                { key: "i", label: "Investimentos", color: BD },
+                { key: "d", label: "Não Essenciais", color: AMB },
+                { key: "cr", label: "Crédito", color: OK },
+              ];
+              return (
+                <div style={S.card}>
+                  <div style={{ ...S.h2, marginBottom: 2 }}>{"Comparativo Visual " + String(yr)}</div>
+                  <div style={{ ...S.cap, marginBottom: 14 }}>{"Somente meses com dados reais"}</div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+                    {groups.map(function(g) {
+                      return (
+                        <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color }} />
+                          <span style={{ fontSize: 10, color: TM }}>{g.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {chD.map(function(d, idx) {
+                    if (!d.real && d.td === 0 && d.cr === 0) return null;
+                    var isCur = idx === mo;
+                    return (
+                      <div key={idx} style={{ marginBottom: 16, padding: isCur ? "10px 10px 10px 10px" : "6px 0", background: isCur ? BG : "transparent", borderRadius: isCur ? 8 : 0, border: isCur ? "1px solid " + BR : "none" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 13, fontWeight: 700, color: isCur ? BD : T2 }}>{MA[idx]}{isCur ? " ◀" : ""}</span>
+                            {!d.real && <span style={{ ...S.cap, background: WN + "20", color: WN, padding: "1px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700 }}>{"projeção"}</span>}
+                          </div>
+                          <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={S.cap}>{"Crédito"}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: OK }}>{fmt(d.cr)}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={S.cap}>{"Débito"}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(d.td)}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={S.cap}>{"Saldo"}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {groups.map(function(g) {
+                            var val = d[g.key] || 0;
+                            if (val === 0) return null;
+                            var barW = allMax > 0 ? (val / allMax) * 100 : 0;
+                            return (
+                              <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 70, fontSize: 10, color: TM, textAlign: "right", flexShrink: 0 }}>{g.label}</div>
+                                <div style={{ flex: 1, height: 20, background: BR, borderRadius: 4, overflow: "hidden" }}>
+                                  <div style={{ width: String(barW) + "%", height: "100%", background: g.color, borderRadius: 4, transition: "width 0.4s", display: "flex", alignItems: "center", paddingLeft: 6 }}>
+                                    {barW > 20 && <span style={{ fontSize: 10, color: "#fff", fontWeight: 600 }}>{fmt(val)}</span>}
+                                  </div>
+                                </div>
+                                {barW <= 20 && <span style={{ fontSize: 10, color: T3, fontWeight: 600, flexShrink: 0 }}>{fmt(val)}</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ borderTop: "2px solid " + BR, paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{"Total ano"}</span>
+                    <div style={{ display: "flex", gap: 16 }}>
+                      {[
+                        { l: "Débito", v: chD.reduce(function(a, d) { return a + d.td; }, 0), c: ER },
+                        { l: "Crédito", v: chD.reduce(function(a, d) { return a + d.cr; }, 0), c: OK },
+                        { l: "Saldo", v: chD.reduce(function(a, d) { return a + d.s; }, 0), c: BD },
+                      ].map(function(it) {
                         return (
-                          <tr key={idx} style={{ background: rowBg, borderBottom: "1px solid " + BR }}>
-                            <td style={{ padding: "6px 8px", fontWeight: isCur ? 700 : 500, color: isCur ? BD : T2 }}>
-                              {d.mes}{isCur ? " ◀" : ""}
-                            </td>
-                            {[
-                              { v: d.e, prev: prevD ? prevD.e : null, color: "#1B5FAA" },
-                              { v: d.i, prev: prevD ? prevD.i : null, color: "#1A3A5C" },
-                              { v: d.d, prev: prevD ? prevD.d : null, color: "#9A7420" },
-                              { v: d.cr, prev: prevD ? prevD.cr : null, color: OK },
-                              { v: d.s, prev: prevD ? prevD.s : null, color: d.s >= 0 ? OK : ER },
-                            ].map(function(cell, ci) {
-                              var diff = cell.prev !== null ? cell.v - cell.prev : null;
-                              return (
-                                <td key={ci} style={{ padding: "6px 8px", textAlign: "right" }}>
-                                  <div style={{ fontWeight: isCur ? 700 : 400, color: cell.color, fontSize: 11 }}>{fK(cell.v)}</div>
-                                  {diff !== null && Math.abs(diff) > 50 && (
-                                    <div style={{ fontSize: 9, color: diff > 0 ? ER : OK, fontWeight: 600 }}>
-                                      {(diff > 0 ? "▲" : "▼") + fK(Math.abs(diff))}
-                                    </div>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
+                          <div key={it.l} style={{ textAlign: "right" }}>
+                            <div style={S.cap}>{it.l}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: it.c }}>{fmt(it.v)}</div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: "2px solid " + BR, background: BG }}>
-                        <td style={{ padding: "6px 8px", fontWeight: 700, color: BD }}>{"Total"}</td>
-                        {[
-                          chD.reduce(function(a, d) { return a + d.e; }, 0),
-                          chD.reduce(function(a, d) { return a + d.i; }, 0),
-                          chD.reduce(function(a, d) { return a + d.d; }, 0),
-                          chD.reduce(function(a, d) { return a + d.cr; }, 0),
-                          chD.reduce(function(a, d) { return a + d.s; }, 0),
-                        ].map(function(total, ci) {
-                          return <td key={ci} style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: ci === 4 ? (total >= 0 ? OK : ER) : TX, fontSize: 11 }}>{fK(total)}</td>;
-                        })}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Anomalias */}
-            {anomalies.length > 0 && (
-              <div style={S.cardA(ER)}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={S.lbl}>{"⚡ ALERTAS DE GASTO"}</div>
-                  <span style={{ fontSize: 11, color: TM }}>{String(anomalies.length) + " categoria" + (anomalies.length > 1 ? "s" : "")}</span>
-                </div>
-                <div style={{ ...S.cap, marginBottom: 8 }}>{"Categorias com gasto acima de 50% da média histórica"}</div>
-                {anomalies.slice(0, 5).map(function(an) {
-                  return (
-                    <div key={an.cat.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid " + BR }}>
-                      <span style={{ fontSize: 18 }}>{an.cat.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{an.cat.name}</div>
-                        <div style={S.cap}>{"Média: " + fmt(an.avg)}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(an.cur)}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{"+" + pct(an.pct) + " acima"}</div>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Categoria que mais variou */}
             {yrD && (
