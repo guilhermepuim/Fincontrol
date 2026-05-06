@@ -3,30 +3,30 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
 
-/* ══ PRUMO BRANDBOOK — AZUL ══ */
-var BL = "#1A3A5C";
-var BD = "#0F2540";
-var BG = "#E8F0FA";
-var TX = "#0F2540";
-var T2 = "#1A3A5C";
-var T3 = "#2A5A8C";
-var TM = "#6A90B8";
-var BR = "#D8E8F4";
-var OK = "#2D7A3E";
-var ER = "#C0392B";
-var WN = "#9A7420";
-var TEAL = "#1B5FAA";
-var AMB = "#9A7420";
-var PETR = "#003F5D";
-var CARD = "#FDFAF5";
-var BGMAIN = "#F5F0E8";
+/* ══ PRUMO DESIGN SYSTEM — oklch harmônico ══ */
+var BL = "#2B4F82";    /* brand  oklch(0.38 0.07 235) */
+var BD = "#1E2D3D";    /* ink    oklch(0.22 0.02 250) */
+var BG = "#F5F2ED";    /* surface-2 oklch(0.965 0.006 80) */
+var TX = "#1E2D3D";    /* ink */
+var T2 = "#2B4F82";    /* brand */
+var T3 = "#3D5570";    /* ink-2  oklch(0.42 0.025 250) */
+var TM = "#6A8BA8";    /* ink-3  oklch(0.62 0.02 250) */
+var BR = "#E8E4DC";    /* line   oklch(0.92 0.008 80) - borda quente */
+var OK = "#2D7845";    /* pos    oklch(0.58 0.13 155) */
+var ER = "#C04030";    /* neg    oklch(0.58 0.16 25) */
+var WN = "#A8822A";    /* warn/accent-2 oklch(0.62 0.14 65) */
+var TEAL = "#2B4F82";  /* brand alias */
+var AMB = "#C9A44A";   /* accent oklch(0.72 0.13 75) - âmbar vibrante */
+var PETR = "#1D3A6A";  /* brand-2 oklch(0.30 0.075 235) */
+var CARD = "#FFFFFF";  /* surface oklch(1 0 0) */
+var BGMAIN = "#FAF9F6"; /* bg    oklch(0.985 0.004 80) - areia quase-branca */
 
 var DS = 14000;
 var DP = { essenciais: 50, investimentos: 25, desejos: 25 };
 var GR = [
-  { id: "essenciais", label: "Essenciais", color: "#1B5FAA" },
-  { id: "investimentos", label: "Investimentos", color: "#1A3A5C" },
-  { id: "desejos", label: "Não Essenciais", color: "#9A7420" },
+  { id: "essenciais", label: "Essenciais", color: "#2B4F82" },
+  { id: "investimentos", label: "Investimentos", color: "#1E2D3D" },
+  { id: "desejos", label: "Não Essenciais", color: "#C9A44A" },
 ];
 var DC = [
   { id: "moradia", name: "Moradia", icon: "🏠", group: "essenciais" },
@@ -37,13 +37,13 @@ var DC = [
   { id: "dividas", name: "Dívidas e Impostos", icon: "💳", group: "essenciais" },
   { id: "ferramentas", name: "Ferramentas", icon: "🛠️", group: "essenciais" },
   { id: "vestuario", name: "Vestuário", icon: "👔", group: "essenciais" },
-  { id: "comerfora_suno", name: "Comer fora Trabalho", icon: "🍽️", group: "essenciais" },
-  { id: "bernardo", name: "Filho(a)", icon: "👶", group: "essenciais" },
+  { id: "comerfora_suno", name: "Comer fora Suno", icon: "🍽️", group: "essenciais" },
+  { id: "bernardo", name: "Bernardo", icon: "👶", group: "essenciais" },
   { id: "investimentos_cat", name: "Investimentos", icon: "📈", group: "investimentos" },
   { id: "reservas", name: "Reservas e Metas", icon: "🎯", group: "investimentos" },
   { id: "compras", name: "Compras", icon: "🛍️", group: "desejos" },
   { id: "lazer", name: "Lazer", icon: "🎉", group: "desejos" },
-  { id: "lazer_suno", name: "Lazer Trabalho", icon: "🏢", group: "desejos" },
+  { id: "lazer_suno", name: "Lazer Suno", icon: "🏢", group: "desejos" },
   { id: "comerfora", name: "Comer fora / iFood", icon: "🍔", group: "desejos" },
   { id: "viagem", name: "Viagem", icon: "✈️", group: "desejos" },
   { id: "assinaturas", name: "Assinaturas", icon: "📺", group: "desejos" },
@@ -51,9 +51,7 @@ var DC = [
 var PAYS = ["Cartão Nubank", "PIX", "Boleto", "Dinheiro", "Cartão Porto", "Cartão Itaú", "Cartão Inter"];
 var MS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 var MA = MS.map(function(m) { return m.slice(0, 3); });
-var PC = ["#1B5FAA","#1A3A5C","#9A7420","#003F5D","#4E97D1","#C9A84C","#7BB4E3","#2D7A3E","#0F2540","#6A90B8"];
-var WD = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-var WD_FULL = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+var PC = ["#2B4F82","#1E2D3D","#C9A44A","#1D3A6A","#4E97D1","#A8822A","#7BB4E3","#2D7845","#3D5570","#6A8BA8"];
 
 /* ══ HELPERS ══ */
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
@@ -88,6 +86,13 @@ async function sv(k, d) {
   } catch (e) { console.error(e); }
 }
 
+/* Fix B1: closure correta para salvar projeções de parcelas */
+function saveProjMonth(fKey, projTx) {
+  ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
+    sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
+  });
+}
+
 function calcSpent(mData, cats, fxd) {
   var sp = { essenciais: 0, investimentos: 0, desejos: 0 };
   var sc = {};
@@ -117,16 +122,16 @@ function calcSpent(mData, cats, fxd) {
 
 /* ══ STYLES ══ */
 var S = {
-  card: { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR },
-  cardA: function(c) { return { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
-  inp: { background: BG, border: "1px solid " + BR, borderRadius: 6, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
-  btn: function(c) { return { background: c, border: "none", borderRadius: 6, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
-  btnO: { background: CARD, border: "1px solid " + BR, borderRadius: 6, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
-  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: c + "20", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
+  card: { background: CARD, borderRadius: 12, padding: 16, marginBottom: 10, border: "1px solid " + BR },
+  cardA: function(c) { return { background: CARD, borderRadius: 12, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
+  inp: { background: BG, border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
+  btn: function(c) { return { background: c, border: "none", borderRadius: 999, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
+  btnO: { background: CARD, border: "1px solid " + BR, borderRadius: 999, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
+  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: c + "20", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
   g2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
-  ck: { accentColor: OK, width: 16, height: 16, cursor: "pointer" },
-  lbl: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: TM, textTransform: "uppercase", marginBottom: 4 },
-  h2: { fontFamily: "'Montserrat',sans-serif", fontSize: 14, fontWeight: 700, color: BD },
+  ck: { accentColor: AMB, width: 16, height: 16, cursor: "pointer" },
+  lbl: { fontSize: 10, fontWeight: 500, letterSpacing: "0.12em", color: TM, textTransform: "uppercase", marginBottom: 4, fontFamily: "'JetBrains Mono',monospace" },
+  h2: { fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 500, color: BD },
   data: function(c) { return { fontSize: 28, fontWeight: 700, color: c || TX, fontFamily: "'Inter',sans-serif", lineHeight: 1.1 }; },
   cap: { fontSize: 11, color: TM, fontFamily: "'Inter',sans-serif" },
 };
@@ -136,8 +141,8 @@ function PB(props) {
   var r = props.max > 0 ? props.value / props.max : 0;
   var c = props.noWarn ? (props.color || BL) : (r > 1 ? ER : r > 0.85 ? WN : (props.color || BL));
   return (
-    <div style={{ background: "#F0F0F0", borderRadius: 4, height: 6, overflow: "hidden", width: "100%" }}>
-      <div style={{ width: String(Math.min(r * 100, 100)) + "%", height: "100%", borderRadius: 4, background: c, transition: "width 0.4s" }} />
+    <div style={{ background: BR, borderRadius: 999, height: 7, overflow: "hidden", width: "100%" }}>
+      <div style={{ width: String(Math.min(r * 100, 100)) + "%", height: "100%", borderRadius: 999, background: c, transition: "width 0.4s" }} />
     </div>
   );
 }
@@ -205,7 +210,7 @@ function ChartTip(props) {
   return (
     <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "#fff", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", zIndex: 20, minWidth: 180, whiteSpace: "nowrap" }}
       onClick={function(e) { e.stopPropagation(); }}>
-      <div style={{ ...S.h2, fontSize: 12, marginBottom: 6, borderBottom: "1px solid #F0F0F0", paddingBottom: 4 }}>{MS[i] + (d.real ? "" : " (projeção)")}</div>
+      <div style={{ ...S.h2, fontSize: 12, marginBottom: 6, borderBottom: "1px solid " + BR, paddingBottom: 4 }}>{MS[i] + (d.real ? "" : " (projeção)")}</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, ...S.cap }}>
         <span>{"Débitos"}</span><span style={{ fontWeight: 700, color: ER }}>{fmt(d.td)}</span>
       </div>
@@ -230,64 +235,39 @@ function ChartTip(props) {
           </div>
         );
       })}
-      <div style={{ borderTop: "1px solid #F0F0F0", paddingTop: 4, marginTop: 2, display: "flex", justifyContent: "space-between", ...S.cap }}>
+      <div style={{ borderTop: "1px solid " + BR, paddingTop: 4, marginTop: 2, display: "flex", justifyContent: "space-between", ...S.cap }}>
         <span style={{ fontWeight: 700, color: BD }}>{"Saldo"}</span>
         <span style={{ fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</span>
       </div>
+
     </div>
   );
 }
 
-/* Reserva semáforo card pequeno (Dashboard) */
-function ReservaPill(props) {
-  var months = props.months;
-  var color = months >= 12 ? OK : months >= 3 ? WN : ER;
-  var label = months >= 12 ? "Sólida" : months >= 3 ? "Razoável" : "Insuficiente";
-  var icon = months >= 12 ? "✅" : months >= 3 ? "⚡" : "⚠️";
-  return (
-    <div onClick={props.onClick} style={{ ...S.cardA(color), cursor: "pointer" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={S.lbl}>{"RESERVA DE EMERGÊNCIA"}</div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 2 }}>
-            <span style={{ fontSize: 26, fontWeight: 700, color: color, fontFamily: "'Montserrat',sans-serif" }}>{months >= 99 ? "99+" : months.toFixed(1)}</span>
-            <span style={{ fontSize: 12, color: TM, fontWeight: 600 }}>{"meses cobertos"}</span>
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: color, marginTop: 2 }}>{icon + " " + label}</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={S.cap}>{"Reserva"}</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T2 }}>{fmt(props.amount)}</div>
-          <div style={{ ...S.cap, marginTop: 4 }}>{"Despesa essencial"}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: T3 }}>{fmt(props.avgEss) + "/mês"}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+/* ══ MAIN APP ══ */
 
 /* ══ LOGIN SCREEN ══ */
 function LoginScreen({ onLogin }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BGMAIN, fontFamily: "'Inter',sans-serif" }}>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 40, border: "1px solid #DDDDDD", textAlign: "center", maxWidth: 320, width: "90%" }}>
+      <div style={{ background: CARD, borderRadius: 16, padding: 40, border: "1px solid " + BR, textAlign: "center", maxWidth: 320, width: "90%" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14, height: 26 }}>
-              <div style={{ width: 5, height: 5, background: "#C9A84C", borderRadius: "50%" }} />
+              <div style={{ width: 5, height: 5, background: AMB, borderRadius: "50%" }} />
               <div style={{ width: 2, background: BD, flex: 1, marginTop: 3 }} />
               <div style={{ width: 10, height: 11, background: BD, clipPath: "polygon(50% 100%,0 0,100% 0)" }} />
             </div>
-            <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 28, color: BD, letterSpacing: "0.5px" }}>{"Prumo"}</span>
+            <span style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 500, color: BD, letterSpacing: "-0.01em" }}>{"Prumo"}</span>
           </div>
         </div>
-        <p style={{ color: "#666666", fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
+        <p style={{ color: TM, fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
         <button onClick={onLogin}
-          style={{ background: "#1B72B8", border: "none", borderRadius: 8, padding: "13px 24px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center" }}>
+          style={{ background: BL, border: "none", borderRadius: 999, padding: "13px 24px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center" }}>
           <span style={{ fontSize: 18 }}>{"G"}</span>
           {"Entrar com Google"}
         </button>
-        <p style={{ color: "#BBBBBB", fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
+        <p style={{ color: TM, fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
       </div>
     </div>
   );
@@ -328,13 +308,6 @@ export default function App() {
   var [showNw, sShowNw] = useState(false);
   var [editLimId, sELimId] = useState(null);
   var [editLimV, sELimV] = useState("");
-  var [resInput, sResI] = useState("");
-  var [showRes, sShowRes] = useState(false);
-  var [showAsset, sShowAsset] = useState(false);
-  var [showLiab, sShowLiab] = useState(false);
-  var [af, sAf] = useState({ name: "", value: "", type: "imovel" });
-  var [lf, sLf] = useState({ name: "", amount: "", type: "financiamento" });
-  var [subRev, sSubRev] = useState({});
   var fr = useRef(null);
   var emFm = { desc: "", valor: "", cat: "", pay: "Cartão Nubank", hs: false, sp: [{ person: "Duda", pct: 30 }], date: "", reimb: false, ic: "", it: "", note: "" };
   var [fm, sFm] = useState(emFm);
@@ -349,9 +322,12 @@ export default function App() {
   var [showIfEdit, sShowIfEdit] = useState(false);
   var [rollover, setRollover] = useState({});
   var [chatOpen, sChatOpen] = useState(false);
+  var [aiInsight, sAiInsight] = useState("");
+  var [aiLoading, sAiLoading] = useState(false);
   var [chatMsgs, sChatMsgs] = useState([]);
   var [chatInput, sChatIn] = useState("");
   var [chatLd, sChatLd] = useState(false);
+  var chatEndRef = useRef(null);
 
   var mK = tk(yr, mo);
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
@@ -368,13 +344,7 @@ export default function App() {
     var active = true;
     (async function() {
       sLd(true);
-      var defCfg = { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] }, emergencyReserve: { amount: 0 }, assets: [], liabilities: [], subscriptionsReview: {} };
-      var c = await ld("fc2-cfg", defCfg);
-      /* Migration: garantir campos novos em cfgs antigos */
-      if (!c.emergencyReserve) c.emergencyReserve = { amount: 0 };
-      if (!c.assets) c.assets = [];
-      if (!c.liabilities) c.liabilities = [];
-      if (!c.subscriptionsReview) c.subscriptionsReview = {};
+      var c = await ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } });
       var m = await ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] });
       var rv = await ld("fc2-rollover", {});
       var mp = await ld("fc2-maps", {});
@@ -383,7 +353,6 @@ export default function App() {
       var pm = await ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} });
       if (!active) return;
       sCfg(c); sMd(m); sMp(mp); sPv(pm); sSI(String(c.salary)); setRollover(rv); sLd(false);
-      sSubRev(c.subscriptionsReview || {});
     })();
     return function() { active = false; };
   }, [yr, mo]);
@@ -422,9 +391,6 @@ export default function App() {
   var goals = cfg.goals || [];
   var catLimits = cfg.catLimits || {};
   var nw = cfg.netWorth || { balance: 0, history: [] };
-  var emergencyReserve = (cfg.emergencyReserve && cfg.emergencyReserve.amount) || 0;
-  var assets = cfg.assets || [];
-  var liabilities = cfg.liabilities || [];
   var extraCr = crs.reduce(function(a, c) { return a + c.amount; }, 0);
   var totalInc = sal + extraCr;
   var bud = {};
@@ -441,7 +407,6 @@ export default function App() {
 
   /* ── Rollover calculation ── */
   var saveRollover = function(rv) { setRollover(rv); sv("fc2-rollover", rv); };
-  var prevSp = pvMd ? calcSpent(pvMd, cats, fxd).spent : null;
   var prevKey = tk(mo === 0 ? yr - 1 : yr, mo === 0 ? 11 : mo - 1);
   var rvCredit = {};
   GR.forEach(function(g) {
@@ -453,34 +418,6 @@ export default function App() {
   });
   var budWithRollover = {};
   GR.forEach(function(g) { budWithRollover[g.id] = bud[g.id] + (rvCredit[g.id] || 0); });
-
-  /* ── Despesa essencial média (ultimos 3 meses com dados reais) ── */
-  var avgEssMonth = 0;
-  if (yrD) {
-    var essVals = [];
-    for (var iEss = 0; iEss < 12; iEss++) {
-      var mEss = yrD[iEss] || { tx: [], cr: [], fs: {} };
-      var hasEssReal = (mEss.tx || []).some(function(t) { return t.src !== "proj"; }) || Object.keys(mEss.fs || {}).filter(function(k) { return !k.endsWith("_p") && !k.endsWith("_r"); }).length > 0;
-      if (!hasEssReal) continue;
-      var spE = calcSpent(mEss, cats, fxd).spent;
-      if (spE.essenciais > 0) essVals.push(spE.essenciais);
-    }
-    essVals.sort(function(a, b) { return b - a; });
-    var lastN = essVals.slice(0, 3);
-    if (lastN.length > 0) avgEssMonth = lastN.reduce(function(a, v) { return a + v; }, 0) / lastN.length;
-  }
-  if (avgEssMonth === 0) avgEssMonth = bud.essenciais || (totalInc * 0.5);
-
-  var reserveCoverage = avgEssMonth > 0 ? emergencyReserve / avgEssMonth : 0;
-
-  /* ── PL Completo ── */
-  var totalAssetsValue = assets.reduce(function(a, x) { return a + (x.value || 0); }, 0);
-  var totalLiabValue = liabilities.reduce(function(a, x) { return a + (x.amount || 0); }, 0);
-  var nwBalance = nw.balance || 0;
-  var totalAssetsAll = nwBalance + emergencyReserve + totalAssetsValue;
-  var plCompleto = totalAssetsAll - totalLiabValue;
-  var liquidAssets = nwBalance + emergencyReserve;
-  var illiquidAssets = totalAssetsValue;
 
   /* ── Anomaly detection ── */
   var anomalies = [];
@@ -504,80 +441,6 @@ export default function App() {
     anomalies.sort(function(a, b) { return b.delta - a.delta; });
   }
 
-  /* ── Detecção de Assinaturas Recorrentes ── */
-  var subscriptions = [];
-  if (yrD) {
-    var subMap = {};
-    yrD.forEach(function(mDt, mIdx) {
-      var seenInMonth = {};
-      (mDt.tx || []).forEach(function(tx) {
-        if (tx.reimbursed) return;
-        if (pi(tx.desc)) return; /* parcelado, não é assinatura */
-        var key = nd(tx.desc);
-        if (!key || key.length < 3) return;
-        if (seenInMonth[key]) return; /* já contado neste mês */
-        seenInMonth[key] = true;
-        if (!subMap[key]) subMap[key] = { name: tx.desc, amounts: [], months: [], cat: tx.cat };
-        subMap[key].amounts.push(myP(tx));
-        subMap[key].months.push(mIdx);
-      });
-      /* fixed também conta como assinatura recorrente */
-      (cfg.fixed || []).forEach(function(f) {
-        if ((mDt.fs || {})[f.id] === "paid") {
-          var key2 = nd(f.name);
-          if (!key2 || key2.length < 3) return;
-          if (seenInMonth[key2]) return;
-          seenInMonth[key2] = true;
-          if (!subMap[key2]) subMap[key2] = { name: f.name, amounts: [], months: [], cat: f.cat, isFixed: true };
-          subMap[key2].isFixed = true;
-          subMap[key2].amounts.push(f.hasSplit ? f.amount - spt(f) : f.amount);
-          subMap[key2].months.push(mIdx);
-        }
-      });
-    });
-    Object.keys(subMap).forEach(function(k) {
-      var item = subMap[k];
-      var uniqueMonths = item.months.length;
-      if (uniqueMonths < 3) return;
-      var avgAmt = item.amounts.reduce(function(a, v) { return a + v; }, 0) / item.amounts.length;
-      if (avgAmt < 5) return;
-      var minAmt = Math.min.apply(null, item.amounts);
-      var maxAmt = Math.max.apply(null, item.amounts);
-      var variation = avgAmt > 0 ? (maxAmt - minAmt) / avgAmt : 0;
-      if (variation > 0.20 && !item.isFixed) return;
-      subscriptions.push({ key: k, name: item.name, avg: avgAmt, occurrences: uniqueMonths, cat: item.cat, isFixed: !!item.isFixed, annual: avgAmt * 12 });
-    });
-    subscriptions.sort(function(a, b) { return b.avg - a.avg; });
-  }
-  var subsActiveCount = subscriptions.filter(function(s) { return subRev[s.key] !== "cancelled"; }).length;
-  var subsTotalMonthly = subscriptions.filter(function(s) { return subRev[s.key] !== "cancelled"; }).reduce(function(a, s) { return a + s.avg; }, 0);
-  var subsTotalAnnual = subsTotalMonthly * 12;
-
-  /* ── Análise por dia da semana ── */
-  var weekdayStats = [0, 0, 0, 0, 0, 0, 0];
-  var weekdayCount = [0, 0, 0, 0, 0, 0, 0];
-  var weekdayTotal = 0;
-  if (yrD) {
-    yrD.forEach(function(mDt) {
-      (mDt.tx || []).forEach(function(tx) {
-        if (!tx.date || tx.reimbursed) return;
-        if (tx.src === "proj") return;
-        var d = new Date(tx.date);
-        if (isNaN(d.getTime())) return;
-        var dow = d.getDay();
-        var v = myP(tx);
-        if (v <= 0) return;
-        weekdayStats[dow] += v;
-        weekdayCount[dow]++;
-        weekdayTotal += v;
-      });
-    });
-  }
-  var weekdayAvg = weekdayStats.map(function(s, i) { return weekdayCount[i] > 0 ? s / weekdayCount[i] : 0; });
-  var weekdayMax = Math.max.apply(null, weekdayStats.concat([1]));
-  var topWeekdayIdx = weekdayStats.indexOf(Math.max.apply(null, weekdayStats));
-  var weekdayAvgGlobal = weekdayCount.reduce(function(a, v) { return a + v; }, 0) > 0 ? weekdayTotal / weekdayCount.reduce(function(a, v) { return a + v; }, 0) : 0;
-
   var debtors = {};
   function addD(p, it) {
     if (!debtors[p]) debtors[p] = { items: [], total: 0, pending: 0 };
@@ -599,6 +462,7 @@ export default function App() {
   var fxMy = fxd.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
   var invSp = spent.investimentos;
   var savR = totalInc > 0 ? invSp / totalInc : 0;
+  var prevSp = pvMd ? calcSpent(pvMd, cats, fxd).spent : null;
 
   /* Active installments */
   var activeInst = [];
@@ -620,6 +484,7 @@ export default function App() {
   var totalInstMonthly = activeInst.reduce(function(a, it) { return a + it.amount; }, 0);
 
   /* Net worth projection */
+  var nwBalance = nw.balance || 0;
   var nwHistory = nw.history || [];
   var monthlyInvest = invSp > 0 ? invSp : totalInc * 0.25;
   var nwProjection = [];
@@ -697,20 +562,6 @@ export default function App() {
       .sort(function(a, b) { return b.value - a.value; });
   });
 
-  /* Score Mensal */
-  var scoreS = Math.min(savR / 0.25, 1) * 40;
-  var limCats = cats.filter(function(c) { return catLimits[c.id]; });
-  var limOk = limCats.filter(function(c) { return (spC[c.id] || 0) <= catLimits[c.id]; }).length;
-  var scoreL = limCats.length > 0 ? (limOk / limCats.length) * 30 : 30;
-  var goalsTotal = goals.length;
-  var avgGP = goalsTotal > 0 ? goals.reduce(function(a, g) { return a + Math.min((g.saved || 0) / g.target, 1); }, 0) / goalsTotal : 1;
-  var scoreG = avgGP * 30;
-  var score = Math.round(scoreS + scoreL + scoreG);
-  var scoreColor = score >= 80 ? OK : score >= 60 ? WN : score >= 40 ? "#F59E0B" : ER;
-  var scoreLbl = score >= 80 ? "Excelente 🏆" : score >= 60 ? "Bom 👍" : score >= 40 ? "Regular ⚠️" : "Atenção 🚨";
-  var scoreCirc = 2 * Math.PI * 36;
-  var scoreOff = scoreCirc * (1 - score / 100);
-
   /* ── Navigation ── */
   var goPrev = function() {
     if (mo === 0) { sMo(11); sYr(function(y) { return y - 1; }); }
@@ -740,9 +591,7 @@ export default function App() {
         var fKey = tk(fy, fmo);
         var projDesc = fm.desc + " " + String(ii) + "/" + String(it);
         var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
-        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
-          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
-        });
+        saveProjMonth(fKey, projTx);
       }
     }
     sFm(emFm);
@@ -814,10 +663,11 @@ export default function App() {
     var msg = chatInput.trim();
     if (!msg || chatLd) return;
     var userMsg = { role: "user", text: msg };
-    sChatMsgs(chatMsgs.concat([userMsg]));
+    var newMsgs = chatMsgs.concat([userMsg]);
+    sChatMsgs(newMsgs);
     sChatIn("");
     sChatLd(true);
-    sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "🔜 Assistente financeiro com IA em breve. Por enquanto, use a aba Input." }]); });
+    sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "🔜 Assistente financeiro em breve! Esta funcionalidade estará disponível em breve." }]); });
     sChatLd(false);
   };
 
@@ -843,46 +693,28 @@ export default function App() {
     saveCfg({ ...cfg, netWorth: { balance: v, history: h } });
     sNwI(""); sShowNw(false);
   };
-  var updateReserve = function() {
-    var v = parseFloat(resInput.replace(",", "."));
-    if (isNaN(v) || v < 0) return;
-    saveCfg({ ...cfg, emergencyReserve: { amount: v } });
-    sResI(""); sShowRes(false);
-  };
-  var addAsset = function() {
-    var v = parseFloat(af.value.replace(",", "."));
-    if (!af.name || isNaN(v) || v <= 0) return;
-    var newAsset = { id: uid(), name: af.name, value: v, type: af.type };
-    saveCfg({ ...cfg, assets: assets.concat([newAsset]) });
-    sAf({ name: "", value: "", type: "imovel" }); sShowAsset(false);
-  };
-  var rmAsset = function(id) { saveCfg({ ...cfg, assets: assets.filter(function(x) { return x.id !== id; }) }); };
-  var updAssetValue = function(id, v) {
-    var n = parseFloat(String(v).replace(",", "."));
-    if (isNaN(n)) return;
-    saveCfg({ ...cfg, assets: assets.map(function(x) { return x.id === id ? { ...x, value: n } : x; }) });
-  };
-  var addLiab = function() {
-    var v = parseFloat(lf.amount.replace(",", "."));
-    if (!lf.name || isNaN(v) || v <= 0) return;
-    var newLiab = { id: uid(), name: lf.name, amount: v, type: lf.type };
-    saveCfg({ ...cfg, liabilities: liabilities.concat([newLiab]) });
-    sLf({ name: "", amount: "", type: "financiamento" }); sShowLiab(false);
-  };
-  var rmLiab = function(id) { saveCfg({ ...cfg, liabilities: liabilities.filter(function(x) { return x.id !== id; }) }); };
-  var updLiabValue = function(id, v) {
-    var n = parseFloat(String(v).replace(",", "."));
-    if (isNaN(n)) return;
-    saveCfg({ ...cfg, liabilities: liabilities.map(function(x) { return x.id === id ? { ...x, amount: n } : x; }) });
-  };
-  var togSubReview = function(key) {
-    var newRev = { ...subRev };
-    newRev[key] = newRev[key] === "cancelled" ? "active" : "cancelled";
-    sSubRev(newRev);
-    saveCfg({ ...cfg, subscriptionsReview: newRev });
-  };
 
-  var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
+  var rmTx = function(id) {
+    var tx = txs.find(function(t) { return t.id === id; });
+    saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) });
+    if (tx && yrD) {
+      var cleanDesc = nd(tx.desc);
+      var txAmt = Math.round(tx.amount);
+      for (var ri = 0; ri < 12; ri++) {
+        if (ri === mo) continue;
+        var futMd2 = yrD[ri];
+        if (!futMd2) continue;
+        var origTxs = futMd2.tx || [];
+        var filteredT = origTxs.filter(function(t) {
+          if (t.src !== "proj") return true;
+          return !(nd(t.desc) === cleanDesc && Math.round(t.amount) === txAmt);
+        });
+        if (filteredT.length !== origTxs.length) {
+          sv("fc2-m-" + tk(yr, ri), { ...futMd2, tx: filteredT });
+        }
+      }
+    }
+  };
   var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
   var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxd.filter(function(f) { return f.id !== id; }) }); };
   var togRcv = function(id) {
@@ -997,7 +829,7 @@ export default function App() {
   };
 
   var tabs = [
-    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "vida", l: "Vida" }, { id: "analise", l: "Análise" }, { id: "metas", l: "Metas" }, { id: "input", l: "Input" },
+    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "analise", l: "Análise" }, { id: "metas", l: "Metas" }, { id: "input", l: "Input" },
     { id: "fixas", l: "Fixas" }, { id: "monthly", l: "Mensal" }, { id: "deve", l: "Devedores" },
   ];
 
@@ -1019,22 +851,22 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Inter',sans-serif", background: BGMAIN, color: TX, minHeight: "100vh" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
       {/* Header */}
       <div style={{ background: CARD, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid " + BR }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 12, height: 22 }}>
-            <div style={{ width: 4, height: 4, background: "#C9A84C", borderRadius: "50%", position: "relative", zIndex: 1 }} />
+            <div style={{ width: 4, height: 4, background: AMB, borderRadius: "50%", position: "relative", zIndex: 1 }} />
             <div style={{ width: 1.5, background: BD, flex: 1, marginTop: 3 }} />
             <div style={{ width: 8, height: 9, background: BD, clipPath: "polygon(50% 100%,0 0,100% 0)" }} />
           </div>
-          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: BD, letterSpacing: "0.5px" }}>{"Prumo"}</span>
+          <span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 500, color: BD, letterSpacing: "-0.01em" }}>{"Prumo"}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button style={{ background: "#F0F0F0", border: "none", borderRadius: 6, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goPrev}>{"◀"}</button>
-          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: BD, minWidth: 130, textAlign: "center" }}>{MS[mo] + " " + String(yr)}</span>
-          <button style={{ background: "#F0F0F0", border: "none", borderRadius: 6, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goNext}>{"▶"}</button>
+          <button style={{ background: BG, border: "1px solid " + BR, borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goPrev}>{"◀"}</button>
+          <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Fraunces',serif", color: BD, minWidth: 130, textAlign: "center" }}>{MS[mo] + " " + String(yr)}</span>
+          <button style={{ background: BG, border: "1px solid " + BR, borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goNext}>{"▶"}</button>
         </div>
         <button onClick={function() { signOut(auth); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: TM, padding: "4px 6px" }} title="Sair">{"Sair"}</button>
       </div>
@@ -1077,9 +909,6 @@ export default function App() {
               </div>
               <div style={{ ...S.cap, cursor: "pointer" }} onClick={function() { sSI(String(sal)); sES(true); }}>{"✏️"}</div>
             </div>
-
-            {/* Reserva de Emergência - card permanente */}
-            <ReservaPill months={reserveCoverage} amount={emergencyReserve} avgEss={avgEssMonth} onClick={function() { sTab("vida"); }} />
 
             {/* Fixed summary */}
             {fxd.length > 0 && (
@@ -1150,44 +979,61 @@ export default function App() {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={S.lbl}>{"TAXA POUPANÇA"}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: savR >= 0.25 ? OK : savR >= 0.1 ? WN : ER }}>{pct(savR)}</div>
+                  <div style={{ fontSize: 24, fontWeight: 600, fontFamily: "'Fraunces',serif", color: savR >= 0.25 ? OK : savR >= 0.1 ? WN : ER }}>{pct(savR)}</div>
                 </div>
               </div>
             </div>
 
             {/* Score Mensal */}
-            <div style={{ ...S.card, background: "linear-gradient(135deg, #fff 0%, " + BG + " 100%)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ position: "relative", width: 88, height: 88, flexShrink: 0 }}>
-                  <svg width="88" height="88" viewBox="0 0 88 88">
-                    <circle cx="44" cy="44" r="36" fill="none" stroke="#F0F0F0" strokeWidth="8" />
-                    <circle cx="44" cy="44" r="36" fill="none" stroke={scoreColor} strokeWidth="8"
-                      strokeDasharray={String(scoreCirc)} strokeDashoffset={String(scoreOff)}
-                      strokeLinecap="round" transform="rotate(-90 44 44)"
-                      style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-                    <text x="44" y="48" textAnchor="middle" fontSize="18" fontWeight="700" fill={scoreColor} fontFamily="'Montserrat',sans-serif">{String(score)}</text>
-                  </svg>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={S.lbl}>{"SCORE FINANCEIRO DO MÊS"}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: scoreColor, fontFamily: "'Montserrat',sans-serif", marginBottom: 6 }}>{scoreLbl}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
-                      <span>{"💰 Taxa de poupança"}</span>
-                      <span style={{ fontWeight: 700, color: scoreS >= 35 ? OK : ER }}>{String(Math.round(scoreS)) + "/40"}</span>
+            {(function() {
+              var scoreS = Math.min(savR / 0.25, 1) * 40;
+              var limCats = cats.filter(function(c) { return catLimits[c.id]; });
+              var limOk = limCats.filter(function(c) { return (spC[c.id] || 0) <= catLimits[c.id]; }).length;
+              var scoreL = limCats.length > 0 ? (limOk / limCats.length) * 30 : 30;
+              var goalsDone = goals.filter(function(g) { return (g.saved || 0) >= g.target; }).length;
+              var goalsTotal = goals.length;
+              var avgGP = goalsTotal > 0 ? goals.reduce(function(a, g) { return a + Math.min((g.saved || 0) / g.target, 1); }, 0) / goalsTotal : 1;
+              var scoreG = avgGP * 30;
+              var score = Math.round(scoreS + scoreL + scoreG);
+              var scoreColor = score >= 80 ? OK : score >= 60 ? WN : score >= 40 ? "#F59E0B" : ER;
+              var scoreLbl = score >= 80 ? "Excelente 🏆" : score >= 60 ? "Bom 👍" : score >= 40 ? "Regular ⚠️" : "Atenção 🚨";
+              var circumference = 2 * Math.PI * 36;
+              var dashOffset = circumference * (1 - score / 100);
+              return (
+                <div style={{ ...S.card, background: BG }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ position: "relative", width: 88, height: 88, flexShrink: 0 }}>
+                      <svg width="88" height="88" viewBox="0 0 88 88">
+                        <circle cx="44" cy="44" r="36" fill="none" stroke={BR} strokeWidth="8" />
+                        <circle cx="44" cy="44" r="36" fill="none" stroke={scoreColor} strokeWidth="8"
+                          strokeDasharray={String(circumference)} strokeDashoffset={String(dashOffset)}
+                          strokeLinecap="round" transform="rotate(-90 44 44)"
+                          style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+                        <text x="44" y="48" textAnchor="middle" fontSize="18" fontWeight="700" fill={scoreColor} fontFamily="'Fraunces',serif">{String(score)}</text>
+                      </svg>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
-                      <span>{"🎯 Limites respeitados"}</span>
-                      <span style={{ fontWeight: 700, color: scoreL >= 25 ? OK : WN }}>{String(Math.round(scoreL)) + "/30"}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
-                      <span>{"🏆 Progresso de metas"}</span>
-                      <span style={{ fontWeight: 700, color: scoreG >= 25 ? OK : WN }}>{String(Math.round(scoreG)) + "/30"}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={S.lbl}>{"SCORE FINANCEIRO DO MÊS"}</div>
+                      <div style={{ fontSize: 20, fontWeight: 600, color: scoreColor, fontFamily: "'Fraunces',serif", marginBottom: 6 }}>{scoreLbl}</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
+                          <span>{"💰 Taxa de poupança"}</span>
+                          <span style={{ fontWeight: 700, color: scoreS >= 35 ? OK : ER }}>{String(Math.round(scoreS)) + "/40"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
+                          <span>{"🎯 Limites respeitados"}</span>
+                          <span style={{ fontWeight: 700, color: scoreL >= 25 ? OK : WN }}>{String(Math.round(scoreL)) + "/30"}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
+                          <span>{"🏆 Progresso de metas"}</span>
+                          <span style={{ fontWeight: 700, color: scoreG >= 25 ? OK : WN }}>{String(Math.round(scoreG)) + "/30"}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Pie */}
             <div style={S.card}>
@@ -1207,7 +1053,7 @@ export default function App() {
                           <span style={{ fontSize: 12, flex: 1, color: T3 }}>{item.icon + " " + item.name}</span>
                           <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(item.value)}</span>
                           <span style={{ ...S.cap, minWidth: 34, textAlign: "right" }}>{pct(p)}</span>
-                          <div style={{ width: 50, height: 4, background: "#F0F0F0", borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ width: 50, height: 4, background: BR, borderRadius: 2, overflow: "hidden" }}>
                             <div style={{ width: String(p * 100) + "%", height: "100%", background: PC[idx % PC.length], borderRadius: 2 }} />
                           </div>
                         </div>
@@ -1220,13 +1066,13 @@ export default function App() {
 
             {/* Debtors */}
             {Object.keys(debtors).length > 0 && (
-              <div style={S.cardA("#D97706")}>
+              <div style={S.cardA(AMB)}>
                 <div style={S.lbl}>{"A RECEBER"}</div>
                 {Object.entries(debtors).map(function(e2) {
                   return (
                     <div key={e2[0]} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
                       <span style={{ fontSize: 13, color: T3 }}>{e2[0]}</span>
-                      <span style={{ fontWeight: 700, color: "#D97706", fontSize: 13 }}>{fmt(e2[1].pending)}</span>
+                      <span style={{ fontWeight: 700, color: AMB, fontSize: 13 }}>{fmt(e2[1].pending)}</span>
                     </div>
                   );
                 })}
@@ -1242,7 +1088,7 @@ export default function App() {
             <div style={S.cardA(BL)}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={S.lbl}>{"TAXA DE POUPANÇA"}</div><div style={S.cap}>{"Investido / Renda total"}</div></div>
-                <div style={{ fontSize: 32, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: savR >= 0.25 ? OK : savR >= 0.1 ? WN : ER }}>{pct(savR)}</div>
+                <div style={{ fontSize: 32, fontWeight: 600, fontFamily: "'Fraunces',serif", color: savR >= 0.25 ? OK : savR >= 0.1 ? WN : ER }}>{pct(savR)}</div>
               </div>
               <PB value={invSp} max={totalInc} color={BL} />
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, ...S.cap }}>
@@ -1250,13 +1096,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Carteira de Investimentos */}
-            <div style={S.cardA("#1A2B5F")}>
+            {/* Patrimônio líquido */}
+            <div style={S.cardA(BD)}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div>
-                  <div style={S.lbl}>{"CARTEIRA DE INVESTIMENTOS"}</div>
-                  <div style={S.cap}>{"Veja PL completo na aba Vida"}</div>
-                </div>
+                <div style={S.lbl}>{"PATRIMÔNIO LÍQUIDO"}</div>
                 <button style={{ ...S.btn(BD), padding: "6px 12px", fontSize: 12 }} onClick={function() { sShowNw(!showNw); }}>{"✏️ Atualizar"}</button>
               </div>
               {showNw && (
@@ -1267,13 +1110,13 @@ export default function App() {
                 </div>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-                <div><div style={S.cap}>{"Saldo carteira"}</div><div style={{ fontSize: 22, fontWeight: 700, color: "#1A2B5F" }}>{fmt(nwBalance)}</div></div>
+                <div><div style={S.cap}>{"Saldo atual"}</div><div style={{ fontSize: 22, fontWeight: 700, color: BD }}>{fmt(nwBalance)}</div></div>
                 <div><div style={S.cap}>{"Investido este mês"}</div><div style={{ fontSize: 22, fontWeight: 700, color: BL }}>{fmt(invSp)}</div></div>
               </div>
 
               {nwHistory.length > 1 && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={S.lbl}>{"EVOLUÇÃO DA CARTEIRA"}</div>
+                  <div style={S.lbl}>{"EVOLUÇÃO DO PATRIMÔNIO"}</div>
                   {(function() {
                     var hist = nwHistory.slice(-12);
                     var maxV = Math.max.apply(null, hist.map(function(h) { return h.balance; }).concat([1]));
@@ -1303,7 +1146,7 @@ export default function App() {
                           <div style={{ marginTop: 6, padding: "6px 10px", background: nwBalance > hist[0].balance ? OK + "12" : ER + "12", borderRadius: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: nwBalance > hist[0].balance ? OK : ER }}>
                               {nwBalance > hist[0].balance ? "▲ +" : "▼ "}
-                              {fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0,5) + " (" + pct(hist[0].balance > 0 ? Math.abs((nwBalance - hist[0].balance) / hist[0].balance) : 0) + ")"}
+                              {fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0,5) + " (" + pct(Math.abs((nwBalance - hist[0].balance) / hist[0].balance)) + ")"}
                             </span>
                           </div>
                         )}
@@ -1357,7 +1200,7 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div>
                       <div style={S.lbl}>{"SIMULADOR DE APORTES"}</div>
-                      <div style={{ ...S.cap, marginTop: 2 }}>{"Juros compostos sobre carteira atual"}</div>
+                      <div style={{ ...S.cap, marginTop: 2 }}>{"Juros compostos sobre patrimônio atual"}</div>
                     </div>
                     <span style={{ fontSize: 20 }}>{"📈"}</span>
                   </div>
@@ -1388,11 +1231,11 @@ export default function App() {
                   <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginBottom: 12, border: "1px solid " + BL + "30" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                       <div style={S.cap}>{"Patrimônio em " + String(simAnos) + " anos"}</div>
-                      <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: BD }}>{fmt(simFV)}</div>
+                      <div style={{ fontSize: 26, fontWeight: 600, fontFamily: "'Fraunces',serif", color: BD }}>{fmt(simFV)}</div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
                       <div style={{ textAlign: "center", padding: "6px 4px", background: "#fff", borderRadius: 6, border: "1px solid " + BR }}>
-                        <div style={{ ...S.cap, marginBottom: 2 }}>{"Carteira hoje"}</div>
+                        <div style={{ ...S.cap, marginBottom: 2 }}>{"Patrimônio hoje"}</div>
                         <div style={{ fontSize: 12, fontWeight: 700, color: T2 }}>{fmt(nwBalance)}</div>
                       </div>
                       <div style={{ textAlign: "center", padding: "6px 4px", background: "#fff", borderRadius: 6, border: "1px solid " + BR }}>
@@ -1405,13 +1248,13 @@ export default function App() {
                       </div>
                     </div>
                     <div style={S.lbl}>{"COMPOSIÇÃO DO PATRIMÔNIO FINAL"}</div>
-                    <div style={{ height: 10, borderRadius: 5, overflow: "hidden", display: "flex", marginTop: 4 }}>
-                      <div style={{ width: String(simFV > 0 ? (nwBalance / simFV) * 100 : 0) + "%", background: "#003F5D", transition: "width 0.4s" }} />
-                      <div style={{ width: String(simFV > 0 ? (simTotalAport / simFV) * 100 : 0) + "%", background: "#A3CEEF", transition: "width 0.4s" }} />
-                      <div style={{ flex: 1, background: "#006DB2", transition: "width 0.4s" }} />
+                    <div style={{ height: 10, borderRadius: 999, overflow: "hidden", display: "flex", marginTop: 4 }}>
+                      <div style={{ width: String(simFV > 0 ? (nwBalance / simFV) * 100 : 0) + "%", background: PETR, transition: "width 0.4s" }} />
+                      <div style={{ width: String(simFV > 0 ? (simTotalAport / simFV) * 100 : 0) + "%", background: TM, transition: "width 0.4s" }} />
+                      <div style={{ flex: 1, background: BL, transition: "width 0.4s" }} />
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
-                      {[["#003F5D", "Carteira atual"], ["#A3CEEF", "Aportes"], ["#006DB2", "Juros (" + pct(jurosRatio) + ")"]].map(function(it) {
+                      {[[PETR, "Patrimônio atual"], [TM, "Aportes"], [BL, "Juros (" + pct(jurosRatio) + ")"]].map(function(it) {
                         return (
                           <div key={it[1]} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                             <div style={{ width: 8, height: 8, borderRadius: 2, background: it[0] }} />
@@ -1475,19 +1318,19 @@ export default function App() {
                 <div style={S.cardA("#7C3AED")}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div>
-                      <div style={S.lbl}>{"RENDA PASSIVA DA CARTEIRA"}</div>
-                      <div style={{ ...S.cap, marginTop: 2 }}>{"Carteira × 0,7% a.m. (padrão conservador)"}</div>
+                      <div style={S.lbl}>{"RENDA PASSIVA DO PL"}</div>
+                      <div style={{ ...S.cap, marginTop: 2 }}>{"PL atual × 0,7% a.m. (padrão conservador)"}</div>
                     </div>
                     <span style={{ fontSize: 20 }}>{"🏦"}</span>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                     <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
                       <div style={S.cap}>{"Renda passiva/mês"}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: BD, fontFamily: "'Montserrat',sans-serif" }}>{fmt(rpMensal)}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: BD, fontFamily: "'Fraunces',serif" }}>{fmt(rpMensal)}</div>
                     </div>
                     <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
                       <div style={S.cap}>{"Cobre " + pct(Math.min(coverPct, 1)) + " das fixas"}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: coverPct >= 1 ? OK : "#7C3AED", fontFamily: "'Montserrat',sans-serif" }}>{fmt(fxTotal)}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: coverPct >= 1 ? OK : "#7C3AED", fontFamily: "'Fraunces',serif" }}>{fmt(fxTotal)}</div>
                     </div>
                   </div>
                   <PB value={rpMensal} max={Math.max(fxTotal, 1)} color="#7C3AED" noWarn={true} />
@@ -1502,7 +1345,7 @@ export default function App() {
                             var cat2 = cats.find(function(c) { return c.id === f.cat; });
                             var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
                             return (
-                              <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid #F0F0F0" }}>
+                              <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid " + BR }}>
                                 <span style={{ color: OK, fontSize: 12 }}>{"✅"}</span>
                                 <span style={{ fontSize: 12, color: T3, flex: 1 }}>{cat2 ? cat2.icon + " " : ""}{f.name}</span>
                                 <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(myA)}</span>
@@ -1567,6 +1410,9 @@ export default function App() {
                       )}
                     </div>
                   )}
+                  {fxd.length === 0 && (
+                    <div style={{ ...S.cap, textAlign: "center", padding: 12, color: TM }}>{"Cadastre contas fixas para ver quais o seu PL já consegue pagar."}</div>
+                  )}
                 </div>
               );
             })()}
@@ -1579,6 +1425,8 @@ export default function App() {
               var totalExp = ifTargetVal > 0 ? ifTargetVal : (totDb > 0 ? totDb : totalInc * 0.75);
               var fiPct = totalExp > 0 ? Math.min(rpMensal2 / totalExp, 1) : 0;
               var plFor100 = totalExp > 0 ? Math.ceil(totalExp / rpTaxa2) : 0;
+              var plFor25 = Math.ceil(plFor100 * 0.25);
+              var plFor50 = Math.ceil(plFor100 * 0.5);
               var milestones2 = [
                 { pct: 0.25, label: "25% IF", desc: "Renda passiva cobre 1/4 dos gastos", color: "#60A5FA" },
                 { pct: 0.50, label: "50% IF", desc: "Meio caminho andado", color: WN },
@@ -1592,7 +1440,7 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div>
                       <div style={S.lbl}>{"TERMÔMETRO DE LIBERDADE FINANCEIRA"}</div>
-                      <div style={{ ...S.cap, marginTop: 2 }}>{"Quanto da sua vida a carteira já financia"}</div>
+                      <div style={{ ...S.cap, marginTop: 2 }}>{"Quanto da sua vida o PL já financia"}</div>
                     </div>
                     <button onClick={function() { sShowIfEdit(!showIfEdit); }}
                       style={{ ...S.btnO, padding: "5px 10px", fontSize: 11 }}>
@@ -1613,7 +1461,7 @@ export default function App() {
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                    <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: fiPct >= 1 ? OK : fiPct >= 0.5 ? WN : BL }}>
+                    <div style={{ fontSize: 36, fontWeight: 600, fontFamily: "'Fraunces',serif", color: fiPct >= 1 ? OK : fiPct >= 0.5 ? WN : BL }}>
                       {pct(fiPct)}
                     </div>
                     <div>
@@ -1621,7 +1469,7 @@ export default function App() {
                       <div style={S.cap}>{"Renda passiva " + fmt(rpMensal2) + " / Gastos " + fmt(totalExp)}</div>
                     </div>
                   </div>
-                  <div style={{ position: "relative", height: 20, background: "#F0F0F0", borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
+                  <div style={{ position: "relative", height: 20, background: BR, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
                     <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pct(fiPct), background: fiPct >= 1 ? OK : "linear-gradient(90deg, " + BL + ", #7C3AED)", borderRadius: 10, transition: "width 0.8s ease" }} />
                     {milestones2.map(function(m) {
                       return (
@@ -1678,33 +1526,33 @@ export default function App() {
 
             {/* Parcelas ativas */}
             {activeInst.length > 0 && (
-              <div style={S.cardA("#D97706")}>
+              <div style={S.cardA(AMB)}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                   <div style={S.lbl}>{"PARCELAS ATIVAS"}</div>
                   <div style={{ textAlign: "right" }}>
                     <div style={S.cap}>{"Custo mensal"}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#D97706" }}>{fmt(totalInstMonthly)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: AMB }}>{fmt(totalInstMonthly)}</div>
                   </div>
                 </div>
                 {activeInst.map(function(it, idx) {
                   var cat2 = cats.find(function(c) { return c.id === it.cat; });
                   return (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #F0F0F0" }}>
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid " + BR }}>
                       <span style={{ fontSize: 14 }}>{cat2 ? cat2.icon : "💳"}</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{it.desc}</div>
                         <div style={S.cap}>{String(it.remaining) + " parcelas restantes"}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#D97706" }}>{fmt(it.amount) + "/mês"}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: AMB }}>{fmt(it.amount) + "/mês"}</div>
                         <div style={S.cap}>{"Total: " + fmt(it.amount * it.remaining)}</div>
                       </div>
                     </div>
                   );
                 })}
-                <div style={{ borderTop: "1px solid #F0F0F0", paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+                <div style={{ borderTop: "1px solid " + BR, paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
                   <span style={{ ...S.cap, fontWeight: 700 }}>{"Compromisso total"}</span>
-                  <span style={{ fontWeight: 700, color: "#D97706" }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
+                  <span style={{ fontWeight: 700, color: AMB }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
                 </div>
               </div>
             )}
@@ -1719,7 +1567,7 @@ export default function App() {
                     var pD = pv > 0 ? diff / pv : 0;
                     var isGood = g.id === "investimentos" ? diff > 0 : diff < 0;
                     return (
-                      <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
+                      <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid " + BR }}>
                         <div style={{ width: 4, height: 28, borderRadius: 2, background: g.color }} />
                         <span style={{ flex: 1, fontSize: 13, color: T3 }}>{g.label}</span>
                         <span style={{ ...S.cap, minWidth: 70, textAlign: "right" }}>{fmt(pv)}</span>
@@ -1739,7 +1587,7 @@ export default function App() {
                 <div style={S.h2}>{"Projeção Anual " + String(yr)}</div>
                 <div style={{ ...S.cap, marginBottom: 10 }}>{"Fixas + parcelas projetadas"}</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                  {[["Ess.", "#0D9488"], ["Inv.", "#1A2B5F"], ["Des.", "#D97706"], ["Créd.", "#2563EB"]].map(function(it) {
+                  {[["Ess.", "#2B4F82"], ["Inv.", "#1E2D3D"], ["Des.", "#C9A44A"], ["Créd.", "#4E97D1"]].map(function(it) {
                     return (
                       <div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}>
                         <div style={{ width: 7, height: 7, borderRadius: it[0] === "Créd." ? 7 : 2, background: it[1] }} />
@@ -1762,11 +1610,11 @@ export default function App() {
                         onClick={function() { sHM(isH ? null : idx); }}
                         onMouseEnter={function() { sHM(idx); }}
                         onMouseLeave={function() { sHM(null); }}>
-                        <div style={{ position: "absolute", bottom: cH, left: 0, right: 0, height: 2, background: "#2563EB", borderRadius: 1, zIndex: 2 }} />
-                        <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", opacity: d.real ? 1 : 0.35, outline: isH ? "2px solid " + BL : "none", outlineOffset: 1 }}>
-                          <div style={{ height: eH, background: "#0D9488" }} />
-                          <div style={{ height: iH, background: "#1A2B5F" }} />
-                          <div style={{ height: dH, background: "#D97706" }} />
+                        <div style={{ position: "absolute", bottom: cH, left: 0, right: 0, height: 2, background: "#4E97D1", borderRadius: 1, zIndex: 2 }} />
+                        <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", opacity: d.real ? 1 : 0.35, outline: isH ? "2px solid " + BL : "none", outlineOffset: 1, transformOrigin: "bottom", animation: "growBar 0.6s ease " + String(idx * 0.04) + "s both" }}>
+                          <div style={{ height: eH, background: "#2B4F82" }} />
+                          <div style={{ height: iH, background: "#1E2D3D" }} />
+                          <div style={{ height: dH, background: "#C9A44A" }} />
                         </div>
                         <div style={{ fontSize: 8, color: cu ? BD : "#BBBBBB", marginTop: 2, fontWeight: cu ? 800 : 400 }}>{d.mes}</div>
                         {isH && d.td > 0 && <ChartTip d={d} i={idx} cats={cats} />}
@@ -1798,9 +1646,9 @@ export default function App() {
                   <table style={{ borderCollapse: "collapse", fontSize: 10, width: "100%", minWidth: 430 }}>
                     <thead>
                       <tr>
-                        <th style={{ padding: 4, textAlign: "left", color: TM, borderBottom: "1px solid #F0F0F0" }}>{""}</th>
+                        <th style={{ padding: 4, textAlign: "left", color: TM, borderBottom: "1px solid " + BR }}>{""}</th>
                         {chD.map(function(d, idx) {
-                          return <th key={idx} style={{ padding: 4, textAlign: "center", color: idx === mo ? BD : TM, borderBottom: "1px solid #F0F0F0", fontWeight: idx === mo ? 800 : 400 }}>{d.mes}</th>;
+                          return <th key={idx} style={{ padding: 4, textAlign: "center", color: idx === mo ? BD : TM, borderBottom: "1px solid " + BR, fontWeight: idx === mo ? 800 : 400 }}>{d.mes}</th>;
                         })}
                       </tr>
                     </thead>
@@ -1825,460 +1673,72 @@ export default function App() {
           </div>
         )}
 
-        {/* ═══ VIDA ═══ */}
-        {tab === "vida" && (
-          <div>
-            {/* Reserva de Emergência */}
-            <div style={S.cardA(reserveCoverage >= 12 ? OK : reserveCoverage >= 3 ? WN : ER)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div>
-                  <div style={S.lbl}>{"RESERVA DE EMERGÊNCIA"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"O primeiro pilar do planejamento financeiro"}</div>
-                </div>
-                <button style={{ ...S.btn(reserveCoverage >= 12 ? OK : reserveCoverage >= 3 ? WN : ER), padding: "6px 12px", fontSize: 12 }}
-                  onClick={function() { sResI(String(emergencyReserve || 0)); sShowRes(!showRes); }}>{"✏️ Atualizar"}</button>
-              </div>
-
-              {showRes && (
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  <input style={{ ...S.inp, flex: 1 }} placeholder="Valor da reserva (R$)" value={resInput} inputMode="decimal" onChange={function(e) { sResI(e.target.value); }} />
-                  <button style={S.btn(BD)} onClick={updateReserve}>{"OK"}</button>
-                  <button style={S.btnO} onClick={function() { sShowRes(false); }}>{"×"}</button>
-                </div>
-              )}
-
-              {/* Big Number cobertura */}
-              <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "8px 0", marginBottom: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={S.cap}>{"Cobertura em meses"}</div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: 44, fontWeight: 700, color: reserveCoverage >= 12 ? OK : reserveCoverage >= 3 ? WN : ER, fontFamily: "'Montserrat',sans-serif", lineHeight: 1 }}>
-                      {reserveCoverage >= 99 ? "99+" : reserveCoverage.toFixed(1)}
-                    </span>
-                    <span style={{ fontSize: 14, color: TM, fontWeight: 600 }}>{"meses"}</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: reserveCoverage >= 12 ? OK : reserveCoverage >= 3 ? WN : ER, marginTop: 4 }}>
-                    {reserveCoverage >= 12 ? "✅ Reserva sólida" : reserveCoverage >= 3 ? "⚡ Reserva razoável" : "⚠️ Reserva insuficiente"}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={S.cap}>{"Reserva atual"}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: BD }}>{fmt(emergencyReserve)}</div>
-                  <div style={{ ...S.cap, marginTop: 6 }}>{"Despesa essencial/mês"}</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: T2 }}>{fmt(avgEssMonth)}</div>
-                  <div style={{ ...S.cap, marginTop: 1, fontSize: 9 }}>{"Média dos últimos meses"}</div>
-                </div>
-              </div>
-
-              {/* Barra de progresso visual até 12 meses */}
-              <div style={{ position: "relative", height: 18, background: "#F0F0F0", borderRadius: 9, overflow: "hidden", marginBottom: 8 }}>
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: String(Math.min(reserveCoverage / 12 * 100, 100)) + "%", background: reserveCoverage >= 12 ? OK : reserveCoverage >= 3 ? "linear-gradient(90deg, " + WN + ", " + OK + ")" : "linear-gradient(90deg, " + ER + ", " + WN + ")", borderRadius: 9, transition: "width 0.6s ease" }} />
-                <div style={{ position: "absolute", left: "25%", top: 0, bottom: 0, width: 2, background: "#ffffff80" }} />
-                <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, background: "#ffffff80" }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", ...S.cap, marginBottom: 10 }}>
-                <span>{"0m"}</span><span style={{ fontWeight: 700 }}>{"3m"}</span><span style={{ fontWeight: 700 }}>{"6m"}</span><span style={{ fontWeight: 700, color: OK }}>{"12m+"}</span>
-              </div>
-
-              {/* Próximas metas */}
-              {reserveCoverage < 12 && avgEssMonth > 0 && (
-                <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BR }}>
-                  <div style={{ ...S.lbl, marginBottom: 6 }}>{"PRÓXIMAS METAS"}</div>
-                  {[3, 6, 12].map(function(m) {
-                    var target = avgEssMonth * m;
-                    var falta = Math.max(0, target - emergencyReserve);
-                    var done = emergencyReserve >= target;
-                    if (done && reserveCoverage >= m + 2) return null;
-                    return (
-                      <div key={m} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #F0F0F0" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 13 }}>{done ? "✅" : "⏳"}</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: TX }}>{String(m) + " meses"}</span>
-                          <span style={{ ...S.cap }}>{"= " + fmt(target)}</span>
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: done ? OK : ER }}>
-                          {done ? "atingido" : "falta " + fmt(falta)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {reserveCoverage >= 12 && (
-                <div style={{ background: "#F0FDF4", borderRadius: 8, padding: "10px 12px", border: "1px solid #86EFAC", textAlign: "center" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#166534" }}>{"🏆 Reserva sólida — você pode focar em construir patrimônio."}</div>
-                </div>
-              )}
-            </div>
-
-            {/* Patrimônio Líquido Completo - Big Number */}
-            <div style={S.cardA(plCompleto >= 0 ? "#1A2B5F" : ER)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
-                  <div style={S.lbl}>{"PATRIMÔNIO LÍQUIDO COMPLETO"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Ativos − Passivos"}</div>
-                </div>
-                <span style={{ fontSize: 22 }}>{"💎"}</span>
-              </div>
-
-              <div style={{ ...S.data(plCompleto >= 0 ? "#1A2B5F" : ER), fontSize: 36, marginBottom: 12 }}>{fmt(plCompleto)}</div>
-
-              {/* Decomposição visual: Ativos vs Passivos */}
-              {(totalAssetsAll > 0 || totalLiabValue > 0) && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 11 }}>
-                    <span style={{ fontWeight: 700, color: OK }}>{"▲ Ativos " + fmt(totalAssetsAll)}</span>
-                    <span style={{ fontWeight: 700, color: ER }}>{"▼ Passivos " + fmt(totalLiabValue)}</span>
-                  </div>
-                  <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "#F0F0F0" }}>
-                    <div style={{ width: String(totalAssetsAll + totalLiabValue > 0 ? (totalAssetsAll / (totalAssetsAll + totalLiabValue)) * 100 : 0) + "%", background: OK, transition: "width 0.5s" }} />
-                    <div style={{ width: String(totalAssetsAll + totalLiabValue > 0 ? (totalLiabValue / (totalAssetsAll + totalLiabValue)) * 100 : 0) + "%", background: ER, transition: "width 0.5s" }} />
-                  </div>
-                </div>
-              )}
-
-              {/* Breakdown */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <div style={{ padding: "10px 12px", background: BG, borderRadius: 6, border: "1px solid " + BR }}>
-                  <div style={{ ...S.cap, marginBottom: 2 }}>{"💧 Líquido"}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: BD }}>{fmt(liquidAssets)}</div>
-                  <div style={{ ...S.cap, fontSize: 9 }}>{"Carteira + Reserva"}</div>
-                </div>
-                <div style={{ padding: "10px 12px", background: BG, borderRadius: 6, border: "1px solid " + BR }}>
-                  <div style={{ ...S.cap, marginBottom: 2 }}>{"🏠 Ilíquido"}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: BD }}>{fmt(illiquidAssets)}</div>
-                  <div style={{ ...S.cap, fontSize: 9 }}>{"Imóveis, veículos, outros"}</div>
-                </div>
-              </div>
-
-              <div style={{ ...S.cap, padding: "8px 10px", background: "#F8F4ED", borderRadius: 6, border: "1px solid " + BR }}>
-                {"💡 PL = Carteira " + fmt(nwBalance) + " + Reserva " + fmt(emergencyReserve) + " + Outros ativos " + fmt(totalAssetsValue) + " − Passivos " + fmt(totalLiabValue)}
-              </div>
-            </div>
-
-            {/* Ativos */}
-            <div style={S.cardA(OK)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div>
-                  <div style={S.lbl}>{"ATIVOS NÃO-FINANCEIROS"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Imóveis, veículos, e outros bens"}</div>
-                </div>
-                <button style={S.btn(OK)} onClick={function() { sShowAsset(!showAsset); }}>{showAsset ? "Cancelar" : "+ Ativo"}</button>
-              </div>
-
-              {showAsset && (
-                <div style={{ background: BG, borderRadius: 8, padding: 12, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <input style={S.inp} placeholder="Nome (ex: Apartamento Vila Mariana)" value={af.name} onChange={function(e) { sAf({ ...af, name: e.target.value }); }} />
-                  <div style={S.g2}>
-                    <input style={S.inp} placeholder="Valor (R$)" value={af.value} inputMode="decimal" onChange={function(e) { sAf({ ...af, value: e.target.value }); }} />
-                    <select style={S.inp} value={af.type} onChange={function(e) { sAf({ ...af, type: e.target.value }); }}>
-                      <option value="imovel">{"🏠 Imóvel"}</option>
-                      <option value="veiculo">{"🚗 Veículo"}</option>
-                      <option value="outro">{"💼 Outro"}</option>
-                    </select>
-                  </div>
-                  <button style={S.btn(OK)} onClick={addAsset}>{"Salvar"}</button>
-                </div>
-              )}
-
-              {assets.length === 0 && !showAsset && (
-                <p style={{ ...S.cap, textAlign: "center", padding: 8 }}>{"Nenhum ativo cadastrado. Adicione imóveis, veículos e outros bens para ver o PL completo."}</p>
-              )}
-
-              {assets.map(function(a) {
-                var icon = a.type === "imovel" ? "🏠" : a.type === "veiculo" ? "🚗" : "💼";
-                return (
-                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{a.name}</div>
-                      <div style={S.tag(OK)}>{a.type === "imovel" ? "Imóvel" : a.type === "veiculo" ? "Veículo" : "Outro"}</div>
-                    </div>
-                    <input style={{ ...S.inp, width: 120, textAlign: "right", fontSize: 13, fontWeight: 700, color: OK }}
-                      defaultValue={String(a.value)} inputMode="decimal"
-                      onBlur={function(e) { updAssetValue(a.id, e.target.value); }} />
-                    <span onClick={function() { rmAsset(a.id); }} style={{ cursor: "pointer", color: ER, fontSize: 16 }}>{"×"}</span>
-                  </div>
-                );
-              })}
-
-              {assets.length > 0 && (
-                <div style={{ borderTop: "1px solid " + BR, paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{"Total ativos não-financeiros"}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: OK }}>{fmt(totalAssetsValue)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Passivos */}
-            <div style={S.cardA(ER)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div>
-                  <div style={S.lbl}>{"PASSIVOS"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Financiamentos, dívidas, cartão a vencer"}</div>
-                </div>
-                <button style={S.btn(ER)} onClick={function() { sShowLiab(!showLiab); }}>{showLiab ? "Cancelar" : "+ Passivo"}</button>
-              </div>
-
-              {showLiab && (
-                <div style={{ background: BG, borderRadius: 8, padding: 12, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <input style={S.inp} placeholder="Nome (ex: Financiamento imóvel)" value={lf.name} onChange={function(e) { sLf({ ...lf, name: e.target.value }); }} />
-                  <div style={S.g2}>
-                    <input style={S.inp} placeholder="Saldo devedor (R$)" value={lf.amount} inputMode="decimal" onChange={function(e) { sLf({ ...lf, amount: e.target.value }); }} />
-                    <select style={S.inp} value={lf.type} onChange={function(e) { sLf({ ...lf, type: e.target.value }); }}>
-                      <option value="financiamento">{"🏦 Financiamento"}</option>
-                      <option value="cartao">{"💳 Cartão a vencer"}</option>
-                      <option value="emprestimo">{"💰 Empréstimo"}</option>
-                      <option value="outro">{"📋 Outro"}</option>
-                    </select>
-                  </div>
-                  <button style={S.btn(ER)} onClick={addLiab}>{"Salvar"}</button>
-                </div>
-              )}
-
-              {liabilities.length === 0 && !showLiab && (
-                <p style={{ ...S.cap, textAlign: "center", padding: 8 }}>{"Nenhum passivo. Cadastre financiamentos, dívidas e saldo de cartão a vencer para ver o PL completo."}</p>
-              )}
-
-              {liabilities.map(function(l) {
-                var icon = l.type === "financiamento" ? "🏦" : l.type === "cartao" ? "💳" : l.type === "emprestimo" ? "💰" : "📋";
-                var lbl = l.type === "financiamento" ? "Financiamento" : l.type === "cartao" ? "Cartão" : l.type === "emprestimo" ? "Empréstimo" : "Outro";
-                return (
-                  <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{l.name}</div>
-                      <div style={S.tag(ER)}>{lbl}</div>
-                    </div>
-                    <input style={{ ...S.inp, width: 120, textAlign: "right", fontSize: 13, fontWeight: 700, color: ER }}
-                      defaultValue={String(l.amount)} inputMode="decimal"
-                      onBlur={function(e) { updLiabValue(l.id, e.target.value); }} />
-                    <span onClick={function() { rmLiab(l.id); }} style={{ cursor: "pointer", color: ER, fontSize: 16 }}>{"×"}</span>
-                  </div>
-                );
-              })}
-
-              {liabilities.length > 0 && (
-                <div style={{ borderTop: "1px solid " + BR, paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{"Total passivos"}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: ER }}>{fmt(totalLiabValue)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Atalho para atualizar carteira (sem precisar ir pra Projeção) */}
-            <div style={S.cardA("#1A2B5F")}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div>
-                  <div style={S.lbl}>{"CARTEIRA DE INVESTIMENTOS"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Saldo da sua carteira (atualize quando rebalancear)"}</div>
-                </div>
-                <button style={{ ...S.btn(BD), padding: "6px 12px", fontSize: 12 }} onClick={function() { sShowNw(!showNw); }}>{"✏️ Atualizar"}</button>
-              </div>
-
-              {showNw && (
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  <input style={{ ...S.inp, flex: 1 }} placeholder="Saldo atual (R$)" value={nwInput} inputMode="decimal" onChange={function(e) { sNwI(e.target.value); }} />
-                  <button style={S.btn(BD)} onClick={updateNW}>{"OK"}</button>
-                  <button style={S.btnO} onClick={function() { sShowNw(false); }}>{"×"}</button>
-                </div>
-              )}
-
-              <div style={{ ...S.data("#1A2B5F"), fontSize: 28 }}>{fmt(nwBalance)}</div>
-              <div style={{ ...S.cap, marginTop: 4 }}>{"Análise completa e simuladores na aba Projeção"}</div>
-            </div>
-          </div>
-        )}
-
         {/* ═══ ANÁLISE ANUAL ═══ */}
         {tab === "analise" && (
           <div>
-            {/* Anomalias */}
-            {anomalies.length > 0 && (
-              <div style={S.cardA(ER)}>
-                <div style={S.lbl}>{"⚠️ GASTOS FORA DO PADRÃO"}</div>
-                <div style={{ ...S.cap, marginTop: 2, marginBottom: 8 }}>{"Categorias com gasto " + String(50) + "% acima da média histórica"}</div>
-                {anomalies.slice(0, 5).map(function(a) {
-                  return (
-                    <div key={a.cat.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
-                      <span style={{ fontSize: 18 }}>{a.cat.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{a.cat.name}</div>
-                        <div style={S.cap}>{"Média histórica " + fmt(a.avg)}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(a.cur)}</div>
-                        <div style={{ fontSize: 10, color: ER, fontWeight: 600 }}>{"+" + pct(a.pct) + " (" + fmt(a.delta) + ")"}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Assinaturas Recorrentes Detectadas */}
-            <div style={S.cardA("#7C3AED")}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                <div>
-                  <div style={S.lbl}>{"ASSINATURAS RECORRENTES DETECTADAS"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Padrões mensais de gasto recorrente identificados automaticamente"}</div>
-                </div>
-                <span style={{ fontSize: 22 }}>{"🔁"}</span>
-              </div>
-
-              {subscriptions.length === 0 && (
-                <div style={{ textAlign: "center", padding: 16 }}>
-                  <p style={{ ...S.cap }}>{"Nenhuma assinatura detectada ainda. Importe pelo menos 3 meses de transações."}</p>
-                </div>
-              )}
-
-              {subscriptions.length > 0 && (
-                <div>
-                  {/* Resumo */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                    <div style={{ background: BG, borderRadius: 8, padding: "10px 8px", border: "1px solid " + BR, textAlign: "center" }}>
-                      <div style={S.cap}>{"Ativas"}</div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: "#7C3AED", fontFamily: "'Montserrat',sans-serif" }}>{String(subsActiveCount)}</div>
-                    </div>
-                    <div style={{ background: BG, borderRadius: 8, padding: "10px 8px", border: "1px solid " + BR, textAlign: "center" }}>
-                      <div style={S.cap}>{"Por mês"}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#7C3AED", fontFamily: "'Montserrat',sans-serif" }}>{fmt(subsTotalMonthly)}</div>
-                    </div>
-                    <div style={{ background: ER + "15", borderRadius: 8, padding: "10px 8px", border: "1px solid " + ER + "40", textAlign: "center" }}>
-                      <div style={{ ...S.cap, color: ER }}>{"Por ano"}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: ER, fontFamily: "'Montserrat',sans-serif" }}>{fmt(subsTotalAnnual)}</div>
-                    </div>
+            {/* Comparativo visual mensal */}
+            {chD.length > 0 && (function() {
+              var realMonths = chD.filter(function(d) { return d.real || d.td > 0 || d.cr > 0; });
+              if (realMonths.length === 0) return null;
+              var allMax = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
+              var groups = [
+                { key: "e", label: "Essenciais", color: TEAL },
+                { key: "i", label: "Investimentos", color: BD },
+                { key: "d", label: "Não Essenciais", color: AMB },
+                { key: "cr", label: "Crédito", color: OK },
+              ];              return (
+                <div style={S.card}>
+                  <div style={{ ...S.h2, marginBottom: 2 }}>{"Comparativo Visual " + String(yr)}</div>
+                  <div style={{ ...S.cap, marginBottom: 14 }}>{"Somente meses com dados reais"}</div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+                    {groups.map(function(g) {
+                      return (
+                        <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color }} />
+                          <span style={{ fontSize: 10, color: TM }}>{g.label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  {/* Insight contextual */}
-                  {subsTotalAnnual > 0 && (
-                    <div style={{ marginBottom: 10, padding: "8px 10px", background: "#F8F4ED", borderRadius: 6, border: "1px solid " + BR }}>
-                      <div style={{ fontSize: 11, color: T2, fontWeight: 600 }}>
-                        {"💡 " + fmt(subsTotalAnnual) + "/ano em assinaturas. Investido a 0,8% a.m., daria " + fmt(subsTotalMonthly * 12 * Math.pow(1 + 0.008, 60)) + " em 5 anos."}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Lista */}
-                  {subscriptions.map(function(s) {
-                    var cat2 = cats.find(function(c) { return c.id === s.cat; });
-                    var isCancelled = subRev[s.key] === "cancelled";
+                  {chD.map(function(d, idx) {
+                    if (!d.real && d.td === 0 && d.cr === 0) return null;
+                    var isCur = idx === mo;
                     return (
-                      <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #F0F0F0", opacity: isCancelled ? 0.4 : 1 }}>
-                        <span style={{ fontSize: 18 }}>{cat2 ? cat2.icon : "📺"}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: TX, textDecoration: isCancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
-                          <div style={{ display: "flex", gap: 3, marginTop: 2, flexWrap: "wrap" }}>
-                            <span style={S.tag(TM)}>{String(s.occurrences) + "x detectada"}</span>
-                            {s.isFixed && <span style={S.tag(BL)}>{"Conta fixa"}</span>}
-                            {cat2 && <span style={S.tag("#7C3AED")}>{cat2.name}</span>}
+                      <div key={idx} style={{ marginBottom: 16, padding: isCur ? "10px 10px 10px 10px" : "6px 0", background: isCur ? BG : "transparent", borderRadius: isCur ? 8 : 0, border: isCur ? "1px solid " + BR : "none" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontFamily: "'Fraunces',serif", fontSize: 13, fontWeight: 600, color: isCur ? BD : T2 }}>{MA[idx]}{isCur ? " ◀" : ""}</span>
+                            {!d.real && <span style={{ ...S.cap, background: WN + "20", color: WN, padding: "1px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700 }}>{"projeção"}</span>}
+                          </div>
+                          <div style={{ display: "flex", gap: 12 }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={S.cap}>{"Crédito"}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: OK }}>{fmt(d.cr)}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={S.cap}>{"Débito"}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(d.td)}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={S.cap}>{"Saldo"}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</div>
+                            </div>
                           </div>
                         </div>
-                        <div style={{ textAlign: "right", minWidth: 90 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>{fmt(s.avg) + "/mês"}</div>
-                          <div style={{ ...S.cap, color: ER, fontWeight: 600 }}>{fmt(s.annual) + "/ano"}</div>
-                        </div>
-                        <button onClick={function() { togSubReview(s.key); }}
-                          style={{ background: isCancelled ? OK : "#fff", border: "1px solid " + (isCancelled ? OK : BR), borderRadius: 6, padding: "4px 8px", fontSize: 10, fontWeight: 700, color: isCancelled ? "#fff" : T3, cursor: "pointer", whiteSpace: "nowrap" }}>
-                          {isCancelled ? "✓ Revisada" : "Ainda uso?"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Análise por Dia da Semana */}
-            <div style={S.cardA("#0D9488")}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                <div>
-                  <div style={S.lbl}>{"GASTOS POR DIA DA SEMANA"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Padrões inconscientes do seu comportamento"}</div>
-                </div>
-                <span style={{ fontSize: 22 }}>{"📅"}</span>
-              </div>
-
-              {weekdayStats.reduce(function(a, v) { return a + v; }, 0) === 0 ? (
-                <div style={{ textAlign: "center", padding: 16 }}>
-                  <p style={{ ...S.cap }}>{"Sem dados suficientes ainda. Importe transações com data para ver padrões."}</p>
-                </div>
-              ) : (
-                <div>
-                  {/* Barras */}
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 130, marginBottom: 6 }}>
-                    {weekdayStats.map(function(v, idx) {
-                      var h = weekdayMax > 0 ? (v / weekdayMax) * 100 : 0;
-                      var isMax = idx === topWeekdayIdx && v > 0;
-                      return (
-                        <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                          <div style={{ ...S.cap, fontSize: 9, fontWeight: 700, color: isMax ? ER : TM, marginBottom: 2 }}>{v > 0 ? fK(v) : ""}</div>
-                          <div style={{ width: "100%", height: h, background: isMax ? ER : "#0D9488", borderRadius: "4px 4px 0 0", transition: "height 0.4s" }} />
-                          <div style={{ fontSize: 11, color: isMax ? ER : T3, marginTop: 4, fontWeight: isMax ? 700 : 500 }}>{WD[idx]}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Insights comportamentais */}
-                  {topWeekdayIdx >= 0 && weekdayStats[topWeekdayIdx] > 0 && (
-                    <div style={{ marginTop: 12, padding: "10px 12px", background: ER + "12", borderRadius: 6, border: "1px solid " + ER + "40" }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: ER, marginBottom: 4 }}>
-                        {"🎯 " + WD_FULL[topWeekdayIdx] + " é o seu dia mais caro"}
-                      </div>
-                      <div style={{ fontSize: 11, color: T2 }}>
-                        {fmt(weekdayStats[topWeekdayIdx]) + " no acumulado — " +
-                          (weekdayAvgGlobal > 0 && weekdayAvg[topWeekdayIdx] > 0 ?
-                            String(Math.round(((weekdayAvg[topWeekdayIdx] / weekdayAvgGlobal) - 1) * 100)) + "% acima da média por transação" : "")}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Detalhamento por dia */}
-                  <div style={{ marginTop: 10 }}>
-                    <div style={S.lbl}>{"MÉDIA POR TRANSAÇÃO"}</div>
-                    {weekdayStats.map(function(v, idx) {
-                      if (weekdayCount[idx] === 0) return null;
-                      var avg = weekdayAvg[idx];
-                      var deltaVsGlobal = weekdayAvgGlobal > 0 ? ((avg - weekdayAvgGlobal) / weekdayAvgGlobal) : 0;
-                      return (
-                        <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid #F0F0F0" }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: T3, minWidth: 70 }}>{WD_FULL[idx]}</span>
-                          <span style={{ ...S.cap, flex: 1 }}>{String(weekdayCount[idx]) + " transações"}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: TX, minWidth: 75, textAlign: "right" }}>{fmt(avg)}</span>
-                          {Math.abs(deltaVsGlobal) > 0.05 && (
-                            <span style={{ fontSize: 10, fontWeight: 700, color: deltaVsGlobal > 0 ? ER : OK, minWidth: 50, textAlign: "right" }}>
-                              {(deltaVsGlobal > 0 ? "+" : "") + String(Math.round(deltaVsGlobal * 100)) + "%"}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Comparativo Visual Mensal (existente) */}
-            {chD.filter(function(d) { return d.real; }).length > 0 && (
-              <div style={S.card}>
-                <div style={S.lbl}>{"EVOLUÇÃO POR GRUPO"}</div>
-                <div style={{ marginTop: 8 }}>
-                  {GR.map(function(g) {
-                    var key = g.id === "essenciais" ? "e" : g.id === "investimentos" ? "i" : "d";
-                    var maxV = Math.max.apply(null, chD.map(function(d) { return d[key]; }).concat([1]));
-                    return (
-                      <div key={g.id} style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: g.color, marginBottom: 4, textTransform: "uppercase" }}>{g.label}</div>
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 50 }}>
-                          {chD.map(function(d, idx) {
-                            var h = maxV > 0 ? (d[key] / maxV) * 45 : 0;
-                            var cu = idx === mo;
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {groups.map(function(g) {
+                            var val = d[g.key] || 0;
+                            if (val === 0) return null;
+                            var barW = allMax > 0 ? (val / allMax) * 100 : 0;
                             return (
-                              <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                <div style={{ width: "100%", height: h, background: g.color, opacity: d.real ? (cu ? 1 : 0.5) : 0.15, borderRadius: "2px 2px 0 0" }} />
-                                <div style={{ fontSize: 7, color: cu ? BD : "#BBBBBB", marginTop: 1, fontWeight: cu ? 800 : 400 }}>{d.mes}</div>
+                              <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 70, fontSize: 10, color: TM, textAlign: "right", flexShrink: 0 }}>{g.label}</div>
+                                <div style={{ flex: 1, height: 20, background: BR, borderRadius: 4, overflow: "hidden" }}>
+                                  <div style={{ width: String(barW) + "%", height: "100%", background: g.color, borderRadius: 4, transition: "width 0.4s", display: "flex", alignItems: "center", paddingLeft: 6 }}>
+                                    {barW > 20 && <span style={{ fontSize: 10, color: "#fff", fontWeight: 600 }}>{fmt(val)}</span>}
+                                  </div>
+                                </div>
+                                {barW <= 20 && <span style={{ fontSize: 10, color: T3, fontWeight: 600, flexShrink: 0 }}>{fmt(val)}</span>}
                               </div>
                             );
                           })}
@@ -2286,18 +1746,107 @@ export default function App() {
                       </div>
                     );
                   })}
+                  <div style={{ borderTop: "2px solid " + BR, paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{"Total ano"}</span>
+                    <div style={{ display: "flex", gap: 16 }}>
+                      {[
+                        { l: "Débito", v: chD.reduce(function(a, d) { return a + d.td; }, 0), c: ER },
+                        { l: "Crédito", v: chD.reduce(function(a, d) { return a + d.cr; }, 0), c: OK },
+                        { l: "Saldo", v: chD.reduce(function(a, d) { return a + d.s; }, 0), c: BD },
+                      ].map(function(it) {
+                        return (
+                          <div key={it.l} style={{ textAlign: "right" }}>
+                            <div style={S.cap}>{it.l}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: it.c }}>{fmt(it.v)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
+              );
+            })()}
+
+            {/* Categoria que mais variou */}
+            {yrD && (
+              <div style={S.cardA(TEAL)}>
+                <div style={S.lbl}>{"DESTAQUES POR CATEGORIA"}</div>
+                <div style={{ ...S.cap, marginBottom: 10, marginTop: 2 }}>{"Maiores variações no ano"}</div>
+                {(function() {
+                  var catStats = cats.map(function(cat2) {
+                    var months = yrD.map(function(mDt) {
+                      return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+                        .reduce(function(a, t) { return a + myP(t); }, 0);
+                    }).filter(function(v) { return v > 0; });
+                    if (months.length < 3) return null;
+                    var avg2 = months.reduce(function(a, v) { return a + v; }, 0) / months.length;
+                    var max2 = Math.max.apply(null, months);
+                    var min2 = Math.min.apply(null, months);
+                    var variance = max2 - min2;
+                    var maxMo = yrD.findIndex(function(mDt) {
+                      return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+                        .reduce(function(a, t) { return a + myP(t); }, 0) === max2;
+                    });
+                    return { cat: cat2, avg: avg2, max: max2, min: min2, variance: variance, maxMo: maxMo };
+                  }).filter(Boolean).sort(function(a, b) { return b.variance - a.variance; });
+
+                  return catStats.slice(0, 5).map(function(cs) {
+                    var grp = GR.find(function(g) { return g.id === cs.cat.group; });
+                    return (
+                      <div key={cs.cat.id} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 16 }}>{cs.cat.icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: TX }}>{cs.cat.name}</span>
+                            <span style={{ ...S.tag(grp ? grp.color : TM), marginLeft: 6 }}>{grp ? grp.label : ""}</span>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: TX }}>{"Média: " + fmt(cs.avg)}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <div style={{ flex: 1, background: OK + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
+                            <div style={{ ...S.cap }}>{"Mín"}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: OK }}>{fmt(cs.min)}</div>
+                          </div>
+                          <div style={{ flex: 1, background: ER + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
+                            <div style={{ ...S.cap }}>{"Máx (" + (cs.maxMo >= 0 ? MA[cs.maxMo] : "-") + ")"}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{fmt(cs.max)}</div>
+                          </div>
+                          <div style={{ flex: 1, background: WN + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
+                            <div style={{ ...S.cap }}>{"Variação"}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: WN }}>{fmt(cs.variance)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
 
-            {/* AI Insights placeholder */}
-            <div style={S.cardA("#7C3AED")}>
-              <div style={S.lbl}>{"✨ INSIGHTS COM IA"}</div>
-              <div style={{ ...S.cap, marginTop: 2, marginBottom: 8 }}>{"Análises personalizadas geradas por IA"}</div>
-              <div style={{ padding: "12px", background: BG, borderRadius: 6, border: "1px dashed " + BR, textAlign: "center" }}>
-                <div style={{ fontSize: 13, color: T2, fontWeight: 600 }}>{"🔜 Em breve"}</div>
-                <div style={{ ...S.cap, marginTop: 4 }}>{"Insights inteligentes baseados nos seus padrões financeiros"}</div>
-              </div>
+            {/* AI Insights */}
+            <div style={S.cardA(BD)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div>
+                  <div style={S.lbl}>{"✨ INSIGHTS COM IA"}</div>
+                  <div style={{ ...S.cap, marginTop: 2 }}>{"Análise do seu padrão financeiro anual"}</div>
+                </div>
+                <button
+                  onClick={function() {
+                  sAiLoading(false);
+                }}
+                style={{ ...S.btn(TM), padding: "8px 14px", fontSize: 12, opacity: 0.5, cursor: "not-allowed" }}
+                disabled={true}
+              >
+                {"🧠 Gerar análise"}
+              </button>
+            </div>
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{"🧠"}</div>
+              <div style={{ fontSize: 12, color: TM, lineHeight: 1.6 }}>{"Análise inteligente do seu padrão financeiro anual."}</div>
+              <div style={{ marginTop: 8, fontSize: 11, color: WN, fontWeight: 600, background: WN + "15", display: "inline-block", padding: "4px 12px", borderRadius: 12 }}>{"🔜 Em breve"}</div>
+            </div>
             </div>
           </div>
         )}
@@ -2305,7 +1854,7 @@ export default function App() {
         {/* ═══ METAS ═══ */}
         {tab === "metas" && (
           <div>
-            {/* Metas */}
+            {/* Metas */}}
             <div style={S.cardA("#7C3AED")}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={S.lbl}>{"METAS"}</div>
@@ -2333,10 +1882,10 @@ export default function App() {
                 }
                 var mN = mL > 0 && remain > 0 ? remain / mL : 0;
                 return (
-                  <div key={g.id} style={{ padding: "12px 0", borderBottom: "1px solid #F0F0F0" }}>
+                  <div key={g.id} style={{ padding: "12px 0", borderBottom: "1px solid " + BR }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                       <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: TX }}>{g.name}</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, fontFamily: "'Fraunces',serif", color: TX }}>{g.name}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
                           <span style={S.cap}>{"Prazo:"}</span>
                           <input type="date" value={g.deadline || ""} onChange={function(e) { updGD(g.id, e.target.value); }}
@@ -2381,7 +1930,7 @@ export default function App() {
                       var spent2 = spC[cat2.id] || 0;
                       var isEditLim2 = editLimId === cat2.id;
                       return (
-                        <div key={cat2.id} style={{ padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
+                        <div key={cat2.id} style={{ padding: "8px 0", borderBottom: "1px solid " + BR }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: lim ? 4 : 0 }}>
                             <span>{cat2.icon}</span>
                             <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: TX }}>{cat2.name}</span>
@@ -2410,7 +1959,6 @@ export default function App() {
                                 onChange={function(e) { sELimV(e.target.value); }} />
                               <button style={S.btn(BL)} onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
                               {lim && <button style={{ ...S.btnO, padding: "8px 10px", fontSize: 12 }} onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
-                              <button style={S.btnO} onClick={function() { sELimId(null); }}>{"×"}</button>
                             </div>
                           )}
                         </div>
@@ -2426,8 +1974,8 @@ export default function App() {
         {/* ═══ INPUT ═══ */}
         {tab === "input" && (
           <div>
-            <div style={S.cardA("#0D9488")}>
-              <div style={S.lbl}>{"NOVA TRANSAÇÃO"}</div>
+            <div style={S.cardA(OK)}>
+              <div style={S.lbl}>{"NOVO GASTO"}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 8 }}>
                 <input style={S.inp} placeholder="Descrição" value={fm.desc} onChange={function(e) { sFm({ ...fm, desc: e.target.value }); }} />
                 <div style={S.g2}>
@@ -2452,7 +2000,7 @@ export default function App() {
                   <input style={S.inp} placeholder="Parcela atual" value={fm.ic} onChange={function(e) { sFm({ ...fm, ic: e.target.value }); }} />
                   <input style={S.inp} placeholder="Total parcelas" value={fm.it} onChange={function(e) { sFm({ ...fm, it: e.target.value }); }} />
                 </div>
-                <button style={S.btn("#0D9488")} onClick={addTx}>{"Adicionar"}</button>
+                <button style={S.btn(OK)} onClick={addTx}>{"Adicionar"}</button>
                 {err && tab === "input" && <div style={{ color: ER, fontSize: 12, fontWeight: 600 }}>{"⚠️ " + err}</div>}
               </div>
             </div>
@@ -2471,7 +2019,7 @@ export default function App() {
                 <div style={{ marginTop: 6 }}>
                   {crs.map(function(c) {
                     return (
-                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #F0F0F0", fontSize: 13 }}>
+                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid " + BR, fontSize: 13 }}>
                         <span style={{ color: T3 }}>{c.desc + " "}<span style={S.tag(BL)}>{c.type}</span></span>
                         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                           <span style={{ fontWeight: 700, color: BL }}>{fmt(c.amount)}</span>
@@ -2484,13 +2032,13 @@ export default function App() {
               )}
             </div>
 
-            <div style={S.cardA("#D97706")}>
+            <div style={S.cardA(AMB)}>
               <div style={S.lbl}>{"IMPORTAR EXTRATO NUBANK"}</div>
               {!csvR ? (
                 <div style={{ marginTop: 8 }}>
                   <p style={S.cap}>{"Dedup automático."}</p>
                   <input ref={fr} type="file" accept=".csv" onChange={handleCSV} style={{ display: "none" }} />
-                  <button style={{ ...S.btn("#D97706"), marginTop: 6 }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar CSV"}</button>
+                  <button style={{ ...S.btn(AMB), marginTop: 6 }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar CSV"}</button>
                 </div>
               ) : (
                 <div style={{ marginTop: 8 }}>
@@ -2503,7 +2051,7 @@ export default function App() {
                       var inst = pi(desc);
                       var c2 = csvSp[row._idx] || { on: false, sp: [{ person: "Duda", pct: 30 }] };
                       return (
-                        <div key={idx} style={{ padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
+                        <div key={idx} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 600, color: TX }}>{desc}</div>
@@ -2512,7 +2060,7 @@ export default function App() {
                                 {inst && <span style={S.tag("#7C3AED")}>{"P " + String(inst.c) + "/" + String(inst.t)}</span>}
                               </div>
                             </div>
-                            <span style={{ color: "#D97706", fontWeight: 700, fontSize: 16 }}>{amt}</span>
+                            <span style={{ color: AMB, fontWeight: 700, fontSize: 16 }}>{amt}</span>
                           </div>
                           <CatS value={csvC[row._idx] || ""} onChange={function(e) { sCC({ ...csvC, [row._idx]: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
                           <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer", marginTop: 6 }}>
@@ -2591,15 +2139,15 @@ export default function App() {
                 var pSum = parts.reduce(function(a, p) { return a + p.amount; }, 0);
                 var isO = pO === f.id;
                 return (
-                  <div key={f.id} style={{ padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
+                  <div key={f.id} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: ip ? 0.5 : 1 }}>
                       <input type="checkbox" checked={ip} style={{ ...S.ck, width: 18, height: 18 }} onChange={function() { togFP(f.id); }} />
                       <span style={{ fontSize: 15 }}>{cat2 ? cat2.icon : "📄"}</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, textDecoration: ip ? "line-through" : "none", color: TX }}>{f.name}</div>
                         <div style={{ display: "flex", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
-                          <span style={S.tag(mode === "budget" ? "#0D9488" : "#7C3AED")}>{mode === "budget" ? "💰" : "💳"}</span>
-                          {sp2.map(function(s, j) { return <span key={j} style={S.tag("#D97706")}>{"÷" + s.person + " " + String(s.pct) + "%"}</span>; })}
+                          <span style={S.tag(mode === "budget" ? OK : "#7C3AED")}>{mode === "budget" ? "💰" : "💳"}</span>
+                          {sp2.map(function(s, j) { return <span key={j} style={S.tag(AMB)}>{"÷" + s.person + " " + String(s.pct) + "%"}</span>; })}
                         </div>
                         {!ip && mode === "budget" && (
                           <div style={{ marginTop: 5 }}>
@@ -2671,7 +2219,7 @@ export default function App() {
                       return (
                         <div key={cat2.id}>
                           <div onClick={function() { if (!isEditLim) sCatF(isAc ? null : cat2.id); }}
-                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px", marginLeft: -6, borderBottom: "1px solid #F0F0F0", cursor: "pointer", borderRadius: 4, background: isAc ? BG : "transparent" }}>
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px", marginLeft: -6, borderBottom: "1px solid " + BR, cursor: "pointer", borderRadius: 4, background: isAc ? BG : "transparent" }}>
                             <span>{cat2.icon}</span>
                             <div style={{ flex: 1 }}>
                               <span style={{ fontSize: 12, color: isAc ? BD : T3, fontWeight: isAc ? 700 : 400 }}>{cat2.name}</span>
@@ -2739,7 +2287,7 @@ export default function App() {
                   var isE = eId === tx.id;
                   var isEd = editTxId === tx.id;
                   return (
-                    <div key={tx.id} style={{ padding: "6px 0", borderBottom: "1px solid #F0F0F0", opacity: tx.reimbursed ? 0.5 : 1 }}>
+                    <div key={tx.id} style={{ padding: "6px 0", borderBottom: "1px solid " + BR, opacity: tx.reimbursed ? 0.5 : 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span>{cat2 ? cat2.icon : "?"}</span>
                         <div style={{ flex: 1 }}>
@@ -2750,18 +2298,18 @@ export default function App() {
                           {tx.note && <div style={{ ...S.cap, color: T2, fontStyle: "italic", marginTop: 1 }}>{"📝 " + tx.note}</div>}
                           <div style={{ display: "flex", gap: 2, marginTop: 1, flexWrap: "wrap" }}>
                             <span style={S.tag(grp ? grp.color : TM)}>{cat2 ? cat2.name : "?"}</span>
-                            {sp2.map(function(s, idx) { return <span key={idx} style={S.tag("#D97706")}>{"÷" + s.person}</span>; })}
+                            {sp2.map(function(s, idx) { return <span key={idx} style={S.tag(AMB)}>{"÷" + s.person}</span>; })}
                             {tx.reimbursed && <span style={S.tag("#7C3AED")}>{"Reemb."}</span>}
-                            {tx.src === "proj" && <span style={S.tag("#2563EB")}>{"Proj."}</span>}
+                            {tx.src === "proj" && <span style={S.tag(TM)}>{"Proj."}</span>}
                           </div>
                         </div>
                         <div style={{ textAlign: "right", minWidth: 55 }}>
                           <div style={{ fontWeight: 700, fontSize: 13, color: TX }}>{fmt(tx.amount)}</div>
-                          {sp2.length > 0 && <div style={{ ...S.cap, color: "#0D9488" }}>{"Vc: " + fmt(myP(tx))}</div>}
+                          {sp2.length > 0 && <div style={{ ...S.cap, color: BL }}>{"Vc: " + fmt(myP(tx))}</div>}
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                           <span onClick={function() { openTxEdit(tx); }} style={{ cursor: "pointer", fontSize: 11, color: isEd ? BL : "#BBBBBB" }} title="Editar">{"✏️"}</span>
-                          <span onClick={function() { openSE(tx); }} style={{ cursor: "pointer", fontSize: 11, color: sp2.length > 0 ? "#D97706" : "#BBBBBB" }}>{"÷"}</span>
+                          <span onClick={function() { openSE(tx); }} style={{ cursor: "pointer", fontSize: 11, color: sp2.length > 0 ? AMB : "#BBBBBB" }}>{"÷"}</span>
                           <span onClick={function() { togRe(tx.id); }} style={{ cursor: "pointer", fontSize: 11 }}>{tx.reimbursed ? "💜" : "🔄"}</span>
                           <span onClick={function() { rmTx(tx.id); }} style={{ cursor: "pointer", color: ER, fontSize: 14 }}>{"×"}</span>
                         </div>
@@ -2785,10 +2333,10 @@ export default function App() {
                       )}
                       {isE && (
                         <div style={{ marginTop: 6, marginLeft: 24, padding: 8, background: BG, borderRadius: 6, border: "1px solid " + BR }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#D97706", marginBottom: 5 }}>{"Dividir:"}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: AMB, marginBottom: 5 }}>{"Dividir:"}</div>
                           <SE compact splits={eD} onChange={function(s) { sED(s); }} />
                           <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
-                            <button style={S.btn("#D97706")} onClick={function() { savSE(tx.id); }}>{"Salvar"}</button>
+                            <button style={S.btn(AMB)} onClick={function() { savSE(tx.id); }}>{"Salvar"}</button>
                             {sp2.length > 0 && <button onClick={function() { rmSE(tx.id); }} style={{ background: "#fff", border: "1px solid #FECACA", borderRadius: 6, padding: "5px 10px", color: ER, fontSize: 10, cursor: "pointer" }}>{"Remover"}</button>}
                             <button onClick={function() { sEId(null); }} style={S.btnO}>{"×"}</button>
                           </div>
@@ -2808,7 +2356,7 @@ export default function App() {
             <div style={S.card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={S.h2}>{"Devedores — " + MS[mo]}</div>
-                <button style={S.btn("#D97706")} onClick={function() { sSDbt(!showDebt); }}>{showDebt ? "Cancelar" : "+ Novo"}</button>
+                <button style={S.btn(AMB)} onClick={function() { sSDbt(!showDebt); }}>{showDebt ? "Cancelar" : "+ Novo"}</button>
               </div>
               {showDebt && (
                 <div style={{ background: BG, borderRadius: 8, padding: 10, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
@@ -2817,7 +2365,7 @@ export default function App() {
                     <input style={S.inp} placeholder="Valor (R$)" value={df.amount} inputMode="decimal" onChange={function(e) { sDf({ ...df, amount: e.target.value }); }} />
                     <input style={S.inp} placeholder="Quem deve?" value={df.person} onChange={function(e) { sDf({ ...df, person: e.target.value }); }} />
                   </div>
-                  <button style={S.btn("#D97706")} onClick={addDebt}>{"Adicionar"}</button>
+                  <button style={S.btn(AMB)} onClick={addDebt}>{"Adicionar"}</button>
                 </div>
               )}
             </div>
@@ -2831,19 +2379,19 @@ export default function App() {
                 var person = e2[0];
                 var data = e2[1];
                 return (
-                  <div key={person} style={S.cardA("#D97706")}>
+                  <div key={person} style={S.cardA(AMB)}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: TX }}>{person}</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, fontFamily: "'Fraunces',serif", color: TX }}>{person}</div>
                       <div style={{ textAlign: "right" }}>
                         <div style={S.cap}>{"Pendente"}</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: "#D97706" }}>{fmt(data.pending)}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: AMB }}>{fmt(data.pending)}</div>
                       </div>
                     </div>
                     <PB value={data.total - data.pending} max={data.total} color={OK} />
                     <div style={{ marginTop: 8 }}>
                       {data.items.map(function(it, idx) {
                         return (
-                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: "1px solid #F0F0F0" }}>
+                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: "1px solid " + BR }}>
                             <input type="checkbox" checked={it.rcv || false} style={S.ck}
                               onChange={function() {
                                 if (it.src === "fx") togFR(it.id);
@@ -2857,7 +2405,7 @@ export default function App() {
                                 {it.src === "manual" && <span style={S.tag("#7C3AED")}>{"Manual"}</span>}
                               </div>
                             </div>
-                            <span style={{ fontWeight: 700, color: it.rcv ? OK : "#D97706", fontSize: 13 }}>{fmt(it.debt)}</span>
+                            <span style={{ fontWeight: 700, color: it.rcv ? OK : AMB, fontSize: 13 }}>{fmt(it.debt)}</span>
                             {it.src === "manual" && (
                               <span onClick={function() { rmD(it.id); }} style={{ cursor: "pointer", color: ER }}>{"×"}</span>
                             )}
@@ -2874,11 +2422,12 @@ export default function App() {
 
       </div>
 
-      {/* ══ FLOATING CHAT ══ */}
+      {/* ══ FLOATING AI CHAT ══ */}
       <style>{`
         @keyframes fadeInTab { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #1B72B840; } 50% { box-shadow: 0 0 0 8px #1B72B820; } }
+        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #2B4F8240; } 50% { box-shadow: 0 0 0 8px #2B4F8220; } }
         .fc-tab-content { animation: fadeInTab 0.22s ease; }
         .fc-chat-msg { animation: slideUp 0.18s ease; }
         @media (min-width: 768px) { .fc-main { max-width: 100% !important; padding: 16px 32px !important; } }
@@ -2891,8 +2440,8 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>{"✨"}</span>
               <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "'Montserrat',sans-serif" }}>{"Assistente Prumo"}</div>
-                <div style={{ color: "#ffffff90", fontSize: 10 }}>{"Em breve: input por linguagem natural"}</div>
+                <div style={{ color: "#fff", fontWeight: 600, fontSize: 13, fontFamily: "'Fraunces',serif" }}>{"Assistente Prumo"}</div>
+                <div style={{ color: "#ffffff90", fontSize: 10 }}>{"Diga o que gastou ou recebeu"}</div>
               </div>
             </div>
             <span onClick={function() { sChatOpen(false); }} style={{ color: "#ffffff80", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>{"×"}</span>
@@ -2901,7 +2450,7 @@ export default function App() {
             {chatMsgs.length === 0 && (
               <div style={{ textAlign: "center", padding: "20px 8px" }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>{"💬"}</div>
-                <div style={{ fontSize: 12, color: T2, lineHeight: 1.6, fontWeight: 500 }}>{"Em breve você poderá lançar gastos em linguagem natural."}</div>
+                <div style={{ fontSize: 12, color: T2, lineHeight: 1.6, fontWeight: 500 }}>{"Diga o que gastou ou recebeu em linguagem natural."}</div>
                 <div style={{ fontSize: 11, color: TM, marginTop: 10, fontStyle: "italic" }}>{"Ex: gastei 150 no mercado pix hoje"}</div>
               </div>
             )}
