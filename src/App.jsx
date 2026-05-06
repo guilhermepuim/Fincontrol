@@ -122,17 +122,17 @@ function calcSpent(mData, cats, fxd) {
 
 /* ══ STYLES ══ */
 var S = {
-  card: { background: CARD, borderRadius: 12, padding: 16, marginBottom: 10, border: "1px solid " + BR },
-  cardA: function(c) { return { background: CARD, borderRadius: 12, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
-  inp: { background: BG, border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
-  btn: function(c) { return { background: c, border: "none", borderRadius: 999, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
+  card: { background: CARD, borderRadius: 20, padding: 16, marginBottom: 10, border: "1px solid " + BR },
+  cardA: function(c) { return { background: CARD, borderRadius: 20, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
+  inp: { background: CARD, border: "1px solid " + BR, borderRadius: 10, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
+  btn: function(c) { return { background: c, border: "none", borderRadius: 999, padding: "10px 18px", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }; },
   btnO: { background: CARD, border: "1px solid " + BR, borderRadius: 999, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
-  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: c + "20", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
+  tag: function(c) { return { display: "inline-flex", alignItems: "center", padding: "3px 9px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: c + "18", color: c, border: "1px solid " + c + "30", whiteSpace: "nowrap", marginRight: 3 }; },
   g2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
   ck: { accentColor: AMB, width: 16, height: 16, cursor: "pointer" },
-  lbl: { fontSize: 10, fontWeight: 500, letterSpacing: "0.12em", color: TM, textTransform: "uppercase", marginBottom: 4, fontFamily: "'JetBrains Mono',monospace" },
+  lbl: { fontSize: 9, fontWeight: 500, letterSpacing: "0.14em", color: TM, textTransform: "uppercase", marginBottom: 4, fontFamily: "'JetBrains Mono',monospace" },
   h2: { fontFamily: "'Fraunces',serif", fontSize: 15, fontWeight: 500, color: BD },
-  data: function(c) { return { fontSize: 28, fontWeight: 700, color: c || TX, fontFamily: "'Inter',sans-serif", lineHeight: 1.1 }; },
+  data: function(c) { return { fontSize: 30, fontWeight: 500, color: c || TX, fontFamily: "'Fraunces',serif", letterSpacing: "-0.02em", lineHeight: 1 }; },
   cap: { fontSize: 11, color: TM, fontFamily: "'Inter',sans-serif" },
 };
 
@@ -141,7 +141,7 @@ function PB(props) {
   var r = props.max > 0 ? props.value / props.max : 0;
   var c = props.noWarn ? (props.color || BL) : (r > 1 ? ER : r > 0.85 ? WN : (props.color || BL));
   return (
-    <div style={{ background: BR, borderRadius: 999, height: 7, overflow: "hidden", width: "100%" }}>
+    <div style={{ background: BG, borderRadius: 999, height: 6, overflow: "hidden", width: "100%" }}>
       <div style={{ width: String(Math.min(r * 100, 100)) + "%", height: "100%", borderRadius: 999, background: c, transition: "width 0.4s" }} />
     </div>
   );
@@ -863,10 +863,10 @@ export default function App() {
           </div>
           <span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 500, color: BD, letterSpacing: "-0.01em" }}>{"Prumo"}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button style={{ background: BG, border: "1px solid " + BR, borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goPrev}>{"◀"}</button>
-          <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Fraunces',serif", color: BD, minWidth: 130, textAlign: "center" }}>{MS[mo] + " " + String(yr)}</span>
-          <button style={{ background: BG, border: "1px solid " + BR, borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goNext}>{"▶"}</button>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 14, padding: "7px 14px", background: BGMAIN, border: "1px solid " + BR, borderRadius: 999 }}>
+          <button style={{ background: BG, border: "none", width: 24, height: 24, borderRadius: "50%", cursor: "pointer", color: T2, fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={goPrev}>{"◀"}</button>
+          <span style={{ fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono',monospace", letterSpacing: "0.12em", color: BD, textTransform: "uppercase" }}>{MA[mo] + " " + String(yr)}</span>
+          <button style={{ background: BG, border: "none", width: 24, height: 24, borderRadius: "50%", cursor: "pointer", color: T2, fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={goNext}>{"▶"}</button>
         </div>
         <button onClick={function() { signOut(auth); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: TM, padding: "4px 6px" }} title="Sair">{"Sair"}</button>
       </div>
@@ -877,7 +877,7 @@ export default function App() {
           var ac = tab === t.id;
           return (
             <button key={t.id} onClick={function() { sTab(t.id); sErr(""); sTxS(""); sCfC(false); sCatF(null); }}
-              style={{ padding: "10px 16px", border: "none", background: "transparent", fontFamily: "'Inter',sans-serif", color: ac ? BL : "#BBBBBB", fontWeight: ac ? 700 : 500, fontSize: 12, cursor: "pointer", borderBottom: ac ? "2px solid " + BL : "2px solid transparent", whiteSpace: "nowrap" }}>
+              style={{ padding: "11px 16px", border: "none", background: "transparent", fontFamily: "'JetBrains Mono',monospace", color: ac ? BL : TM, fontWeight: ac ? 600 : 500, fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", borderBottom: ac ? "2px solid " + BL : "2px solid transparent", whiteSpace: "nowrap", textTransform: "uppercase" }}>
               {t.l}
             </button>
           );
@@ -1110,8 +1110,8 @@ export default function App() {
                 </div>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-                <div><div style={S.cap}>{"Saldo atual"}</div><div style={{ fontSize: 22, fontWeight: 700, color: BD }}>{fmt(nwBalance)}</div></div>
-                <div><div style={S.cap}>{"Investido este mês"}</div><div style={{ fontSize: 22, fontWeight: 700, color: BL }}>{fmt(invSp)}</div></div>
+                <div><div style={S.cap}>{"Saldo atual"}</div><div style={{ fontSize: 22, fontWeight: 500, color: BD, fontFamily: "'Fraunces',serif" }}>{fmt(nwBalance)}</div></div>
+                <div><div style={S.cap}>{"Investido este mês"}</div><div style={{ fontSize: 22, fontWeight: 500, color: BL, fontFamily: "'Fraunces',serif" }}>{fmt(invSp)}</div></div>
               </div>
 
               {nwHistory.length > 1 && (
@@ -1730,12 +1730,13 @@ export default function App() {
                             var val = d[g.key] || 0;
                             if (val === 0) return null;
                             var barW = allMax > 0 ? (val / allMax) * 100 : 0;
+                            var barTxt = g.color === AMB ? BD : "#fff";
                             return (
                               <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 <div style={{ width: 70, fontSize: 10, color: TM, textAlign: "right", flexShrink: 0 }}>{g.label}</div>
-                                <div style={{ flex: 1, height: 20, background: BR, borderRadius: 4, overflow: "hidden" }}>
+                                <div style={{ flex: 1, height: 20, background: BG, borderRadius: 4, overflow: "hidden" }}>
                                   <div style={{ width: String(barW) + "%", height: "100%", background: g.color, borderRadius: 4, transition: "width 0.4s", display: "flex", alignItems: "center", paddingLeft: 6 }}>
-                                    {barW > 20 && <span style={{ fontSize: 10, color: "#fff", fontWeight: 600 }}>{fmt(val)}</span>}
+                                    {barW > 20 && <span style={{ fontSize: 10, color: barTxt, fontWeight: 600 }}>{fmt(val)}</span>}
                                   </div>
                                 </div>
                                 {barW <= 20 && <span style={{ fontSize: 10, color: T3, fontWeight: 600, flexShrink: 0 }}>{fmt(val)}</span>}
@@ -2384,7 +2385,7 @@ export default function App() {
                       <div style={{ fontSize: 16, fontWeight: 600, fontFamily: "'Fraunces',serif", color: TX }}>{person}</div>
                       <div style={{ textAlign: "right" }}>
                         <div style={S.cap}>{"Pendente"}</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: AMB }}>{fmt(data.pending)}</div>
+                        <div style={{ fontSize: 22, fontWeight: 500, color: AMB, fontFamily: "'Fraunces',serif" }}>{fmt(data.pending)}</div>
                       </div>
                     </div>
                     <PB value={data.total - data.pending} max={data.total} color={OK} />
@@ -2488,7 +2489,7 @@ export default function App() {
       )}
 
       <button onClick={function() { sChatOpen(!chatOpen); }}
-        style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, transition: "background 0.2s", animation: chatOpen ? "none" : "pulse 2s infinite" }}>
+        style={{ position: "fixed", bottom: 24, right: 16, width: 52, height: 52, borderRadius: "50%", background: chatOpen ? BD : AMB, border: "none", cursor: "pointer", boxShadow: "0 12px 40px rgba(201,164,74,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: chatOpen ? 22 : 22, zIndex: 1001, transition: "background 0.2s", color: chatOpen ? "#fff" : BD, animation: chatOpen ? "none" : "pulse 2s infinite" }}>
         {chatOpen ? "×" : "✨"}
       </button>
 
