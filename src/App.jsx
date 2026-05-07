@@ -200,12 +200,19 @@ var PRUMO_TOKENS = `
 .prumo-dev-av { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-tint); color: var(--brand); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
 
 /* ANNUAL CHART ────────────────────────────────── */
-.prumo-yr { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding-top: 18px; }
+.prumo-yr { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-top: 22px; }
 .prumo-yr-col { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative; }
-.prumo-yr-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; transition: outline 120ms; min-height: 4px; }
+.prumo-yr-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; transition: outline 120ms; min-height: 6px; }
+.prumo-yr-stack > i { display: block; min-height: 1px; }
 .prumo-yr-col:hover .prumo-yr-stack, .prumo-yr-col.active .prumo-yr-stack { outline: 2px solid var(--ink); outline-offset: 1px; }
 .prumo-yr-mes { font-size: 9px; color: var(--ink-3); margin-top: 4px; font-weight: 600; }
 .prumo-yr-mes.cur { color: var(--ink); font-weight: 800; }
+.prumo-yr-val { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); margin-bottom: 4px; font-weight: 500; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+
+/* DASH GRID — mobile first (DECLARADO ANTES de qualquer media query) */
+.prumo-dash-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.prumo-dash-grid .full { grid-column: 1 / -1; }
+.prumo-dash-grid .span2 { grid-column: 1 / -1; }
 
 /* DESKTOP ≥ 1100px ──────────────────────────────── */
 @media (min-width: 1100px) {
@@ -243,20 +250,19 @@ var PRUMO_TOKENS = `
   .prumo-quick-add .qa-text { flex: 1; font-size: 13px; color: var(--ink-3); padding: 10px 0; }
   .prumo-quick-add .kbd { font-family: var(--f-mono); font-size: 10px; padding: 3px 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; color: var(--ink-3); }
 
-  /* DASHBOARD GRID DESKTOP */
-  .prumo-dash-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; align-items: start; }
+  /* DASHBOARD GRID DESKTOP — overrides do mobile */
+  .prumo-dash-grid { grid-template-columns: 2fr 1fr 1fr; gap: 16px; align-items: start; }
+  .prumo-dash-grid .span2 { grid-column: span 2; }
   .prumo-card { padding: 20px; }
   .prumo-big { font-size: 38px; }
-  .prumo-ring-svg { width: 60px; height: 60px; margin: 0 auto 6px; }
-  .prumo-ring-card { padding: 14px; }
-  .prumo-ring-val { font-size: 18px; }
-  .prumo-yr { height: 220px; padding-top: 28px; gap: 8px; }
+  .prumo-ring-svg { width: 64px; height: 64px; margin: 0 auto 6px; }
+  .prumo-ring-card { padding: 14px 10px; }
+  .prumo-ring-lbl { font-size: 11px; }
+  .prumo-ring-val { font-size: 22px; font-weight: 600; }
+  .prumo-yr { height: 240px; padding-top: 30px; gap: 8px; }
   .prumo-yr-mes { font-size: 11px; }
+  .prumo-yr-val { font-size: 10px; }
 }
-.prumo-dash-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.prumo-dash-grid .full { grid-column: 1 / -1; }
-.prumo-dash-grid .span2 { grid-column: 1 / -1; }
-@media (min-width: 1100px) { .prumo-dash-grid .span2 { grid-column: span 2; } }
 
 /* TOOLTIP ──────────────────────────────────────── */
 .prumo-tip { position: absolute; bottom: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 12px; box-shadow: var(--shadow-2); z-index: 20; min-width: 200px; white-space: nowrap; margin-bottom: 6px; pointer-events: auto; }
@@ -544,7 +550,7 @@ function DashboardPrumo(props) {
   var devTop = devList.slice(0, 3);
   var devTotalPending = devList.reduce(function(a, d) { return a + d.pending; }, 0);
 
-  /* ─── Atividade recente (txs do mês atual + crs) ─── */
+  /* ─── Atividade recente (txs do mês atual + crs) — agrupada por dia ─── */
   var recentItems = [];
   txs.forEach(function(t) {
     if (t.src === "proj") return;
@@ -552,10 +558,33 @@ function DashboardPrumo(props) {
     recentItems.push({ id: t.id, kind: "tx", date: t.date || "", desc: t.desc, amount: t.amount, icon: c ? c.icon : "💸", catName: c ? c.name : "" });
   });
   crs.forEach(function(c) {
-    recentItems.push({ id: c.id, kind: "cr", date: c.dateAdded || "", desc: c.desc, amount: c.amount, icon: "💼", catName: c.type || "Crédito extra" });
+    recentItems.push({ id: c.id, kind: "cr", date: c.dateAdded || c.date || "", desc: c.desc, amount: c.amount, icon: "💼", catName: c.type || "Crédito extra" });
   });
   recentItems.sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
-  var recentTop = recentItems.slice(0, 6);
+  var recentTop = recentItems.slice(0, 8);
+  var groupedRecent = [];
+  var seenDays = {};
+  recentTop.forEach(function(it) {
+    var dkey = String(it.date).slice(0, 10);
+    if (!dkey) dkey = "sem-data";
+    if (!seenDays[dkey]) {
+      seenDays[dkey] = { key: dkey, items: [], totalDb: 0, totalCr: 0 };
+      groupedRecent.push(seenDays[dkey]);
+    }
+    seenDays[dkey].items.push(it);
+    if (it.kind === "cr") seenDays[dkey].totalCr += it.amount;
+    else seenDays[dkey].totalDb += it.amount;
+  });
+  var todayKey = new Date().toISOString().slice(0, 10);
+  var yKey = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  var dayLabel = function(k) {
+    if (k === "sem-data") return "Sem data";
+    if (k === todayKey) return "Hoje";
+    if (k === yKey) return "Ontem";
+    var d = new Date(k);
+    if (isNaN(d.getTime())) return k;
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  };
 
   /* ─── Termômetro IF ─── */
   var rendaPassiva = reservaTotal * 0.007;
@@ -686,17 +715,29 @@ function DashboardPrumo(props) {
           </div>
           <button className="prumo-btn ghost" onClick={function() { sTab("input"); }}>{"Ver todos →"}</button>
         </div>
-        {recentTop.length === 0 ? (
+        {groupedRecent.length === 0 ? (
           <div className="prumo-cap" style={{ padding: "20px 0", textAlign: "center" }}>{"Nenhum lançamento neste mês ainda. Use o botão + para começar."}</div>
-        ) : recentTop.map(function(it) {
+        ) : groupedRecent.map(function(grp) {
+          var hdrSum = grp.totalCr - grp.totalDb;
+          var hdrLabel = grp.totalCr > 0 && grp.totalDb === 0 ? ("+ " + fmt(grp.totalCr)) : (grp.totalDb > 0 && grp.totalCr === 0 ? fmt(grp.totalDb) : (hdrSum >= 0 ? "+ " + fmt(hdrSum) : fmt(Math.abs(hdrSum))));
           return (
-            <div key={it.kind + "-" + it.id} className="prumo-tx">
-              <div className="prumo-tx-icon">{it.icon}</div>
-              <div className="prumo-tx-meat">
-                <div className="prumo-tx-desc">{it.desc}</div>
-                <div className="prumo-tx-meta">{it.catName + (it.date ? " · " + sd(it.date) : "")}</div>
+            <div key={grp.key}>
+              <div className="prumo-section-h">
+                <span>{dayLabel(grp.key).toUpperCase() + (grp.key.length === 10 ? " · " + grp.key.slice(8, 10) + " " + new Date(grp.key).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") : "")}</span>
+                <span>{hdrLabel}</span>
               </div>
-              <div className={"prumo-tx-amt" + (it.kind === "cr" ? " in" : "")}>{(it.kind === "cr" ? "+" : "") + fmt(it.amount)}</div>
+              {grp.items.map(function(it) {
+                return (
+                  <div key={it.kind + "-" + it.id} className="prumo-tx">
+                    <div className="prumo-tx-icon">{it.icon}</div>
+                    <div className="prumo-tx-meat">
+                      <div className="prumo-tx-desc">{it.desc}</div>
+                      <div className="prumo-tx-meta">{it.catName}</div>
+                    </div>
+                    <div className={"prumo-tx-amt" + (it.kind === "cr" ? " in" : "")}>{(it.kind === "cr" ? "+" : "") + fmt(it.amount)}</div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -744,16 +785,18 @@ function DashboardPrumo(props) {
             {chD.map(function(d, i) {
               var total = d.e + d.i + d.d;
               var h = chMx > 0 ? (total / chMx) * 100 : 0;
-              var eH = total > 0 ? (d.e / total) * h : 0;
-              var iH = total > 0 ? (d.i / total) * h : 0;
-              var dH = total > 0 ? (d.d / total) * h : 0;
               var cur = i === mo;
+              var real = d.real;
+              var brandCol = real ? "var(--brand)" : "oklch(0.78 0.04 235)";
+              var inkCol = real ? "var(--ink-2)" : "oklch(0.78 0.015 250)";
+              var accCol = real ? "var(--accent)" : "oklch(0.88 0.06 75)";
               return (
                 <div key={i} className={"prumo-yr-col" + (hovM === i ? " active" : "")} onMouseEnter={function() { sHM(i); }} onMouseLeave={function() { sHM(null); }} onClick={function() { sHM(hovM === i ? null : i); }}>
-                  <div className="prumo-yr-stack" style={{ height: String(h) + "%", opacity: d.real ? 1 : 0.4 }}>
-                    <div style={{ height: String(eH) + "%", background: "var(--brand)" }}></div>
-                    <div style={{ height: String(iH) + "%", background: "var(--ink-2)" }}></div>
-                    <div style={{ height: String(dH) + "%", background: "var(--accent)" }}></div>
+                  {total > 0 && <div className="prumo-yr-val">{fK(total)}</div>}
+                  <div className="prumo-yr-stack" style={{ height: String(h) + "%" }}>
+                    <i style={{ flex: String(d.e) + " 0 0", background: brandCol }} />
+                    <i style={{ flex: String(d.i) + " 0 0", background: inkCol }} />
+                    <i style={{ flex: String(d.d) + " 0 0", background: accCol }} />
                   </div>
                   <div className={"prumo-yr-mes" + (cur ? " cur" : "")}>{d.mes}</div>
                   {hovM === i && <ChartTip d={d} i={i} cats={cats} />}
