@@ -71,6 +71,201 @@ function myP(tx) { if (tx.reimbursed) return 0; return tx.amount - spt(tx); }
 function pi(d) { var m = d.match(/(\d+)\s*\/\s*(\d+)/); return m ? { c: +m[1], t: +m[2] } : null; }
 function nd(d) { return d.toLowerCase().replace(/\s*\d+\s*\/\s*\d+\s*/g, "").replace(/parcela\s*/gi, "").trim(); }
 
+/* ══ PRUMO DESIGN SYSTEM — TOKENS + CLASSES ══ */
+var PRUMO_TOKENS = `
+:root {
+  --bg: oklch(0.985 0.004 80);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.965 0.006 80);
+  --ink: oklch(0.22 0.02 250);
+  --ink-2: oklch(0.42 0.025 250);
+  --ink-3: oklch(0.62 0.02 250);
+  --ink-4: oklch(0.82 0.012 250);
+  --line: oklch(0.92 0.008 80);
+  --line-2: oklch(0.88 0.01 80);
+  --brand: oklch(0.38 0.07 235);
+  --brand-2: oklch(0.30 0.075 235);
+  --brand-tint: oklch(0.96 0.022 235);
+  --accent: oklch(0.72 0.13 75);
+  --accent-2: oklch(0.62 0.14 65);
+  --accent-tint: oklch(0.96 0.04 75);
+  --pos: oklch(0.58 0.13 155);
+  --pos-tint: oklch(0.96 0.035 155);
+  --warn: oklch(0.72 0.13 75);
+  --neg: oklch(0.58 0.16 25);
+  --neg-tint: oklch(0.96 0.035 25);
+  --r-s: 10px; --r-m: 14px; --r-l: 20px; --r-pill: 999px;
+  --shadow-1: 0 1px 2px oklch(0.22 0.02 250 / 0.04);
+  --shadow-2: 0 4px 14px oklch(0.22 0.02 250 / 0.06);
+  --shadow-3: 0 12px 40px oklch(0.22 0.02 250 / 0.10);
+  --f-ui: 'Inter', system-ui, sans-serif;
+  --f-display: 'Inter', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --sb: 240px;
+}
+.prumo-root, .prumo-root * { box-sizing: border-box; }
+.prumo-root { font-family: var(--f-ui); color: var(--ink); -webkit-font-smoothing: antialiased; }
+.prumo-root button { font-family: var(--f-ui); }
+
+/* SHELL ──────────────────────────────────────────── */
+.prumo-shell { display: grid; grid-template-columns: 1fr; min-height: 100vh; background: var(--bg); }
+.prumo-sidebar { display: none; }
+.prumo-main { padding: 18px 16px 100px; min-width: 0; }
+.prumo-mobile-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 18px 8px; background: var(--bg); }
+.prumo-mobile-header .greet { font-size: 11px; color: var(--ink-3); font-weight: 500; }
+.prumo-mobile-header .title { font-family: var(--f-display); font-size: 26px; font-weight: 500; letter-spacing: -.015em; line-height: 1.1; color: var(--ink); }
+.prumo-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--surface); font-weight: 700; font-size: 13px; flex-shrink: 0; cursor: pointer; }
+.prumo-topbar { display: none; }
+.prumo-month-mobile { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 18px 14px; padding: 8px 12px; background: var(--surface); border-radius: var(--r-pill); border: 1px solid var(--line); }
+.prumo-month-mobile button { background: var(--surface-2); border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+.prumo-month-mobile span { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; color: var(--ink); font-weight: 600; text-transform: uppercase; }
+.prumo-quick-add { display: none; }
+
+/* TABBAR / FAB MOBILE ───────────────────────────── */
+.prumo-tabbar { position: fixed; bottom: 0; left: 0; right: 0; height: 76px; padding: 8px 8px 18px; background: oklch(1 0 0 / .92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; z-index: 40; }
+.prumo-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; color: var(--ink-3); padding: 4px 0; background: transparent; border: none; }
+.prumo-tab .ico { font-size: 18px; line-height: 1; }
+.prumo-tab .lbl-t { font-size: 9px; font-weight: 600; }
+.prumo-tab.active { color: var(--brand); }
+.prumo-fab { position: fixed; bottom: 88px; right: 16px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: oklch(0.22 0.04 60); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3); border: none; font-size: 26px; font-weight: 300; cursor: pointer; z-index: 30; }
+
+/* CARDS ─────────────────────────────────────────── */
+.prumo-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 18px; margin-bottom: 12px; }
+.prumo-card.l-brand { border-left: 3px solid var(--brand); }
+.prumo-card.l-pos { border-left: 3px solid var(--pos); }
+.prumo-card.l-warn { border-left: 3px solid var(--warn); }
+.prumo-card.l-neg { border-left: 3px solid var(--neg); }
+.prumo-card.l-accent { border-left: 3px solid var(--accent); }
+.prumo-card-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+
+/* TYPO ──────────────────────────────────────────── */
+.prumo-lbl { font-family: var(--f-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; margin-bottom: 4px; }
+.prumo-cap { font-size: 12px; color: var(--ink-3); font-family: var(--f-ui); }
+.prumo-big { font-family: var(--f-display); font-size: 30px; font-weight: 700; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; color: var(--ink); }
+.prumo-big.brand { color: var(--brand); }
+.prumo-big.pos { color: var(--pos); }
+.prumo-big.neg { color: var(--neg); }
+.prumo-big.accent { color: var(--accent-2); }
+.prumo-big sup { font-size: 60%; color: var(--ink-3); font-weight: 500; }
+.prumo-num { font-family: var(--f-mono); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* CHIPS ─────────────────────────────────────────── */
+.prumo-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
+.prumo-chip.pos { background: var(--pos-tint); color: var(--pos); border-color: oklch(0.58 0.13 155 / .2); }
+.prumo-chip.neg { background: var(--neg-tint); color: var(--neg); border-color: oklch(0.58 0.16 25 / .2); }
+.prumo-chip.warn { background: var(--accent-tint); color: var(--accent-2); border-color: oklch(0.62 0.14 65 / .2); }
+.prumo-chip.brand { background: var(--brand-tint); color: var(--brand); border-color: oklch(0.38 0.07 235 / .2); }
+
+/* METER ─────────────────────────────────────────── */
+.prumo-meter { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.prumo-meter > i { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+
+/* RING / DONUT ──────────────────────────────────── */
+.prumo-ring-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.prumo-ring-card { background: var(--surface-2); border-radius: var(--r-m); padding: 11px 8px; text-align: center; border: 1px solid var(--line); }
+.prumo-ring-svg { width: 56px; height: 56px; margin: 0 auto 4px; display: block; }
+.prumo-ring-lbl { font-size: 10px; color: var(--ink-3); font-weight: 600; }
+.prumo-ring-val { font-family: var(--f-display); font-size: 16px; font-weight: 600; color: var(--ink); }
+
+/* TX ROW ────────────────────────────────────────── */
+.prumo-tx { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.prumo-tx:last-child { border-bottom: none; }
+.prumo-tx-icon { width: 36px; height: 36px; border-radius: var(--r-s); background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+.prumo-tx-meat { flex: 1; min-width: 0; }
+.prumo-tx-desc { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prumo-tx-meta { font-size: 10px; color: var(--ink-3); margin-top: 1px; }
+.prumo-tx-amt { font-family: var(--f-mono); font-size: 13px; font-weight: 600; color: var(--ink); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+.prumo-tx-amt.in { color: var(--pos); }
+.prumo-section-h { font-family: var(--f-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin: 14px 0 4px; display: flex; justify-content: space-between; font-weight: 500; }
+
+/* BUTTONS ───────────────────────────────────────── */
+.prumo-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border-radius: var(--r-pill); font-size: 12px; font-weight: 600; border: 1px solid transparent; cursor: pointer; font-family: var(--f-ui); }
+.prumo-btn.brand { background: var(--ink); color: var(--surface); }
+.prumo-btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
+.prumo-btn.accent { background: var(--accent); color: oklch(0.22 0.04 60); }
+
+/* MOBILE MORE SHEET ─────────────────────────────── */
+.prumo-sheet-overlay { position: fixed; inset: 0; background: oklch(0.22 0.02 250 / .35); z-index: 50; }
+.prumo-sheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 28px 28px 0 0; padding: 6px 18px 28px; box-shadow: 0 -10px 40px oklch(0.22 0.02 250 / .15); z-index: 51; max-height: 80vh; overflow-y: auto; }
+.prumo-sheet-handle { width: 36px; height: 4px; background: var(--line-2); border-radius: 2px; margin: 4px auto 14px; }
+.prumo-sheet-h { font-family: var(--f-display); font-size: 20px; font-weight: 500; margin-bottom: 4px; color: var(--ink); }
+.prumo-sheet-sub { font-size: 11px; color: var(--ink-3); margin-bottom: 14px; }
+.prumo-sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prumo-sheet-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-m); cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink); font-family: var(--f-ui); text-align: left; }
+.prumo-sheet-item.active { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* DEVEDOR ROW ────────────────────────────────────── */
+.prumo-dev { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.prumo-dev:last-child { border-bottom: none; }
+.prumo-dev-av { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-tint); color: var(--brand); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+
+/* ANNUAL CHART ────────────────────────────────── */
+.prumo-yr { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding-top: 18px; }
+.prumo-yr-col { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative; }
+.prumo-yr-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; transition: outline 120ms; min-height: 4px; }
+.prumo-yr-col:hover .prumo-yr-stack, .prumo-yr-col.active .prumo-yr-stack { outline: 2px solid var(--ink); outline-offset: 1px; }
+.prumo-yr-mes { font-size: 9px; color: var(--ink-3); margin-top: 4px; font-weight: 600; }
+.prumo-yr-mes.cur { color: var(--ink); font-weight: 800; }
+
+/* DESKTOP ≥ 1100px ──────────────────────────────── */
+@media (min-width: 1100px) {
+  .prumo-shell { grid-template-columns: var(--sb) 1fr; }
+  .prumo-sidebar { display: block; background: var(--surface); border-right: 1px solid var(--line); padding: 22px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .prumo-sb-logo { display: flex; align-items: baseline; gap: 8px; padding: 0 8px 22px; }
+  .prumo-sb-logo .glyph { width: 18px; height: 18px; border-radius: 50%; background: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
+  .prumo-sb-logo .glyph::after { content: ''; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
+  .prumo-sb-logo .word { font-family: var(--f-display); font-size: 20px; font-weight: 500; letter-spacing: -.015em; color: var(--ink); }
+  .prumo-sb-section { font-family: var(--f-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); padding: 12px 10px 6px; font-weight: 500; }
+  .prumo-sb-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--ink-2); cursor: pointer; font-size: 13px; font-weight: 500; background: transparent; border: none; width: 100%; text-align: left; font-family: var(--f-ui); }
+  .prumo-sb-item:hover { background: var(--surface-2); color: var(--ink); }
+  .prumo-sb-item.active { background: var(--ink); color: var(--surface); }
+  .prumo-sb-item .ico { font-size: 14px; width: 18px; text-align: center; }
+  .prumo-sb-item .badge { margin-left: auto; background: var(--accent); color: oklch(0.22 0.04 60); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+  .prumo-sb-foot { margin-top: 18px; padding: 12px; background: var(--surface-2); border-radius: 12px; display: flex; align-items: center; gap: 10px; }
+  .prumo-sb-foot .av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), var(--accent)); color: var(--surface); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .prumo-sb-foot .nm { font-size: 12px; font-weight: 600; color: var(--ink); }
+  .prumo-sb-foot .em { font-size: 10px; color: var(--ink-3); }
+
+  .prumo-main { padding: 26px 36px 40px; }
+  .prumo-mobile-header { display: none; }
+  .prumo-month-mobile { display: none; }
+  .prumo-tabbar { display: none; }
+  .prumo-fab { display: none; }
+  .prumo-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+  .prumo-topbar h1 { font-family: var(--f-display); font-size: 32px; font-weight: 700; letter-spacing: -.02em; margin: 0; color: var(--ink); }
+  .prumo-topbar .greet { font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
+  .prumo-topbar-r { display: flex; gap: 12px; align-items: center; }
+  .prumo-month-pill { display: inline-flex; align-items: center; gap: 14px; padding: 7px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); }
+  .prumo-month-pill button { background: var(--surface-2); border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; color: var(--ink-2); font-weight: 700; font-size: 11px; }
+  .prumo-month-pill span { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; font-weight: 600; text-transform: uppercase; color: var(--ink); }
+  .prumo-quick-add { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 4px 4px 16px; margin-bottom: 22px; box-shadow: var(--shadow-1); cursor: pointer; }
+  .prumo-quick-add .ico-q { color: var(--ink-3); font-size: 16px; }
+  .prumo-quick-add .qa-text { flex: 1; font-size: 13px; color: var(--ink-3); padding: 10px 0; }
+  .prumo-quick-add .kbd { font-family: var(--f-mono); font-size: 10px; padding: 3px 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; color: var(--ink-3); }
+
+  /* DASHBOARD GRID DESKTOP */
+  .prumo-dash-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; align-items: start; }
+  .prumo-card { padding: 20px; }
+  .prumo-big { font-size: 38px; }
+  .prumo-ring-svg { width: 60px; height: 60px; margin: 0 auto 6px; }
+  .prumo-ring-card { padding: 14px; }
+  .prumo-ring-val { font-size: 18px; }
+  .prumo-yr { height: 220px; padding-top: 28px; gap: 8px; }
+  .prumo-yr-mes { font-size: 11px; }
+}
+.prumo-dash-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.prumo-dash-grid .full { grid-column: 1 / -1; }
+.prumo-dash-grid .span2 { grid-column: 1 / -1; }
+@media (min-width: 1100px) { .prumo-dash-grid .span2 { grid-column: span 2; } }
+
+/* TOOLTIP ──────────────────────────────────────── */
+.prumo-tip { position: absolute; bottom: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 12px; box-shadow: var(--shadow-2); z-index: 20; min-width: 200px; white-space: nowrap; margin-bottom: 6px; pointer-events: auto; }
+
+/* LEGACY CHAT FAB — só aparece em desktop */
+.prumo-legacy-chat-fab { display: none !important; }
+@media (min-width: 1100px) { .prumo-legacy-chat-fab { display: flex !important; } }
+`;
+
 var _uid = null;
 async function ld(k, fb) {
   try {
@@ -237,31 +432,368 @@ function ChartTip(props) {
   );
 }
 
+/* ══ DONUT (PRUMO RING) ══ */
+function Donut(props) {
+  var pct = Math.max(0, Math.min(100, props.pct || 0));
+  var color = props.color || "var(--brand)";
+  var size = props.size || 56;
+  var stroke = props.stroke || 6;
+  var r = (size - stroke) / 2;
+  var c = 2 * Math.PI * r;
+  var off = c * (1 - pct / 100);
+  return (
+    <svg className="prumo-ring-svg" viewBox={"0 0 " + String(size) + " " + String(size)} style={{ width: size, height: size }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={String(c)} strokeDashoffset={String(off)} strokeLinecap="round"
+        transform={"rotate(-90 " + String(size / 2) + " " + String(size / 2) + ")"}
+        style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+    </svg>
+  );
+}
+
+/* ══ DASHBOARD PRUMO ══ */
+function DashboardPrumo(props) {
+  var cfg = props.cfg;
+  var sal = props.sal;
+  var totalInc = props.totalInc;
+  var extraCr = props.extraCr;
+  var bud = props.bud;
+  var budWithRollover = props.budWithRollover;
+  var spent = props.spent;
+  var prevSp = props.prevSp;
+  var GR = props.GR;
+  var cats = props.cats;
+  var spC = props.spC;
+  var totDb = props.totDb;
+  var savR = props.savR;
+  var dRcv = props.dRcv;
+  var debtors = props.debtors;
+  var txs = props.txs;
+  var crs = props.crs;
+  var fxd = props.fxd;
+  var fs = props.fs;
+  var md = props.md;
+  var catLimits = props.catLimits;
+  var goals = props.goals;
+  var chD = props.chD;
+  var chMx = props.chMx;
+  var hovM = props.hovM;
+  var sHM = props.sHM;
+  var mo = props.mo;
+  var sTab = props.sTab;
+  var eSal = props.eSal;
+  var sES = props.sES;
+  var salI = props.salI;
+  var sSI = props.sSI;
+  var saveCfg = props.saveCfg;
+  var DS = props.DS;
+  var nw = props.nw;
+  var monthlyInvest = props.monthlyInvest;
+
+  /* ─── Hero numbers ─── */
+  var saldoLivre = totalInc - totDb + dRcv;
+  var saldoSinal = saldoLivre >= 0;
+  var saldoCents = Math.round((Math.abs(saldoLivre) % 1) * 100);
+  var saldoIntStr = Math.floor(Math.abs(saldoLivre)).toLocaleString("pt-BR");
+  var saldoCentsStr = (saldoCents < 10 ? "0" : "") + String(saldoCents);
+  var prevSaldo = null;
+  if (prevSp) {
+    var prevTotDb = (prevSp.essenciais || 0) + (prevSp.investimentos || 0) + (prevSp.desejos || 0);
+    prevSaldo = totalInc - prevTotDb;
+  }
+  var saldoDelta = prevSaldo !== null ? saldoLivre - prevSaldo : null;
+
+  /* ─── Reserva (estimativa: saldo investimentos / despesa essencial mensal) ─── */
+  var reservaTotal = nw && nw.balance ? nw.balance : 0;
+  var despEssMensal = spent.essenciais > 0 ? spent.essenciais : (totalInc * 0.5);
+  var mesesCobertos = despEssMensal > 0 ? reservaTotal / despEssMensal : 0;
+  var reservaPct = Math.min(mesesCobertos / 12, 1) * 100;
+  var reservaStatus = "Insuficiente";
+  var reservaChipKind = "neg";
+  if (mesesCobertos >= 12) { reservaStatus = "Excelente"; reservaChipKind = "pos"; }
+  else if (mesesCobertos >= 6) { reservaStatus = "Razoável"; reservaChipKind = "pos"; }
+  else if (mesesCobertos >= 3) { reservaStatus = "Atenção"; reservaChipKind = "warn"; }
+
+  /* ─── Score (mantido do código original) ─── */
+  var scoreS = Math.min(savR / 0.25, 1) * 40;
+  var limCats = cats.filter(function(c) { return catLimits[c.id]; });
+  var limOk = limCats.filter(function(c) { return (spC[c.id] || 0) <= catLimits[c.id]; }).length;
+  var scoreL = limCats.length > 0 ? (limOk / limCats.length) * 30 : 30;
+  var goalsTotal = goals.length;
+  var avgGP = goalsTotal > 0 ? goals.reduce(function(a, g) { return a + Math.min((g.saved || 0) / g.target, 1); }, 0) / goalsTotal : 1;
+  var scoreG = avgGP * 30;
+  var scoreNum = Math.round(scoreS + scoreL + scoreG);
+  var scoreColor = scoreNum >= 80 ? "var(--pos)" : scoreNum >= 60 ? "var(--warn)" : scoreNum >= 40 ? "var(--accent-2)" : "var(--neg)";
+  var scoreLbl = scoreNum >= 80 ? "Excelente" : scoreNum >= 60 ? "Bom" : scoreNum >= 40 ? "Regular" : "Atenção";
+
+  /* ─── Anéis 50/25/25 ─── */
+  var rings = GR.map(function(g) {
+    var b = budWithRollover[g.id] || bud[g.id] || 0;
+    var s = spent[g.id] || 0;
+    var p = b > 0 ? Math.round((s / b) * 100) : 0;
+    var color = "var(--brand)";
+    if (g.id === "investimentos") color = "var(--pos)";
+    if (g.id === "desejos") color = "var(--warn)";
+    return { id: g.id, label: g.label, pct: cfg.pcts[g.id] || 0, used: p, color: color, b: b, s: s };
+  });
+
+  /* ─── Devedores top ─── */
+  var devList = Object.entries(debtors).map(function(e2) { return { name: e2[0], pending: e2[1].pending, total: e2[1].total }; });
+  devList.sort(function(a, b) { return b.pending - a.pending; });
+  var devTop = devList.slice(0, 3);
+  var devTotalPending = devList.reduce(function(a, d) { return a + d.pending; }, 0);
+
+  /* ─── Atividade recente (txs do mês atual + crs) ─── */
+  var recentItems = [];
+  txs.forEach(function(t) {
+    if (t.src === "proj") return;
+    var c = cats.find(function(cc) { return cc.id === t.cat; });
+    recentItems.push({ id: t.id, kind: "tx", date: t.date || "", desc: t.desc, amount: t.amount, icon: c ? c.icon : "💸", catName: c ? c.name : "" });
+  });
+  crs.forEach(function(c) {
+    recentItems.push({ id: c.id, kind: "cr", date: c.dateAdded || "", desc: c.desc, amount: c.amount, icon: "💼", catName: c.type || "Crédito extra" });
+  });
+  recentItems.sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
+  var recentTop = recentItems.slice(0, 6);
+
+  /* ─── Termômetro IF ─── */
+  var rendaPassiva = reservaTotal * 0.007;
+  var ifPct = despEssMensal > 0 ? Math.min(rendaPassiva / despEssMensal, 1) * 100 : 0;
+  var ifFillPct = Math.max(0, Math.min(100, ifPct));
+
+  /* ─── Renda salário inline edit ─── */
+  var renderRendaEdit = function() {
+    if (eSal) {
+      return (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
+          <input style={{ background: "var(--surface)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "var(--f-ui)", width: 130, textAlign: "right", outline: "none", color: "var(--ink)" }}
+            value={salI} onChange={function(e) { sSI(e.target.value); }}
+            onKeyDown={function(e) { if (e.key === "Enter") { saveCfg({ ...cfg, salary: parseFloat(salI) || DS }); sES(false); } }} />
+          <button className="prumo-btn brand" onClick={function() { saveCfg({ ...cfg, salary: parseFloat(salI) || DS }); sES(false); }}>{"OK"}</button>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="prumo-dash-grid">
+      {/* HERO ─ Saldo + Score + Anéis ─ span2 */}
+      <div className="prumo-card l-brand span2">
+        <div className="prumo-card-hd">
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="prumo-lbl">{"Saldo livre do mês"}</div>
+            <div className="prumo-big brand" style={{ marginTop: 6 }}>
+              {(saldoSinal ? "" : "−") + "R$ " + saldoIntStr}<sup>{"," + saldoCentsStr}</sup>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {saldoDelta !== null && (
+                <span className={"prumo-chip " + (saldoDelta >= 0 ? "pos" : "neg")}>
+                  {(saldoDelta >= 0 ? "▲ " : "▼ ") + fmt(Math.abs(saldoDelta)) + " vs. mês ant."}
+                </span>
+              )}
+              <span className="prumo-cap" onClick={function() { sSI(String(sal)); sES(true); }} style={{ cursor: "pointer" }}>
+                {"Renda " + fmt(totalInc) + " · " + pct(savR) + " poupado"}
+              </span>
+            </div>
+            {renderRendaEdit()}
+            {extraCr > 0 && !eSal && (
+              <div className="prumo-cap" style={{ marginTop: 4, fontSize: 11 }}>{"Salário " + fmt(sal) + " + Extra " + fmt(extraCr)}</div>
+            )}
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div className="prumo-lbl">{"Score do mês"}</div>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 30, fontWeight: 700, color: scoreColor, lineHeight: 1, marginTop: 4, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>{String(scoreNum)}</div>
+            <div style={{ fontSize: 12, color: scoreColor, fontWeight: 700, marginTop: 2 }}>{scoreLbl}</div>
+          </div>
+        </div>
+        <div className="prumo-ring-row">
+          {rings.map(function(r) {
+            return (
+              <div key={r.id} className="prumo-ring-card">
+                <Donut pct={r.used} color={r.color} />
+                <div className="prumo-ring-lbl">{r.label + " · " + String(r.pct) + "%"}</div>
+                <div className="prumo-ring-val">{String(r.used) + "%"}</div>
+                <div className="prumo-cap" style={{ fontSize: 10, marginTop: 2 }}>{fmt(r.s) + " / " + fmt(r.b)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* RESERVA */}
+      <div className="prumo-card l-pos">
+        <div className="prumo-lbl">{"Reserva de emergência"}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 38, fontWeight: 500, color: "var(--pos)", lineHeight: 1, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>
+            {mesesCobertos.toFixed(1).replace(".", ",")}
+          </span>
+          <span className="prumo-cap">{"meses"}</span>
+        </div>
+        <div className={"prumo-chip " + reservaChipKind} style={{ marginTop: 8 }}>{"⚡ " + reservaStatus}</div>
+        <div className="prumo-meter" style={{ marginTop: 14, height: 10 }}>
+          <i style={{ width: String(reservaPct) + "%", background: "linear-gradient(90deg, var(--warn), var(--pos))" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+          <span className="prumo-cap">{"0m"}</span>
+          <span className="prumo-cap">{"3m"}</span>
+          <span className="prumo-cap">{"6m"}</span>
+          <span className="prumo-cap" style={{ color: "var(--pos)", fontWeight: 700 }}>{"12m+"}</span>
+        </div>
+        <div style={{ borderTop: "1px solid var(--line)", marginTop: 12, paddingTop: 12, display: "flex", justifyContent: "space-between" }}>
+          <div>
+            <div className="prumo-cap">{"Reserva"}</div>
+            <div className="prumo-num" style={{ fontSize: 13 }}>{fmt(reservaTotal)}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div className="prumo-cap">{"Essencial/mês"}</div>
+            <div className="prumo-num" style={{ fontSize: 13 }}>{fmt(despEssMensal)}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* A RECEBER */}
+      <div className="prumo-card l-warn" style={{ cursor: "pointer" }} onClick={function() { sTab("deve"); }}>
+        <div className="prumo-lbl">{"A receber"}</div>
+        <div className="prumo-big accent" style={{ fontSize: 30, marginTop: 4 }}>{fmt(devTotalPending)}</div>
+        <div className="prumo-cap" style={{ marginTop: 4 }}>
+          {String(devList.length) + " " + (devList.length === 1 ? "pessoa" : "pessoas") + " · " + String(Object.values(debtors).reduce(function(a, d) { return a + d.items.length; }, 0)) + " lançamentos"}
+        </div>
+        {devTop.length === 0 ? (
+          <div className="prumo-cap" style={{ marginTop: 14, padding: "10px 0", textAlign: "center" }}>{"Nenhum devedor neste mês 👍"}</div>
+        ) : devTop.map(function(d, i) {
+          var initial = String(d.name || "?").charAt(0).toUpperCase();
+          return (
+            <div key={i} className="prumo-dev">
+              <div className="prumo-dev-av">{initial}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{d.name}</div>
+                <div className="prumo-cap">{d.pending > 0 ? "pendente" : "✓ quitado"}</div>
+              </div>
+              <div className="prumo-num" style={{ color: d.pending > 0 ? "var(--accent-2)" : "var(--pos)" }}>{d.pending > 0 ? fmt(d.pending) : "✓"}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ATIVIDADE RECENTE ─ span2 */}
+      <div className="prumo-card span2">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Atividade recente"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Últimos lançamentos"}</h2>
+          </div>
+          <button className="prumo-btn ghost" onClick={function() { sTab("input"); }}>{"Ver todos →"}</button>
+        </div>
+        {recentTop.length === 0 ? (
+          <div className="prumo-cap" style={{ padding: "20px 0", textAlign: "center" }}>{"Nenhum lançamento neste mês ainda. Use o botão + para começar."}</div>
+        ) : recentTop.map(function(it) {
+          return (
+            <div key={it.kind + "-" + it.id} className="prumo-tx">
+              <div className="prumo-tx-icon">{it.icon}</div>
+              <div className="prumo-tx-meat">
+                <div className="prumo-tx-desc">{it.desc}</div>
+                <div className="prumo-tx-meta">{it.catName + (it.date ? " · " + sd(it.date) : "")}</div>
+              </div>
+              <div className={"prumo-tx-amt" + (it.kind === "cr" ? " in" : "")}>{(it.kind === "cr" ? "+" : "") + fmt(it.amount)}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* TERMÔMETRO IF */}
+      <div className="prumo-card">
+        <div className="prumo-lbl">{"Termômetro de IF"}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "8px 0 12px" }}>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 38, fontWeight: 500, color: "var(--brand)", lineHeight: 1, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>{ifPct.toFixed(0) + "%"}</span>
+          <div style={{ fontSize: 12, lineHeight: 1.3 }}>
+            <div className="prumo-num" style={{ fontSize: 13 }}>{fmt(rendaPassiva) + "/m"}</div>
+            <div className="prumo-cap" style={{ fontSize: 11 }}>{"renda passiva (0,7%)"}</div>
+          </div>
+        </div>
+        <div style={{ position: "relative", height: 14, background: "var(--surface-2)", borderRadius: 7, overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: String(ifFillPct) + "%", background: "linear-gradient(90deg, var(--brand), var(--accent))" }} />
+          <div style={{ position: "absolute", left: "25%", top: 0, bottom: 0, width: 2, background: "oklch(1 0 0 / .6)" }} />
+          <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, background: "oklch(1 0 0 / .6)" }} />
+          <div style={{ position: "absolute", left: "75%", top: 0, bottom: 0, width: 2, background: "oklch(1 0 0 / .6)" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+          <span className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)" }}>{"25%"}</span>
+          <span className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)", color: "var(--brand)", fontWeight: 700 }}>{"50%"}</span>
+          <span className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)" }}>{"75%"}</span>
+          <span className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)" }}>{"IF"}</span>
+        </div>
+      </div>
+
+      {/* PROJEÇÃO ANUAL ─ full */}
+      <div className="prumo-card full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Projeção anual"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Despesa mensal · 12 meses"}</h2>
+          </div>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-2)" }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--brand)" }}></span>{"Essenciais"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-2)" }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--ink-2)" }}></span>{"Investim."}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-2)" }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--accent)" }}></span>{"Não-ess."}</div>
+          </div>
+        </div>
+        {chD && chD.length > 0 ? (
+          <div className="prumo-yr">
+            {chD.map(function(d, i) {
+              var total = d.e + d.i + d.d;
+              var h = chMx > 0 ? (total / chMx) * 100 : 0;
+              var eH = total > 0 ? (d.e / total) * h : 0;
+              var iH = total > 0 ? (d.i / total) * h : 0;
+              var dH = total > 0 ? (d.d / total) * h : 0;
+              var cur = i === mo;
+              return (
+                <div key={i} className={"prumo-yr-col" + (hovM === i ? " active" : "")} onMouseEnter={function() { sHM(i); }} onMouseLeave={function() { sHM(null); }} onClick={function() { sHM(hovM === i ? null : i); }}>
+                  <div className="prumo-yr-stack" style={{ height: String(h) + "%", opacity: d.real ? 1 : 0.4 }}>
+                    <div style={{ height: String(eH) + "%", background: "var(--brand)" }}></div>
+                    <div style={{ height: String(iH) + "%", background: "var(--ink-2)" }}></div>
+                    <div style={{ height: String(dH) + "%", background: "var(--accent)" }}></div>
+                  </div>
+                  <div className={"prumo-yr-mes" + (cur ? " cur" : "")}>{d.mes}</div>
+                  {hovM === i && <ChartTip d={d} i={i} cats={cats} />}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="prumo-cap" style={{ padding: "30px 0", textAlign: "center" }}>{"Carregando dados anuais..."}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ══ MAIN APP ══ */
 
 /* ══ LOGIN SCREEN ══ */
 function LoginScreen({ onLogin }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: BGMAIN, fontFamily: "'Inter',sans-serif" }}>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 40, border: "1px solid #DDDDDD", textAlign: "center", maxWidth: 320, width: "90%" }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 14, height: 26 }}>
-              <div style={{ width: 5, height: 5, background: "#C9A84C", borderRadius: "50%" }} />
-              <div style={{ width: 2, background: BD, flex: 1, marginTop: 3 }} />
-              <div style={{ width: 10, height: 11, background: BD, clipPath: "polygon(50% 100%,0 0,100% 0)" }} />
-            </div>
-            <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 28, color: BD, letterSpacing: "0.5px" }}>{"Prumo"}</span>
-          </div>
+    <div className="prumo-root" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", fontFamily: "var(--f-ui)" }}>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+      <div style={{ background: "var(--surface)", borderRadius: 20, padding: 36, border: "1px solid var(--line)", textAlign: "center", maxWidth: 340, width: "90%", boxShadow: "var(--shadow-2)" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, justifyContent: "center", marginBottom: 8 }}>
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ width: 6, height: 6, background: "var(--accent)", borderRadius: "50%", display: "block" }} />
+          </span>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 26, fontWeight: 500, letterSpacing: "-0.015em", color: "var(--ink)" }}>{"Prumo"}</span>
         </div>
-        <p style={{ color: "#666666", fontSize: 13, marginBottom: 32, lineHeight: 1.5 }}>{"Seu controle financeiro pessoal"}</p>
+        <p style={{ color: "var(--ink-3)", fontSize: 13, marginBottom: 28, lineHeight: 1.55, marginTop: 6 }}>{"Seu controle financeiro pessoal"}</p>
         <button onClick={onLogin}
-          style={{ background: "#1B72B8", border: "none", borderRadius: 8, padding: "13px 24px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center" }}>
-          <span style={{ fontSize: 18 }}>{"G"}</span>
+          style={{ background: "var(--ink)", border: "none", borderRadius: 999, padding: "12px 24px", color: "var(--surface)", fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", width: "100%", justifyContent: "center", fontFamily: "var(--f-ui)" }}>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>{"G"}</span>
           {"Entrar com Google"}
         </button>
-        <p style={{ color: "#BBBBBB", fontSize: 11, marginTop: 20 }}>{"Seus dados ficam salvos na nuvem"}</p>
+        <p style={{ color: "var(--ink-4)", fontSize: 11, marginTop: 20, fontFamily: "var(--f-mono)", letterSpacing: "0.08em" }}>{"DADOS NA NUVEM · FIREBASE"}</p>
       </div>
+      <style>{PRUMO_TOKENS}</style>
     </div>
   );
 }
@@ -315,6 +847,7 @@ export default function App() {
   var [showIfEdit, sShowIfEdit] = useState(false);
   var [rollover, setRollover] = useState({});
   var [chatOpen, sChatOpen] = useState(false);
+  var [showMore, sShowMore] = useState(false);
   var [aiInsight, sAiInsight] = useState("");
   var [aiLoading, sAiLoading] = useState(false);
   var [chatMsgs, sChatMsgs] = useState([]);
@@ -804,9 +1337,19 @@ export default function App() {
   };
 
   var tabs = [
-    { id: "dash", l: "Dashboard" }, { id: "proj", l: "Projeção" }, { id: "analise", l: "Análise" }, { id: "metas", l: "Metas" }, { id: "input", l: "Input" },
-    { id: "fixas", l: "Fixas" }, { id: "monthly", l: "Mensal" }, { id: "deve", l: "Devedores" },
+    { id: "dash", l: "Dashboard", ico: "◐", grp: "Visão" },
+    { id: "analise", l: "Análise", ico: "◇", grp: "Visão" },
+    { id: "proj", l: "Projeção", ico: "↗", grp: "Visão" },
+    { id: "input", l: "Lançamentos", ico: "≡", grp: "Operação" },
+    { id: "fixas", l: "Fixas", ico: "⌶", grp: "Operação" },
+    { id: "deve", l: "Devedores", ico: "⊕", grp: "Operação" },
+    { id: "vida", l: "Vida (PL)", ico: "○", grp: "Patrimônio" },
+    { id: "metas", l: "Metas", ico: "◯", grp: "Patrimônio" },
+    { id: "monthly", l: "Mensal", ico: "▦", grp: "Patrimônio" },
   ];
+  var tabGroups = ["Visão", "Operação", "Patrimônio"];
+  var curTab = tabs.find(function(t) { return t.id === tab; }) || tabs[0];
+  var goTab = function(id) { sTab(id); sErr(""); sTxS(""); sCfC(false); sCatF(null); sShowMore(false); };
 
   var filteredTxs = txs.filter(function(tx) {
     if (catF) {
@@ -825,236 +1368,121 @@ export default function App() {
   });
 
   return (
-    <div style={{ fontFamily: "'Inter',sans-serif", background: BGMAIN, color: TX, minHeight: "100vh" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+    <div className="prumo-root" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+      <style>{PRUMO_TOKENS}</style>
 
-      {/* Header */}
-      <div style={{ background: CARD, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid " + BR }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 12, height: 22 }}>
-            <div style={{ width: 4, height: 4, background: "#C9A84C", borderRadius: "50%", position: "relative", zIndex: 1 }} />
-            <div style={{ width: 1.5, background: BD, flex: 1, marginTop: 3 }} />
-            <div style={{ width: 8, height: 9, background: BD, clipPath: "polygon(50% 100%,0 0,100% 0)" }} />
+      {/* MOBILE HEADER */}
+      <header className="prumo-mobile-header">
+        <div>
+          <div className="greet">{"Olá, " + ((user && user.displayName) ? String(user.displayName).split(" ")[0] : "Gui")}</div>
+          <div className="title">{curTab.l}</div>
+        </div>
+        <div className="prumo-avatar" onClick={function() { signOut(auth); }} title="Sair">
+          {((user && user.displayName) ? String(user.displayName).charAt(0) : "G").toUpperCase()}
+        </div>
+      </header>
+
+      {/* MOBILE MONTH SWITCHER */}
+      <div className="prumo-month-mobile">
+        <button onClick={goPrev}>{"‹"}</button>
+        <span>{MS[mo] + " " + String(yr)}</span>
+        <button onClick={goNext}>{"›"}</button>
+      </div>
+
+      <div className="prumo-shell">
+        {/* DESKTOP SIDEBAR */}
+        <aside className="prumo-sidebar">
+          <div className="prumo-sb-logo">
+            <span className="glyph"></span>
+            <span className="word">{"Prumo"}</span>
           </div>
-          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: BD, letterSpacing: "0.5px" }}>{"Prumo"}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button style={{ background: "#F0F0F0", border: "none", borderRadius: 6, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goPrev}>{"◀"}</button>
-          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: BD, minWidth: 130, textAlign: "center" }}>{MS[mo] + " " + String(yr)}</span>
-          <button style={{ background: "#F0F0F0", border: "none", borderRadius: 6, padding: "5px 11px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: T2 }} onClick={goNext}>{"▶"}</button>
-        </div>
-        <button onClick={function() { signOut(auth); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: TM, padding: "4px 6px" }} title="Sair">{"Sair"}</button>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ background: CARD, display: "flex", borderBottom: "1px solid " + BR, overflowX: "auto" }}>
-        {tabs.map(function(t) {
-          var ac = tab === t.id;
-          return (
-            <button key={t.id} onClick={function() { sTab(t.id); sErr(""); sTxS(""); sCfC(false); sCatF(null); }}
-              style={{ padding: "10px 16px", border: "none", background: "transparent", fontFamily: "'Inter',sans-serif", color: ac ? BL : "#BBBBBB", fontWeight: ac ? 700 : 500, fontSize: 12, cursor: "pointer", borderBottom: ac ? "2px solid " + BL : "2px solid transparent", whiteSpace: "nowrap" }}>
-              {t.l}
-            </button>
-          );
-        })}
-      </div>
-
-      <div key={tab} className="fc-tab-content fc-main" style={{ padding: "14px 16px", maxWidth: 960, margin: "0 auto" }}>
-
-        {/* ═══ DASHBOARD ═══ */}
-        {tab === "dash" && (
-          <div>
-            {/* Salary */}
-            <div style={{ ...S.card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={S.lbl}>{"RENDA MENSAL"}</div>
-                {eSal ? (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input style={{ ...S.inp, width: 110, textAlign: "right" }} value={salI}
-                      onChange={function(e) { sSI(e.target.value); }}
-                      onKeyDown={function(e) { if (e.key === "Enter") { saveCfg({ ...cfg, salary: parseFloat(salI) || DS }); sES(false); } }} />
-                    <button style={S.btn(BL)} onClick={function() { saveCfg({ ...cfg, salary: parseFloat(salI) || DS }); sES(false); }}>{"OK"}</button>
-                  </div>
-                ) : (
-                  <div onClick={function() { sSI(String(sal)); sES(true); }} style={{ cursor: "pointer" }}>
-                    <div style={S.data(BL)}>{fmt(totalInc)}</div>
-                    {extraCr > 0 && <div style={S.cap}>{"Salário " + fmt(sal) + " + Extra " + fmt(extraCr)}</div>}
-                  </div>
-                )}
-              </div>
-              <div style={{ ...S.cap, cursor: "pointer" }} onClick={function() { sSI(String(sal)); sES(true); }}>{"✏️"}</div>
-            </div>
-
-            {/* Fixed summary */}
-            {fxd.length > 0 && (
-              <div style={{ ...S.card, cursor: "pointer" }} onClick={function() { sTab("fixas"); }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <div style={S.lbl}>{"CONTAS FIXAS"}</div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: BL }}>{String(fxPd) + "/" + String(fxd.length)}</span>
-                </div>
-                <PB value={fxPd} max={fxd.length} color={BL} />
-                <div style={{ ...S.cap, marginTop: 4 }}>{fmt(fxMy) + "/mês"}</div>
-              </div>
-            )}
-
-            {/* Budget cards */}
-            {GR.map(function(g) {
-              var b = bud[g.id]; var s = spent[g.id]; var r = b > 0 ? s / b : 0;
-              var pv = prevSp ? prevSp[g.id] : null;
-              var diff = pv !== null ? s - pv : null;
-              var isInv = g.id === "investimentos";
-              return (
-                <div key={g.id} style={S.cardA(g.color)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div>
-                      <div style={S.lbl}>{g.label.toUpperCase() + " (" + String(cfg.pcts[g.id]) + "%)"}</div>
-                      <div style={S.data(g.color)}>{fmt(s)}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={S.cap}>{"Meta " + fmt(b) + (rvCredit[g.id] > 0 ? " + " + fmt(rvCredit[g.id]) + " rollover" : "")}</div>
-                      {diff !== null && (
-                        <div style={{ fontSize: 11, fontWeight: 700, color: (isInv ? diff > 0 : diff < 0) ? OK : ER, marginTop: 2 }}>
-                          {(diff > 0 ? "▲ " : "▼ ") + fmt(Math.abs(diff))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <PB value={s} max={budWithRollover[g.id] || b} color={g.color} noWarn={isInv} />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, alignItems: "center" }}>
-                    <span style={S.cap}>{pct(r) + " utilizado"}</span>
-                    {r > 1 ? (
-                      isInv
-                        ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ Acima da meta"}</span>
-                        : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: ER + "18", color: ER }}>{"⚠ +" + fmt(s - b) + " estourado"}</span>
-                    ) : r > 0.85 ? (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: WN + "18", color: WN }}>{"⚡ " + fmt(b - s) + " restam"}</span>
-                    ) : (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: OK + "18", color: OK }}>{"✓ " + fmt(b - s) + " disponível"}</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Summary */}
-            <div style={S.card}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div><div style={S.lbl}>{"CRÉDITOS"}</div><div style={S.data(OK)}>{fmt(totCr)}</div></div>
-                <div><div style={S.lbl}>{"DÉBITOS"}</div><div style={S.data(ER)}>{fmt(totDb)}</div></div>
-              </div>
-              <div style={{ borderTop: "1px solid " + BR, paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={S.lbl}>{"SALDO"}</div>
-                  <div style={S.data(totCr - totDb + dRcv >= 0 ? OK : ER)}>{fmt(totCr - totDb + dRcv)}</div>
-                  {dRcv > 0 && (
-                    <div style={{ ...S.cap, marginTop: 2 }}>
-                      {fmt(totCr - totDb) + " + " + fmt(dRcv) + " a receber"}
-                    </div>
-                  )}
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={S.lbl}>{"TAXA POUPANÇA"}</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: savR >= 0.25 ? OK : savR >= 0.1 ? WN : ER }}>{pct(savR)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Score Mensal */}
-            {(function() {
-              var scoreS = Math.min(savR / 0.25, 1) * 40;
-              var limCats = cats.filter(function(c) { return catLimits[c.id]; });
-              var limOk = limCats.filter(function(c) { return (spC[c.id] || 0) <= catLimits[c.id]; }).length;
-              var scoreL = limCats.length > 0 ? (limOk / limCats.length) * 30 : 30;
-              var goalsDone = goals.filter(function(g) { return (g.saved || 0) >= g.target; }).length;
-              var goalsTotal = goals.length;
-              var avgGP = goalsTotal > 0 ? goals.reduce(function(a, g) { return a + Math.min((g.saved || 0) / g.target, 1); }, 0) / goalsTotal : 1;
-              var scoreG = avgGP * 30;
-              var score = Math.round(scoreS + scoreL + scoreG);
-              var scoreColor = score >= 80 ? OK : score >= 60 ? WN : score >= 40 ? "#F59E0B" : ER;
-              var scoreLbl = score >= 80 ? "Excelente 🏆" : score >= 60 ? "Bom 👍" : score >= 40 ? "Regular ⚠️" : "Atenção 🚨";
-              var circumference = 2 * Math.PI * 36;
-              var dashOffset = circumference * (1 - score / 100);
-              return (
-                <div style={{ ...S.card, background: "linear-gradient(135deg, #fff 0%, " + BG + " 100%)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ position: "relative", width: 88, height: 88, flexShrink: 0 }}>
-                      <svg width="88" height="88" viewBox="0 0 88 88">
-                        <circle cx="44" cy="44" r="36" fill="none" stroke="#F0F0F0" strokeWidth="8" />
-                        <circle cx="44" cy="44" r="36" fill="none" stroke={scoreColor} strokeWidth="8"
-                          strokeDasharray={String(circumference)} strokeDashoffset={String(dashOffset)}
-                          strokeLinecap="round" transform="rotate(-90 44 44)"
-                          style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-                        <text x="44" y="48" textAnchor="middle" fontSize="18" fontWeight="700" fill={scoreColor} fontFamily="'Montserrat',sans-serif">{String(score)}</text>
-                      </svg>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={S.lbl}>{"SCORE FINANCEIRO DO MÊS"}</div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: scoreColor, fontFamily: "'Montserrat',sans-serif", marginBottom: 6 }}>{scoreLbl}</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
-                          <span>{"💰 Taxa de poupança"}</span>
-                          <span style={{ fontWeight: 700, color: scoreS >= 35 ? OK : ER }}>{String(Math.round(scoreS)) + "/40"}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
-                          <span>{"🎯 Limites respeitados"}</span>
-                          <span style={{ fontWeight: 700, color: scoreL >= 25 ? OK : WN }}>{String(Math.round(scoreL)) + "/30"}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", ...S.cap }}>
-                          <span>{"🏆 Progresso de metas"}</span>
-                          <span style={{ fontWeight: 700, color: scoreG >= 25 ? OK : WN }}>{String(Math.round(scoreG)) + "/30"}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Pie */}
-            <div style={S.card}>
-              <div style={S.lbl}>{"DISTRIBUIÇÃO POR CATEGORIA"}</div>
-              {GR.map(function(g) {
-                var items = pieD[g.id];
-                if (items.length === 0) return null;
-                var total = items.reduce(function(a, it) { return a + it.value; }, 0);
-                return (
-                  <div key={g.id} style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: g.color, marginBottom: 6 }}>{g.label + " — " + fmt(spent[g.id])}</div>
-                    {items.slice(0, 6).map(function(item, idx) {
-                      var p = total > 0 ? item.value / total : 0;
-                      return (
-                        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: PC[idx % PC.length], flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, flex: 1, color: T3 }}>{item.icon + " " + item.name}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(item.value)}</span>
-                          <span style={{ ...S.cap, minWidth: 34, textAlign: "right" }}>{pct(p)}</span>
-                          <div style={{ width: 50, height: 4, background: "#F0F0F0", borderRadius: 2, overflow: "hidden" }}>
-                            <div style={{ width: String(p * 100) + "%", height: "100%", background: PC[idx % PC.length], borderRadius: 2 }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Debtors */}
-            {Object.keys(debtors).length > 0 && (
-              <div style={S.cardA("#D97706")}>
-                <div style={S.lbl}>{"A RECEBER"}</div>
-                {Object.entries(debtors).map(function(e2) {
+          {tabGroups.map(function(grp) {
+            return (
+              <div key={grp}>
+                <div className="prumo-sb-section">{grp}</div>
+                {tabs.filter(function(t) { return t.grp === grp; }).map(function(t) {
+                  var ac = tab === t.id;
+                  var badge = null;
+                  if (t.id === "fixas") {
+                    var pend = fxd.filter(function(f) { return fs[f.id] !== "paid" && (f.mode || "budget") === "budget"; }).length;
+                    if (pend > 0) badge = pend;
+                  }
+                  if (t.id === "deve") {
+                    var devCount = Object.values(debtors).filter(function(d) { return d.pending > 0; }).length;
+                    if (devCount > 0) badge = devCount;
+                  }
                   return (
-                    <div key={e2[0]} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                      <span style={{ fontSize: 13, color: T3 }}>{e2[0]}</span>
-                      <span style={{ fontWeight: 700, color: "#D97706", fontSize: 13 }}>{fmt(e2[1].pending)}</span>
-                    </div>
+                    <button key={t.id} className={"prumo-sb-item" + (ac ? " active" : "")} onClick={function() { goTab(t.id); }}>
+                      <span className="ico">{t.ico}</span>
+                      <span>{t.l}</span>
+                      {badge !== null && <span className="badge">{String(badge)}</span>}
+                    </button>
                   );
                 })}
               </div>
-            )}
+            );
+          })}
+          <div className="prumo-sb-foot">
+            <div className="av">{((user && user.displayName) ? String(user.displayName).charAt(0) : "G").toUpperCase()}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="nm" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(user && user.displayName) ? String(user.displayName) : "Guilherme"}</div>
+              <div className="em" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(user && user.email) ? String(user.email) : ""}</div>
+            </div>
+            <button onClick={function() { signOut(auth); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 11, color: "var(--ink-3)", padding: "4px 6px", fontFamily: "var(--f-ui)" }} title="Sair">{"Sair"}</button>
+          </div>
+        </aside>
+
+        {/* MAIN */}
+        <main className="prumo-main">
+          {/* DESKTOP TOPBAR */}
+          <div className="prumo-topbar">
+            <div>
+              <div className="greet">{"Olá, " + ((user && user.displayName) ? String(user.displayName).split(" ")[0] : "Gui") + " · " + new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</div>
+              <h1>{curTab.l}</h1>
+            </div>
+            <div className="prumo-topbar-r">
+              <div className="prumo-month-pill">
+                <button onClick={goPrev}>{"‹"}</button>
+                <span>{MS[mo].toUpperCase() + " " + String(yr)}</span>
+                <button onClick={goNext}>{"›"}</button>
+              </div>
+            </div>
+          </div>
+
+          {/* DESKTOP QUICK ADD */}
+          <div className="prumo-quick-add" onClick={function() { goTab("input"); }}>
+            <span className="ico-q">{"＋"}</span>
+            <span className="qa-text">{"Lance: 'Mercado 234' · 'Café 18 PIX' · 'Uber 26 dividir Duda'..."}</span>
+            <span className="kbd">{"N"}</span>
+          </div>
+
+          <div key={tab} className="fc-tab-content">
+
+        {/* ═══ DASHBOARD ═══ */}
+        {tab === "dash" && (
+          <DashboardPrumo
+            cfg={cfg} sal={sal} totalInc={totalInc} extraCr={extraCr} bud={bud} budWithRollover={budWithRollover}
+            spent={spent} prevSp={prevSp} GR={GR} cats={cats} spC={spC} totDb={totDb}
+            savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd} fs={fs}
+            md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo}
+            sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg} DS={DS}
+            nw={nw} monthlyInvest={monthlyInvest}
+          />
+        )}
+
+        {/* ═══ VIDA (PL) — placeholder ═══ */}
+        {tab === "vida" && (
+          <div className="prumo-card l-brand">
+            <div className="prumo-lbl">{"Patrimônio Líquido"}</div>
+            <div className="prumo-big brand">{fmt(nw.balance || 0)}</div>
+            <div className="prumo-cap" style={{ marginTop: 8 }}>{"Tela completa em construção. Por enquanto, valor consolidado vindo de Configurações > Patrimônio."}</div>
+            <button className="prumo-btn ghost" style={{ marginTop: 14 }} onClick={function() { goTab("proj"); }}>{"Ir para Projeção →"}</button>
           </div>
         )}
+
 
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
@@ -2397,6 +2825,63 @@ export default function App() {
         )}
 
       </div>
+        </main>
+      </div>
+
+      {/* MOBILE TABBAR */}
+      <nav className="prumo-tabbar">
+        <button className={"prumo-tab" + (tab === "dash" ? " active" : "")} onClick={function() { goTab("dash"); }}>
+          <span className="ico">{"◐"}</span>
+          <span className="lbl-t">{"Início"}</span>
+        </button>
+        <button className={"prumo-tab" + (tab === "input" ? " active" : "")} onClick={function() { goTab("input"); }}>
+          <span className="ico">{"≡"}</span>
+          <span className="lbl-t">{"Lançar"}</span>
+        </button>
+        <button className="prumo-tab" disabled style={{ opacity: 0 }}>{" "}</button>
+        <button className={"prumo-tab" + (tab === "analise" ? " active" : "")} onClick={function() { goTab("analise"); }}>
+          <span className="ico">{"◇"}</span>
+          <span className="lbl-t">{"Análise"}</span>
+        </button>
+        <button className={"prumo-tab" + (["vida","metas","monthly","proj","fixas","deve"].indexOf(tab) >= 0 ? " active" : "")} onClick={function() { sShowMore(true); }}>
+          <span className="ico">{"○"}</span>
+          <span className="lbl-t">{"Mais"}</span>
+        </button>
+      </nav>
+
+      {/* MOBILE FAB */}
+      <button className="prumo-fab" onClick={function() { goTab("input"); }} aria-label="Lançar despesa">{"+"}</button>
+
+      {/* MOBILE SHEET "MAIS" */}
+      {showMore && (
+        <>
+          <div className="prumo-sheet-overlay" onClick={function() { sShowMore(false); }}></div>
+          <div className="prumo-sheet">
+            <div className="prumo-sheet-handle"></div>
+            <div className="prumo-sheet-h">{"Navegar"}</div>
+            <div className="prumo-sheet-sub">{"Selecione uma seção"}</div>
+            {tabGroups.map(function(grp) {
+              return (
+                <div key={grp} style={{ marginBottom: 14 }}>
+                  <div className="prumo-lbl" style={{ marginBottom: 6 }}>{grp}</div>
+                  <div className="prumo-sheet-grid">
+                    {tabs.filter(function(t) { return t.grp === grp; }).map(function(t) {
+                      var ac = tab === t.id;
+                      return (
+                        <button key={t.id} className={"prumo-sheet-item" + (ac ? " active" : "")} onClick={function() { goTab(t.id); }}>
+                          <span style={{ fontSize: 16 }}>{t.ico}</span>
+                          <span>{t.l}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <button className="prumo-btn ghost" style={{ width: "100%", marginTop: 6 }} onClick={function() { signOut(auth); }}>{"Sair da conta"}</button>
+          </div>
+        </>
+      )}
 
       {/* ══ FLOATING AI CHAT ══ */}
       <style>{`
@@ -2463,7 +2948,7 @@ export default function App() {
         </div>
       )}
 
-      <button onClick={function() { sChatOpen(!chatOpen); }}
+      <button className="prumo-legacy-chat-fab" onClick={function() { sChatOpen(!chatOpen); }}
         style={{ position: "fixed", bottom: 24, right: 16, width: 56, height: 56, borderRadius: "50%", background: chatOpen ? BD : BL, border: "none", cursor: "pointer", boxShadow: "0 4px 16px rgba(27,114,184,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, zIndex: 1001, transition: "background 0.2s", animation: chatOpen ? "none" : "pulse 2s infinite" }}>
         {chatOpen ? "×" : "✨"}
       </button>
