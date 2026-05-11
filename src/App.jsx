@@ -267,6 +267,113 @@ var PRUMO_TOKENS = `
 /* TOOLTIP ──────────────────────────────────────── */
 .prumo-tip { position: absolute; bottom: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 12px; box-shadow: var(--shadow-2); z-index: 20; min-width: 200px; white-space: nowrap; margin-bottom: 6px; pointer-events: auto; }
 
+/* INPUTS PRUMO ──────────────────────────────────── */
+.prumo-input { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; font-family: var(--f-ui); font-size: 14px; color: var(--ink); outline: none; transition: border-color .15s, box-shadow .15s; width: 100%; -webkit-appearance: none; appearance: none; }
+.prumo-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px oklch(0.38 0.07 235 / .12); }
+.prumo-input::placeholder { color: var(--ink-3); }
+.prumo-input.mono { font-family: var(--f-mono); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+.prumo-input.right { text-align: right; }
+select.prumo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2362728a' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 32px; cursor: pointer; }
+
+.prumo-form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.prumo-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.prumo-grid-3 { display: grid; grid-template-columns: 2fr 1fr 1.2fr auto; gap: 8px; align-items: stretch; }
+@media (max-width: 600px) { .prumo-grid-3 { grid-template-columns: 1fr 1fr; } }
+
+.prumo-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: var(--ink-2); font-family: var(--f-ui); user-select: none; }
+.prumo-check input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; margin: 0; }
+
+.prumo-form-err { font-size: 12px; font-weight: 600; color: var(--neg); padding: 6px 10px; background: var(--neg-tint); border-radius: 8px; }
+
+.prumo-cred-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.prumo-cred-row:last-child { border-bottom: none; }
+.prumo-cred-tag { display: inline-block; padding: 2px 8px; background: var(--brand-tint); color: var(--brand); border-radius: 999px; font-size: 10px; font-weight: 600; font-family: var(--f-mono); letter-spacing: .05em; text-transform: uppercase; }
+
+.prumo-csv-row { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.prumo-csv-row:last-child { border-bottom: none; }
+.prumo-tag-mono { display: inline-block; padding: 2px 7px; background: var(--surface-2); color: var(--ink-3); border-radius: 6px; font-size: 10px; font-weight: 500; font-family: var(--f-mono); margin-right: 4px; }
+.prumo-tag-mono.acc { background: var(--accent-tint); color: var(--accent-2); }
+
+.prumo-btn-add { width: 44px; height: 44px; border-radius: 50%; background: var(--brand); color: var(--surface); border: none; font-size: 22px; font-weight: 300; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; align-self: stretch; }
+.prumo-btn-add:disabled { opacity: .4; cursor: not-allowed; }
+
+.prumo-icon-x { cursor: pointer; color: var(--neg); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; background: transparent; border: 1px solid transparent; transition: background .15s; }
+.prumo-icon-x:hover { background: var(--neg-tint); border-color: oklch(0.58 0.16 25 / .2); }
+
+@media (min-width: 1100px) {
+  .prumo-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .prumo-form-grid .full { grid-column: 1 / -1; }
+}
+
+/* MINI STAT (caixinha de número compacta) ─────── */
+.prumo-mini-stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; text-align: center; }
+.prumo-mini-stat .lbl { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; margin-bottom: 3px; }
+.prumo-mini-stat .val { font-family: var(--f-display); font-size: 14px; font-weight: 700; color: var(--ink); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+.prumo-mini-stat .val.pos { color: var(--pos); }
+.prumo-mini-stat .val.neg { color: var(--neg); }
+.prumo-mini-stat .val.brand { color: var(--brand); }
+.prumo-mini-stat .val.warn { color: var(--accent-2); }
+.prumo-mini-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.prumo-mini-stat-row.cols-2 { grid-template-columns: 1fr 1fr; }
+
+/* DATA TABLE (tabela anual) ────────────────────── */
+.prumo-data-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--f-mono); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+.prumo-data-table th { padding: 6px 4px; text-align: center; color: var(--ink-3); border-bottom: 1px solid var(--line); font-weight: 500; letter-spacing: .05em; text-transform: uppercase; font-size: 9px; }
+.prumo-data-table td { padding: 6px 4px; text-align: center; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+.prumo-data-table th.cur, .prumo-data-table td.cur { color: var(--ink); font-weight: 700; }
+.prumo-data-table .row-lbl { font-family: var(--f-ui); text-align: left; font-weight: 600; font-size: 10px; }
+.prumo-data-table .pos { color: var(--pos); }
+.prumo-data-table .neg { color: var(--neg); }
+.prumo-data-table .brand { color: var(--brand); }
+
+/* COMPARE ROWS (barras horizontais comparativo) ─ */
+.prumo-cmp-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.prumo-cmp-row:last-child { border-bottom: none; }
+.prumo-cmp-bar-wrap { flex: 1; height: 22px; background: var(--surface-2); border-radius: 5px; overflow: hidden; position: relative; }
+.prumo-cmp-bar { height: 100%; border-radius: 5px; display: flex; align-items: center; padding-left: 8px; transition: width .4s ease; }
+.prumo-cmp-bar-lbl { font-size: 10px; color: var(--surface); font-weight: 600; font-family: var(--f-mono); white-space: nowrap; }
+
+/* SIM CHART (saldo positivo/negativo) ──────────── */
+.prumo-sim-bars { display: flex; align-items: center; gap: 2px; height: 80px; }
+.prumo-sim-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: center; }
+.prumo-sim-half { width: 100%; display: flex; flex-direction: column; }
+.prumo-sim-axis { width: 100%; height: 1px; background: var(--line-2); }
+.prumo-sim-bar-pos { width: 100%; background: var(--pos); border-radius: 2px 2px 0 0; }
+.prumo-sim-bar-neg { width: 100%; background: var(--neg); border-radius: 0 0 2px 2px; }
+
+/* IF MILESTONES ─────────────────────────────────── */
+.prumo-if-bar { position: relative; height: 22px; background: var(--surface-2); border-radius: 11px; overflow: hidden; margin-bottom: 10px; }
+.prumo-if-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--brand), var(--accent)); border-radius: 11px; transition: width .8s ease; }
+.prumo-if-fill.full { background: var(--pos); }
+.prumo-if-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: oklch(1 0 0 / .55); }
+.prumo-if-marks-row { display: flex; justify-content: space-between; padding: 0 0 8px; }
+.prumo-if-mark-lbl { text-align: center; font-size: 10px; font-family: var(--f-mono); font-weight: 600; letter-spacing: .05em; }
+.prumo-if-mark-lbl.reached { color: var(--pos); }
+.prumo-if-mark-lbl.muted { color: var(--ink-3); }
+
+/* MONTH BLOCK (análise visual mensal) ──────────── */
+.prumo-month-block { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.prumo-month-block:last-child { border-bottom: none; }
+.prumo-month-block.cur { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+.prumo-month-hd { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.prumo-month-name { font-family: var(--f-display); font-size: 14px; font-weight: 700; color: var(--ink); }
+.prumo-month-name.muted { color: var(--ink-2); }
+.prumo-month-stats { display: flex; gap: 14px; }
+.prumo-month-stat .lbl { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); letter-spacing: .1em; text-transform: uppercase; }
+.prumo-month-stat .v { font-family: var(--f-mono); font-size: 12px; font-weight: 700; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+
+/* INPUT WITH PREFIX/SUFFIX ─────────────────────── */
+.prumo-input-affix { position: relative; }
+.prumo-input-affix .prefix, .prumo-input-affix .suffix { position: absolute; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--ink-3); font-weight: 600; font-family: var(--f-mono); pointer-events: none; }
+.prumo-input-affix .prefix { left: 12px; }
+.prumo-input-affix .suffix { right: 12px; }
+.prumo-input-affix .prumo-input.with-prefix { padding-left: 32px; }
+.prumo-input-affix .prumo-input.with-suffix { padding-right: 28px; }
+
+/* SUCCESS BANNER ────────────────────────────────── */
+.prumo-success { background: var(--pos-tint); border: 1px solid oklch(0.58 0.13 155 / .3); border-radius: 10px; padding: 10px 12px; }
+.prumo-success-strong { font-size: 12px; font-weight: 700; color: var(--pos); }
+
 /* LEGACY CHAT FAB — só aparece em desktop */
 .prumo-legacy-chat-fab { display: none !important; }
 @media (min-width: 1100px) { .prumo-legacy-chat-fab { display: flex !important; } }
@@ -345,7 +452,35 @@ function SE(props) {
   var splits = props.splits;
   var onChange = props.onChange;
   var compact = props.compact;
+  var pr = props.prumo;
   var tp = splits.reduce(function(a, s) { return a + (s.pct || 0); }, 0);
+  if (pr) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 0" }}>
+        {splits.map(function(s, i) {
+          return (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input className="prumo-input" style={{ flex: 1, fontSize: compact ? 12 : 13 }} placeholder="Com quem?" value={s.person}
+                onChange={function(e) { var n = splits.slice(); n[i] = { ...n[i], person: e.target.value }; onChange(n); }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <input className="prumo-input mono right" style={{ width: 64 }} type="number" value={s.pct}
+                  onChange={function(e) { var n = splits.slice(); n[i] = { ...n[i], pct: parseInt(e.target.value) || 0 }; onChange(n); }} />
+                <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>%</span>
+              </div>
+              {splits.length > 1 && (
+                <button className="prumo-icon-x" onClick={function() { onChange(splits.filter(function(_, j) { return j !== i; })); }}>{"×"}</button>
+              )}
+            </div>
+          );
+        })}
+        <button onClick={function() { onChange(splits.concat([{ person: "", pct: 30 }])); }}
+          style={{ background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 8, color: "var(--ink-3)", padding: "7px", cursor: "pointer", fontSize: 12, fontFamily: "var(--f-ui)", fontWeight: 600 }}>
+          {"+ Pessoa"}
+        </button>
+        <div style={{ fontSize: 11, color: tp > 100 ? "var(--neg)" : "var(--ink-3)", fontFamily: "var(--f-mono)", letterSpacing: ".05em" }}>{"DIVIDIDO: " + String(tp) + "% — VOCÊ: " + String(100 - tp) + "%"}</div>
+      </div>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 0" }}>
       {splits.map(function(s, i) {
@@ -375,6 +510,22 @@ function SE(props) {
 }
 
 function CatS(props) {
+  if (props.prumo) {
+    return (
+      <select className="prumo-input" value={props.value} onChange={props.onChange} style={props.sx || null}>
+        <option value="">{"Categoria"}</option>
+        {GR.map(function(g) {
+          return (
+            <optgroup key={g.id} label={g.label + " (" + String(props.pcts[g.id]) + "%)"}>
+              {props.cats.filter(function(c) { return c.group === g.id; }).map(function(c) {
+                return <option key={c.id} value={c.id}>{c.icon + " " + c.name}</option>;
+              })}
+            </optgroup>
+          );
+        })}
+      </select>
+    );
+  }
   return (
     <select style={{ ...S.inp, ...props.sx }} value={props.value} onChange={props.onChange}>
       <option value="">{"Categoria"}</option>
@@ -808,6 +959,768 @@ function DashboardPrumo(props) {
           <div className="prumo-cap" style={{ padding: "30px 0", textAlign: "center" }}>{"Carregando dados anuais..."}</div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ══ ANÁLISE PRUMO ══ */
+function AnalisePrumo(props) {
+  var chD = props.chD;
+  var mo = props.mo;
+  var yr = props.yr;
+  var yrD = props.yrD;
+  var cats = props.cats;
+  var myP = props.myP;
+
+  var realMonths = chD.filter(function(d) { return d.real || d.td > 0 || d.cr > 0; });
+  var allMax = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
+  var groups = [
+    { key: "e", label: "Essenciais", color: "var(--brand)" },
+    { key: "i", label: "Investimentos", color: "var(--ink-2)" },
+    { key: "d", label: "Não Essenciais", color: "var(--accent)" },
+    { key: "cr", label: "Crédito", color: "var(--pos)" },
+  ];
+
+  var totDb = chD.reduce(function(a, d) { return a + d.td; }, 0);
+  var totCr = chD.reduce(function(a, d) { return a + d.cr; }, 0);
+  var totSd = chD.reduce(function(a, d) { return a + d.s; }, 0);
+
+  /* Destaques por categoria */
+  var catStats = [];
+  if (yrD) {
+    catStats = cats.map(function(cat2) {
+      var months = yrD.map(function(mDt) {
+        return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+          .reduce(function(a, t) { return a + myP(t); }, 0);
+      }).filter(function(v) { return v > 0; });
+      if (months.length < 3) return null;
+      var avg2 = months.reduce(function(a, v) { return a + v; }, 0) / months.length;
+      var max2 = Math.max.apply(null, months);
+      var min2 = Math.min.apply(null, months);
+      var variance = max2 - min2;
+      var maxMo = yrD.findIndex(function(mDt) {
+        return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
+          .reduce(function(a, t) { return a + myP(t); }, 0) === max2;
+      });
+      return { cat: cat2, avg: avg2, max: max2, min: min2, variance: variance, maxMo: maxMo };
+    }).filter(Boolean).sort(function(a, b) { return b.variance - a.variance; });
+  }
+
+  return (
+    <div className="prumo-form-grid">
+      {/* Comparativo Visual Mensal */}
+      {realMonths.length > 0 && (
+        <div className="prumo-card l-brand full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Comparativo visual"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{String(yr) + " · mês a mês"}</h2>
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {groups.map(function(g) {
+                return (
+                  <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color }} />
+                    <span>{g.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="prumo-cap" style={{ marginBottom: 14 }}>{"Apenas meses com dados reais ou movimentações"}</div>
+          {chD.map(function(d, idx) {
+            if (!d.real && d.td === 0 && d.cr === 0) return null;
+            var isCur = idx === mo;
+            return (
+              <div key={idx} className={"prumo-month-block" + (isCur ? " cur" : "")}>
+                <div className="prumo-month-hd">
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className={"prumo-month-name" + (isCur ? "" : " muted")}>{MA[idx]}{isCur ? " ◀" : ""}</span>
+                    {!d.real && <span className="prumo-chip warn" style={{ fontSize: 9 }}>{"projeção"}</span>}
+                  </div>
+                  <div className="prumo-month-stats">
+                    <div className="prumo-month-stat"><div className="lbl">{"Crédito"}</div><div className="v" style={{ color: "var(--pos)" }}>{fmt(d.cr)}</div></div>
+                    <div className="prumo-month-stat"><div className="lbl">{"Débito"}</div><div className="v" style={{ color: "var(--neg)" }}>{fmt(d.td)}</div></div>
+                    <div className="prumo-month-stat"><div className="lbl">{"Saldo"}</div><div className="v" style={{ color: d.s >= 0 ? "var(--pos)" : "var(--neg)" }}>{fmt(d.s)}</div></div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {groups.map(function(g) {
+                    var val = d[g.key] || 0;
+                    if (val === 0) return null;
+                    var barW = allMax > 0 ? (val / allMax) * 100 : 0;
+                    return (
+                      <div key={g.key} className="prumo-cmp-row" style={{ padding: "3px 0", border: "none" }}>
+                        <div style={{ width: 78, fontSize: 10, color: "var(--ink-3)", textAlign: "right", flexShrink: 0, fontFamily: "var(--f-mono)", letterSpacing: ".05em", textTransform: "uppercase" }}>{g.label}</div>
+                        <div className="prumo-cmp-bar-wrap">
+                          <div className="prumo-cmp-bar" style={{ width: String(barW) + "%", background: g.color }}>
+                            {barW > 22 && <span className="prumo-cmp-bar-lbl">{fmt(val)}</span>}
+                          </div>
+                        </div>
+                        {barW <= 22 && <span className="prumo-num" style={{ fontSize: 11, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmt(val)}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ borderTop: "2px solid var(--line-2)", paddingTop: 12, marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <span className="prumo-lbl" style={{ marginBottom: 0, fontSize: 11, color: "var(--ink)" }}>{"Total ano"}</span>
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Débito"}</div><div className="prumo-num" style={{ color: "var(--neg)", fontSize: 13 }}>{fmt(totDb)}</div></div>
+              <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Crédito"}</div><div className="prumo-num" style={{ color: "var(--pos)", fontSize: 13 }}>{fmt(totCr)}</div></div>
+              <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Saldo"}</div><div className="prumo-num" style={{ color: totSd >= 0 ? "var(--pos)" : "var(--neg)", fontSize: 13 }}>{fmt(totSd)}</div></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Destaques por Categoria */}
+      {yrD && catStats.length > 0 && (
+        <div className="prumo-card l-pos">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Destaques por categoria"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Maiores variações no ano"}</h2>
+            </div>
+          </div>
+          <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Categorias com maior diferença entre o pior e o melhor mês"}</div>
+          {catStats.slice(0, 5).map(function(cs) {
+            var grp = GR.find(function(g) { return g.id === cs.cat.group; });
+            return (
+              <div key={cs.cat.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 18 }}>{cs.cat.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{cs.cat.name}</div>
+                    {grp && <span className="prumo-chip" style={{ fontSize: 9, marginTop: 3 }}>{grp.label}</span>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="prumo-cap" style={{ fontSize: 10 }}>{"Média"}</div>
+                    <div className="prumo-num" style={{ fontSize: 13 }}>{fmt(cs.avg)}</div>
+                  </div>
+                </div>
+                <div className="prumo-mini-stat-row">
+                  <div className="prumo-mini-stat">
+                    <div className="lbl">{"Mín"}</div>
+                    <div className="val pos">{fmt(cs.min)}</div>
+                  </div>
+                  <div className="prumo-mini-stat">
+                    <div className="lbl">{"Máx (" + (cs.maxMo >= 0 ? MA[cs.maxMo] : "—") + ")"}</div>
+                    <div className="val neg">{fmt(cs.max)}</div>
+                  </div>
+                  <div className="prumo-mini-stat">
+                    <div className="lbl">{"Variação"}</div>
+                    <div className="val warn">{fmt(cs.variance)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* AI Insights placeholder */}
+      <div className="prumo-card l-accent">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Insights com IA"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Análise inteligente"}</h2>
+          </div>
+          <span className="prumo-chip warn">{"Em breve"}</span>
+        </div>
+        <div style={{ textAlign: "center", padding: "26px 0" }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{"🧠"}</div>
+          <div className="prumo-cap" style={{ lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{"Análise inteligente do seu padrão financeiro anual com identificação de tendências, anomalias e recomendações personalizadas."}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══ PROJEÇÃO PRUMO ══ */
+function calcSimAportes(nwBalance, simAporte, simTaxa, simTempo) {
+  var simA = parseFloat(String(simAporte).replace(",", ".")) || 0;
+  var simR = (parseFloat(String(simTaxa).replace(",", ".")) || 0) / 100;
+  var simN = parseInt(simTempo) || 0;
+  var simFV = simN > 0 ? (nwBalance * Math.pow(1 + simR, simN) + (simR > 0 ? simA * (Math.pow(1 + simR, simN) - 1) / simR : simA * simN)) : nwBalance;
+  var simTotalAport = simA * simN;
+  var simJuros = simFV - nwBalance - simTotalAport;
+  var simAnos = simN > 0 ? (simN / 12).toFixed(1) : "0";
+  var numBars = Math.min(simN, 12);
+  var step = numBars > 0 ? Math.ceil(simN / numBars) : 1;
+  var simBars = [];
+  for (var bi = 0; bi < numBars; bi++) {
+    var mn = Math.min((bi + 1) * step, simN);
+    var bv = mn > 0 ? (nwBalance * Math.pow(1 + simR, mn) + (simR > 0 ? simA * (Math.pow(1 + simR, mn) - 1) / simR : simA * mn)) : nwBalance;
+    var bp = nwBalance + simA * mn;
+    simBars.push({ m: mn, fv: bv, principal: bp, juros: bv - bp });
+  }
+  var barMax = simFV > 0 ? simFV : 1;
+  var jurosRatio = simFV > 0 ? simJuros / simFV : 0;
+  return { simA: simA, simR: simR, simN: simN, simFV: simFV, simTotalAport: simTotalAport, simJuros: simJuros, simAnos: simAnos, simBars: simBars, barMax: barMax, jurosRatio: jurosRatio };
+}
+
+function calcRendaPassiva(nwBalance, fxd, spt) {
+  var rpTaxa = 0.007;
+  var rpMensal = nwBalance * rpTaxa;
+  var fxTotal = fxd.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+  var coverPct = fxTotal > 0 ? rpMensal / fxTotal : 0;
+  var milestones = fxd.slice().sort(function(a, b) { return a.amount - b.amount; });
+  var coveredFx = [];
+  var remaining2 = rpMensal;
+  milestones.forEach(function(f) {
+    var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
+    if (remaining2 >= myA) { coveredFx.push(f); remaining2 -= myA; }
+  });
+  var uncovered = fxd.filter(function(f) { return coveredFx.indexOf(f) < 0; })
+    .map(function(f2) {
+      var myA2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
+      var plNeeded2 = Math.ceil(myA2 / rpTaxa);
+      return { f: f2, myA: myA2, plNeeded: plNeeded2, rpGerada: plNeeded2 * rpTaxa };
+    })
+    .filter(function(item) { return item.plNeeded > nwBalance; })
+    .sort(function(a, b) { return a.myA - b.myA; });
+  return { rpTaxa: rpTaxa, rpMensal: rpMensal, fxTotal: fxTotal, coverPct: coverPct, coveredFx: coveredFx, uncovered: uncovered };
+}
+
+function calcIF(nwBalance, totDb, totalInc, ifTarget) {
+  var rpTaxa = 0.007;
+  var rpMensal = nwBalance * rpTaxa;
+  var ifTargetVal = parseFloat(String(ifTarget).replace(",", ".")) || 0;
+  var totalExp = ifTargetVal > 0 ? ifTargetVal : (totDb > 0 ? totDb : totalInc * 0.75);
+  var fiPct = totalExp > 0 ? Math.min(rpMensal / totalExp, 1) : 0;
+  var plFor100 = totalExp > 0 ? Math.ceil(totalExp / rpTaxa) : 0;
+  var milestones2 = [
+    { pct: 0.25, label: "25% IF", desc: "Renda passiva cobre 1/4 dos gastos" },
+    { pct: 0.50, label: "50% IF", desc: "Meio caminho andado" },
+    { pct: 0.75, label: "75% IF", desc: "Quase lá!" },
+    { pct: 1.00, label: "IF Total", desc: "Liberdade financeira completa" },
+  ];
+  var nextMilestone = milestones2.find(function(m) { return fiPct < m.pct; }) || milestones2[3];
+  var plToNext = Math.max(0, Math.ceil((nextMilestone.pct * totalExp) / rpTaxa) - nwBalance);
+  return { rpMensal: rpMensal, totalExp: totalExp, fiPct: fiPct, plFor100: plFor100, milestones: milestones2, nextMilestone: nextMilestone, plToNext: plToNext };
+}
+
+function ProjecaoPrumo(props) {
+  var cfg = props.cfg;
+  var savR = props.savR;
+  var totalInc = props.totalInc;
+  var invSp = props.invSp;
+  var nwBalance = props.nwBalance;
+  var nwHistory = props.nwHistory;
+  var fxd = props.fxd;
+  var spt = props.spt;
+  var cats = props.cats;
+  var totDb = props.totDb;
+  var ifTarget = props.ifTarget;
+  var sIfTarget = props.sIfTarget;
+  var showIfEdit = props.showIfEdit;
+  var sShowIfEdit = props.sShowIfEdit;
+  var activeInst = props.activeInst;
+  var totalInstMonthly = props.totalInstMonthly;
+  var prevSp = props.prevSp;
+  var spent = props.spent;
+  var mo = props.mo;
+  var yr = props.yr;
+  var chD = props.chD;
+  var chMx = props.chMx;
+  var chMs = props.chMs;
+  var hovM = props.hovM;
+  var sHM = props.sHM;
+  var showNw = props.showNw;
+  var sShowNw = props.sShowNw;
+  var nwInput = props.nwInput;
+  var sNwI = props.sNwI;
+  var updateNW = props.updateNW;
+  var simAporte = props.simAporte;
+  var sSimA = props.sSimA;
+  var simTaxa = props.simTaxa;
+  var sSimT = props.sSimT;
+  var simTempo = props.simTempo;
+  var sSimTp = props.sSimTp;
+  var saveCfg = props.saveCfg;
+
+  var sim = calcSimAportes(nwBalance, simAporte, simTaxa, simTempo);
+  var rp = calcRendaPassiva(nwBalance, fxd, spt);
+  var fi = calcIF(nwBalance, totDb, totalInc, ifTarget);
+
+  var hist = nwHistory.slice(-12);
+  var maxV = nwHistory.length > 0 ? Math.max.apply(null, hist.map(function(h) { return h.balance; }).concat([1])) : 1;
+  var minV = nwHistory.length > 0 ? Math.min.apply(null, hist.map(function(h) { return h.balance; })) : 0;
+  var range = maxV - minV || 1;
+
+  return (
+    <div className="prumo-form-grid">
+
+      {/* TAXA DE POUPANÇA */}
+      <div className="prumo-card l-brand">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Taxa de poupança"}</div>
+            <div className="prumo-cap">{"Investido / Renda total"}</div>
+          </div>
+          <div className="prumo-big" style={{ color: savR >= 0.25 ? "var(--pos)" : savR >= 0.1 ? "var(--accent-2)" : "var(--neg)" }}>{pct(savR)}</div>
+        </div>
+        <div className="prumo-meter" style={{ height: 8, marginTop: 8 }}>
+          <i style={{ width: pct(Math.min(invSp / Math.max(totalInc, 1), 1)), background: "var(--brand)" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11 }}>
+          <span className="prumo-num">{fmt(invSp)}</span>
+          <span className="prumo-cap">{"Meta 25%: " + fmt(totalInc * 0.25)}</span>
+        </div>
+      </div>
+
+      {/* PATRIMÔNIO LÍQUIDO + EDIÇÃO */}
+      <div className="prumo-card l-pos">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Patrimônio líquido"}</div>
+            <div className="prumo-big pos" style={{ marginTop: 4 }}>{fmt(nwBalance)}</div>
+          </div>
+          <button className="prumo-btn ghost" onClick={function() { sShowNw(!showNw); }}>{showNw ? "✕" : "✏️ Atualizar"}</button>
+        </div>
+        {showNw && (
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            <input className="prumo-input mono right" placeholder="Saldo atual (R$)" value={nwInput} inputMode="decimal" onChange={function(e) { sNwI(e.target.value); }} />
+            <button className="prumo-btn brand" onClick={updateNW}>{"OK"}</button>
+          </div>
+        )}
+        <div className="prumo-mini-stat-row cols-2" style={{ marginTop: 10 }}>
+          <div className="prumo-mini-stat"><div className="lbl">{"Investido este mês"}</div><div className="val brand">{fmt(invSp)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva (0,7%)"}</div><div className="val pos">{fmt(nwBalance * 0.007) + "/m"}</div></div>
+        </div>
+        {nwHistory.length > 1 && (
+          <div style={{ marginTop: 14 }}>
+            <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Evolução do patrimônio"}</div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 70 }}>
+              {hist.map(function(h, idx) {
+                var barH = ((h.balance - minV) / range) * 60 + 10;
+                var isLast = idx === hist.length - 1;
+                var isUp = idx > 0 && h.balance >= hist[idx - 1].balance;
+                return (
+                  <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "oklch(0.58 0.13 155 / .55)" : "oklch(0.58 0.16 25 / .45)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
+                    <div style={{ fontSize: 8, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 3, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)" }}>{sd(h.date).slice(0, 5)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11 }}>
+              <span className="prumo-cap">{"Mín: " + fmt(minV)}</span>
+              <span className="prumo-num" style={{ color: "var(--brand)" }}>{"Atual: " + fmt(nwBalance)}</span>
+              <span className="prumo-cap">{"Máx: " + fmt(maxV)}</span>
+            </div>
+            {hist.length >= 2 && (
+              <div className={"prumo-chip " + (nwBalance > hist[0].balance ? "pos" : "neg")} style={{ marginTop: 10 }}>
+                {(nwBalance > hist[0].balance ? "▲ +" : "▼ ") + fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0, 5) + " (" + pct(Math.abs((nwBalance - hist[0].balance) / hist[0].balance)) + ")"}
+              </div>
+            )}
+            <div style={{ marginTop: 14 }}>
+              <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Histórico"}</div>
+              <div style={{ maxHeight: 160, overflowY: "auto" }}>
+                {nwHistory.slice().reverse().map(function(h2, idx2) {
+                  return (
+                    <div key={idx2} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
+                      <div>
+                        <span className="prumo-num" style={{ fontSize: 12 }}>{fmt(h2.balance)}</span>
+                        <span className="prumo-cap" style={{ marginLeft: 10, fontFamily: "var(--f-mono)", fontSize: 10 }}>{sd(h2.date)}</span>
+                      </div>
+                      <button className="prumo-icon-x" onClick={function() {
+                        var newHist = nwHistory.filter(function(x) { return x.date !== h2.date; });
+                        var newBal = newHist.length > 0 ? newHist[newHist.length - 1].balance : 0;
+                        saveCfg({ ...cfg, netWorth: { balance: newBal, history: newHist } });
+                      }} title="Remover entrada">{"×"}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* TERMÔMETRO IF */}
+      <div className="prumo-card l-accent full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Termômetro de liberdade financeira"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Quanto da sua vida o PL já financia"}</h2>
+          </div>
+          <button className="prumo-btn ghost" onClick={function() { sShowIfEdit(!showIfEdit); }}>{showIfEdit ? "Fechar" : "🎯 Definir meta"}</button>
+        </div>
+        {showIfEdit && (
+          <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 14, marginBottom: 14, border: "1px solid var(--line)" }}>
+            <div className="prumo-lbl">{"Gasto mensal desejado na IF"}</div>
+            <div className="prumo-cap" style={{ marginBottom: 8 }}>{"Quanto você quer gastar por mês quando atingir a independência financeira"}</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input className="prumo-input mono right" placeholder="Ex: 15000" value={ifTarget} inputMode="decimal" onChange={function(e) { sIfTarget(e.target.value); }} />
+              <button className="prumo-btn brand" onClick={function() { sShowIfEdit(false); }}>{"OK"}</button>
+              {ifTarget && <button className="prumo-btn ghost" onClick={function() { sIfTarget(""); }}>{"Limpar"}</button>}
+            </div>
+            {!ifTarget && <div className="prumo-cap" style={{ marginTop: 6, color: "var(--accent-2)" }}>{"Sem meta definida — usando gastos do mês atual como referência"}</div>}
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, flexWrap: "wrap" }}>
+          <div className="prumo-big" style={{ color: fi.fiPct >= 1 ? "var(--pos)" : fi.fiPct >= 0.5 ? "var(--accent-2)" : "var(--brand)", fontSize: 44 }}>{pct(fi.fiPct)}</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{"de Independência Financeira"}</div>
+            <div className="prumo-cap">{"Renda passiva " + fmt(fi.rpMensal) + " / Gastos " + fmt(fi.totalExp)}</div>
+          </div>
+        </div>
+        <div className="prumo-if-bar">
+          <div className={"prumo-if-fill" + (fi.fiPct >= 1 ? " full" : "")} style={{ width: pct(fi.fiPct) }} />
+          {fi.milestones.map(function(m) { return <div key={m.label} className="prumo-if-mark" style={{ left: pct(m.pct) }} />; })}
+        </div>
+        <div className="prumo-if-marks-row">
+          {fi.milestones.map(function(m) {
+            var reached = fi.fiPct >= m.pct;
+            return (
+              <div key={m.label} className={"prumo-if-mark-lbl " + (reached ? "reached" : "muted")}>{m.label}{reached ? " ✓" : ""}</div>
+            );
+          })}
+        </div>
+        {fi.fiPct < 1 && (
+          <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 12, border: "1px solid var(--line)", marginTop: 10 }}>
+            <div className="prumo-lbl" style={{ color: "var(--brand)", marginBottom: 6 }}>{"Próximo marco: " + fi.nextMilestone.label}</div>
+            <div className="prumo-cap" style={{ marginBottom: 8 }}>{fi.nextMilestone.desc}</div>
+            <div className="prumo-mini-stat-row">
+              <div className="prumo-mini-stat"><div className="lbl">{"PL necessário"}</div><div className="val brand">{fmt(Math.ceil(fi.nextMilestone.pct * fi.totalExp / 0.007))}</div></div>
+              <div className="prumo-mini-stat"><div className="lbl">{"Falta acumular"}</div><div className="val neg">{fmt(fi.plToNext)}</div></div>
+              <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva"}</div><div className="val pos">{fmt(fi.rpMensal) + "/m"}</div></div>
+            </div>
+          </div>
+        )}
+        {fi.fiPct >= 1 && (
+          <div className="prumo-success" style={{ marginTop: 10, textAlign: "center" }}>
+            <div className="prumo-success-strong" style={{ fontSize: 14 }}>{"🏆 Parabéns! Você atingiu a Independência Financeira!"}</div>
+            <div className="prumo-cap" style={{ color: "var(--pos)", marginTop: 4 }}>{"Sua renda passiva cobre 100% dos seus gastos."}</div>
+          </div>
+        )}
+        {fi.plFor100 > 0 && fi.fiPct < 1 && (
+          <div className="prumo-cap" style={{ textAlign: "center", marginTop: 10, fontSize: 11 }}>{"IF Total: PL de " + fmt(fi.plFor100) + " gerando " + fmt(fi.totalExp) + "/mês"}</div>
+        )}
+      </div>
+
+      {/* SIMULADOR DE APORTES */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Simulador de aportes"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Juros compostos sobre o PL"}</h2>
+          </div>
+          <span style={{ fontSize: 22 }}>{"📈"}</span>
+        </div>
+        <div className="prumo-mini-stat-row" style={{ marginBottom: 14 }}>
+          <div>
+            <div className="prumo-lbl">{"Aporte/mês"}</div>
+            <div className="prumo-input-affix">
+              <span className="prefix">{"R$"}</span>
+              <input className="prumo-input mono right with-prefix" value={simAporte} inputMode="decimal" onChange={function(e) { sSimA(e.target.value); }} />
+            </div>
+          </div>
+          <div>
+            <div className="prumo-lbl">{"Taxa mês"}</div>
+            <div className="prumo-input-affix">
+              <input className="prumo-input mono right with-suffix" value={simTaxa} inputMode="decimal" onChange={function(e) { sSimT(e.target.value); }} />
+              <span className="suffix">{"%"}</span>
+            </div>
+          </div>
+          <div>
+            <div className="prumo-lbl">{"Tempo (m)"}</div>
+            <input className="prumo-input mono right" value={simTempo} inputMode="numeric" onChange={function(e) { sSimTp(e.target.value); }} />
+          </div>
+        </div>
+        <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 14, marginBottom: 12, border: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+            <div className="prumo-cap">{"Patrimônio em " + String(sim.simAnos) + " anos"}</div>
+            <div className="prumo-big brand" style={{ fontSize: 30 }}>{fmt(sim.simFV)}</div>
+          </div>
+          <div className="prumo-mini-stat-row">
+            <div className="prumo-mini-stat"><div className="lbl">{"PL hoje"}</div><div className="val">{fmt(nwBalance)}</div></div>
+            <div className="prumo-mini-stat"><div className="lbl">{"Aportado"}</div><div className="val brand">{fmt(sim.simTotalAport)}</div></div>
+            <div className="prumo-mini-stat"><div className="lbl">{"Juros"}</div><div className="val pos">{fmt(sim.simJuros > 0 ? sim.simJuros : 0)}</div></div>
+          </div>
+          <div className="prumo-lbl" style={{ marginTop: 14, marginBottom: 6 }}>{"Composição do PL final"}</div>
+          <div style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex" }}>
+            <div style={{ width: String(sim.simFV > 0 ? (nwBalance / sim.simFV) * 100 : 0) + "%", background: "var(--ink)", transition: "width 0.4s" }} />
+            <div style={{ width: String(sim.simFV > 0 ? (sim.simTotalAport / sim.simFV) * 100 : 0) + "%", background: "var(--brand)", transition: "width 0.4s" }} />
+            <div style={{ flex: 1, background: "var(--pos)", transition: "width 0.4s" }} />
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 2, background: "var(--ink)" }} /><span className="prumo-cap" style={{ fontSize: 10 }}>{"PL atual"}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 2, background: "var(--brand)" }} /><span className="prumo-cap" style={{ fontSize: 10 }}>{"Aportes"}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 2, background: "var(--pos)" }} /><span className="prumo-cap" style={{ fontSize: 10 }}>{"Juros (" + pct(sim.jurosRatio) + ")"}</span></div>
+          </div>
+        </div>
+        {sim.simBars.length > 0 && (
+          <div>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Evolução do PL"}</div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
+              {sim.simBars.map(function(bar, idx) {
+                var totalH = sim.barMax > 0 ? (bar.fv / sim.barMax) * 90 : 0;
+                var principalH = bar.fv > 0 ? (bar.principal / bar.fv) * totalH : 0;
+                var jurosH = totalH - principalH;
+                var lbl = bar.m >= 12 ? String(Math.round(bar.m / 12)) + "a" : String(bar.m) + "m";
+                return (
+                  <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", height: totalH, minHeight: 2 }}>
+                      <i style={{ flex: String(bar.principal) + " 0 0", background: "var(--brand)", display: "block", minHeight: 1 }} />
+                      <i style={{ flex: String(bar.juros > 0 ? bar.juros : 0) + " 0 0", background: "var(--pos)", display: "block", minHeight: 1 }} />
+                    </div>
+                    <div style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 3, fontFamily: "var(--f-mono)", fontWeight: 600 }}>{lbl}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* RENDA PASSIVA + GAMIFICATION */}
+      <div className="prumo-card l-pos full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Renda passiva do PL"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"PL × 0,7% a.m. (conservador)"}</h2>
+          </div>
+          <span style={{ fontSize: 22 }}>{"🏦"}</span>
+        </div>
+        <div className="prumo-mini-stat-row cols-2" style={{ marginBottom: 12 }}>
+          <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva/mês"}</div><div className="val brand" style={{ fontSize: 18 }}>{fmt(rp.rpMensal)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Total fixas/mês"}</div><div className="val" style={{ color: rp.coverPct >= 1 ? "var(--pos)" : "var(--ink)", fontSize: 18 }}>{fmt(rp.fxTotal)}</div></div>
+        </div>
+        <div className="prumo-meter" style={{ height: 10 }}>
+          <i style={{ width: pct(Math.min(rp.coverPct, 1)), background: rp.coverPct >= 1 ? "var(--pos)" : "var(--brand)" }} />
+        </div>
+        <div className="prumo-cap" style={{ marginTop: 6, textAlign: "center" }}>{"Cobre " + pct(Math.min(rp.coverPct, 1)) + " das fixas"}</div>
+        {fxd.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Contas que já conseguiria pagar"}</div>
+            {rp.coveredFx.length === 0 ? (
+              <div className="prumo-cap" style={{ color: "var(--neg)" }}>{"Ainda não cobre nenhuma fixa. Continue investindo."}</div>
+            ) : (
+              <div>
+                {rp.coveredFx.map(function(f) {
+                  var cat2 = cats.find(function(c) { return c.id === f.cat; });
+                  var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
+                  return (
+                    <div key={f.id} className="prumo-tx" style={{ padding: "8px 0" }}>
+                      <span style={{ fontSize: 18 }}>{"✅"}</span>
+                      <div className="prumo-tx-meat"><div className="prumo-tx-desc">{(cat2 ? cat2.icon + " " : "") + f.name}</div></div>
+                      <span className="prumo-tx-amt">{fmt(myA)}</span>
+                    </div>
+                  );
+                })}
+                <div className="prumo-success" style={{ marginTop: 10 }}>
+                  <div className="prumo-success-strong">
+                    {"💡 Com " + fmt(nwBalance) + " investido você já paga " + String(rp.coveredFx.length) + " conta" + (rp.coveredFx.length > 1 ? "s" : "") + " fixa" + (rp.coveredFx.length > 1 ? "s" : "") + " todo mês — sem trabalhar."}
+                  </div>
+                </div>
+              </div>
+            )}
+            {rp.uncovered.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"🎯 Próximas conquistas"}</div>
+                <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Da menor para a maior — tangibilize o caminho"}</div>
+                {rp.uncovered.slice(0, 5).map(function(item) {
+                  var faltaPL = item.plNeeded - nwBalance;
+                  var progressPct = Math.min(nwBalance / item.plNeeded, 1);
+                  var cat3 = cats.find(function(c) { return c.id === item.f.cat; });
+                  return (
+                    <div key={item.f.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 18 }}>{cat3 ? cat3.icon : "💳"}</span>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{item.f.name}</div>
+                            <div className="prumo-cap" style={{ fontSize: 11 }}>{fmt(item.myA) + "/mês"}</div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div className="prumo-num" style={{ color: "var(--brand)", fontSize: 12 }}>{"PL: " + fmt(item.plNeeded)}</div>
+                          <div className="prumo-cap" style={{ color: "var(--neg)", fontSize: 10 }}>{"falta " + fmt(faltaPL)}</div>
+                        </div>
+                      </div>
+                      <div className="prumo-meter">
+                        <i style={{ width: pct(progressPct), background: "var(--pos)" }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 9, fontFamily: "var(--f-mono)", color: "var(--ink-3)" }}>
+                        <span>{fmt(nwBalance) + " atual"}</span>
+                        <span>{pct(progressPct) + " do caminho"}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {fxd.length === 0 && (
+          <div className="prumo-cap" style={{ textAlign: "center", padding: 14 }}>{"Cadastre contas fixas para ver quais o seu PL já consegue pagar."}</div>
+        )}
+      </div>
+
+      {/* PARCELAS ATIVAS */}
+      {activeInst.length > 0 && (
+        <div className="prumo-card l-warn full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Parcelas ativas"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Compromissos parcelados"}</h2>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="prumo-cap">{"Custo mensal"}</div>
+              <div className="prumo-big accent" style={{ fontSize: 22 }}>{fmt(totalInstMonthly)}</div>
+            </div>
+          </div>
+          {activeInst.map(function(it, idx) {
+            var cat2 = cats.find(function(c) { return c.id === it.cat; });
+            return (
+              <div key={idx} className="prumo-tx">
+                <div className="prumo-tx-icon">{cat2 ? cat2.icon : "💳"}</div>
+                <div className="prumo-tx-meat">
+                  <div className="prumo-tx-desc">{it.desc}</div>
+                  <div className="prumo-tx-meta">{String(it.remaining) + " parcelas restantes"}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div className="prumo-tx-amt" style={{ color: "var(--accent-2)" }}>{fmt(it.amount) + "/m"}</div>
+                  <div className="prumo-cap" style={{ fontSize: 10 }}>{"Total: " + fmt(it.amount * it.remaining)}</div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+            <span className="prumo-lbl" style={{ marginBottom: 0, color: "var(--ink)" }}>{"Compromisso total"}</span>
+            <span className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 14 }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
+          </div>
+        </div>
+      )}
+
+      {/* COMPARATIVO MÊS A MÊS */}
+      {prevSp && (
+        <div className="prumo-card full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Comparativo"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{MA[mo === 0 ? 11 : mo - 1] + " → " + MA[mo]}</h2>
+            </div>
+          </div>
+          {GR.map(function(g) {
+            var c2 = spent[g.id]; var pv = prevSp[g.id]; var diff = c2 - pv;
+            var pD = pv > 0 ? diff / pv : 0;
+            var isGood = g.id === "investimentos" ? diff > 0 : diff < 0;
+            return (
+              <div key={g.id} className="prumo-cmp-row">
+                <div style={{ width: 4, height: 32, borderRadius: 2, background: g.color, flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", fontWeight: 600 }}>{g.label}</span>
+                <span className="prumo-num" style={{ minWidth: 80, textAlign: "right", fontSize: 12, color: "var(--ink-3)" }}>{fmt(pv)}</span>
+                <span style={{ color: "var(--ink-4)" }}>{"→"}</span>
+                <span className="prumo-num" style={{ minWidth: 80, textAlign: "right", fontSize: 13 }}>{fmt(c2)}</span>
+                <span className={"prumo-chip " + (isGood ? "pos" : "neg")} style={{ minWidth: 70, justifyContent: "center" }}>{(diff > 0 ? "▲ " : "▼ ") + pct(Math.abs(pD))}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* GRÁFICO ANUAL + TABELA */}
+      {chD.length > 0 && (
+        <div className="prumo-card full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Projeção anual"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{String(yr) + " · fixas + parceladas"}</h2>
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {[
+                { l: "Ess.", c: "var(--brand)" },
+                { l: "Inv.", c: "var(--ink-2)" },
+                { l: "Des.", c: "var(--accent)" },
+                { l: "Créd.", c: "var(--pos)", round: true }
+              ].map(function(it) {
+                return (
+                  <div key={it.l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}>
+                    <div style={{ width: 9, height: 9, borderRadius: it.round ? "50%" : 2, background: it.c }} />
+                    <span>{it.l}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 200, padding: "20px 0 0", position: "relative" }}>
+            {chD.map(function(d, idx) {
+              var bH = chMx > 0 ? (d.td / chMx) * 170 : 0;
+              var cH = chMx > 0 ? (d.cr / chMx) * 170 : 0;
+              var cu = idx === mo;
+              var isH = hovM === idx;
+              var brandCol = d.real ? "var(--brand)" : "oklch(0.78 0.04 235)";
+              var inkCol = d.real ? "var(--ink-2)" : "oklch(0.78 0.015 250)";
+              var accCol = d.real ? "var(--accent)" : "oklch(0.88 0.06 75)";
+              return (
+                <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", cursor: "pointer" }}
+                  onClick={function() { sHM(isH ? null : idx); }}
+                  onMouseEnter={function() { sHM(idx); }}
+                  onMouseLeave={function() { sHM(null); }}>
+                  <div style={{ position: "absolute", bottom: cH, left: 0, right: 0, height: 2, background: "var(--pos)", borderRadius: 1, zIndex: 2 }} />
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", height: bH, minHeight: 4, outline: isH ? "2px solid var(--ink)" : "none", outlineOffset: 1 }}>
+                    <i style={{ flex: String(d.e) + " 0 0", background: brandCol, display: "block", minHeight: 1 }} />
+                    <i style={{ flex: String(d.i) + " 0 0", background: inkCol, display: "block", minHeight: 1 }} />
+                    <i style={{ flex: String(d.d) + " 0 0", background: accCol, display: "block", minHeight: 1 }} />
+                  </div>
+                  <div style={{ fontSize: 9, color: cu ? "var(--ink)" : "var(--ink-3)", marginTop: 4, fontWeight: cu ? 800 : 600 }}>{d.mes}</div>
+                  {isH && d.td > 0 && <ChartTip d={d} i={idx} cats={cats} />}
+                </div>
+              );
+            })}
+          </div>
+          <div className="prumo-lbl" style={{ marginTop: 22, marginBottom: 6 }}>{"Saldo mensal"}</div>
+          <div className="prumo-sim-bars">
+            {chD.map(function(d, idx) {
+              var h = chMs > 0 ? (Math.abs(d.s) / chMs) * 30 : 0;
+              var pos = d.s >= 0;
+              var cu = idx === mo;
+              return (
+                <div key={idx} className="prumo-sim-col">
+                  <div className="prumo-sim-half" style={{ height: 30, justifyContent: "flex-end" }}>
+                    {pos && <div className="prumo-sim-bar-pos" style={{ height: h, opacity: cu ? 1 : 0.55 }} />}
+                  </div>
+                  <div className="prumo-sim-axis" />
+                  <div className="prumo-sim-half" style={{ height: 30, justifyContent: "flex-start" }}>
+                    {!pos && <div className="prumo-sim-bar-neg" style={{ height: h, opacity: cu ? 1 : 0.55 }} />}
+                  </div>
+                  <div style={{ fontSize: 9, color: cu ? "var(--ink)" : "var(--ink-3)", fontWeight: cu ? 800 : 500 }}>{d.mes}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ overflowX: "auto", marginTop: 14 }}>
+            <table className="prumo-data-table" style={{ minWidth: 460 }}>
+              <thead>
+                <tr>
+                  <th></th>
+                  {chD.map(function(d, idx) { return <th key={idx} className={idx === mo ? "cur" : ""}>{d.mes}</th>; })}
+                </tr>
+              </thead>
+              <tbody>
+                {[{ l: "Déb.", k: "td", c: "neg" }, { l: "Créd.", k: "cr", c: "pos" }, { l: "Saldo", k: "s", c: "brand" }].map(function(row) {
+                  return (
+                    <tr key={row.k}>
+                      <td className={"row-lbl " + row.c}>{row.l}</td>
+                      {chD.map(function(d, idx) {
+                        var val = d[row.k] || 0;
+                        var cls = row.k === "s" ? (val >= 0 ? "pos" : "neg") : "";
+                        return <td key={idx} className={(idx === mo ? "cur " : "") + cls}>{fK(val)}</td>;
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1529,773 +2442,23 @@ export default function App() {
 
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
-          <div>
-            {/* Taxa de poupança */}
-            <div style={S.cardA(BL)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div><div style={S.lbl}>{"TAXA DE POUPANÇA"}</div><div style={S.cap}>{"Investido / Renda total"}</div></div>
-                <div style={{ fontSize: 32, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: savR >= 0.25 ? OK : savR >= 0.1 ? WN : ER }}>{pct(savR)}</div>
-              </div>
-              <PB value={invSp} max={totalInc} color={BL} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, ...S.cap }}>
-                <span>{fmt(invSp)}</span><span>{"Meta 25%: " + fmt(totalInc * 0.25)}</span>
-              </div>
-            </div>
-
-            {/* Patrimônio líquido */}
-            <div style={S.cardA("#1A2B5F")}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={S.lbl}>{"PATRIMÔNIO LÍQUIDO"}</div>
-                <button style={{ ...S.btn(BD), padding: "6px 12px", fontSize: 12 }} onClick={function() { sShowNw(!showNw); }}>{"✏️ Atualizar"}</button>
-              </div>
-              {showNw && (
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  <input style={{ ...S.inp, flex: 1 }} placeholder="Saldo atual (R$)" value={nwInput} inputMode="decimal" onChange={function(e) { sNwI(e.target.value); }} />
-                  <button style={S.btn(BD)} onClick={updateNW}>{"OK"}</button>
-                  <button style={S.btnO} onClick={function() { sShowNw(false); }}>{"×"}</button>
-                </div>
-              )}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-                <div><div style={S.cap}>{"Saldo atual"}</div><div style={{ fontSize: 22, fontWeight: 700, color: "#1A2B5F" }}>{fmt(nwBalance)}</div></div>
-                <div><div style={S.cap}>{"Investido este mês"}</div><div style={{ fontSize: 22, fontWeight: 700, color: BL }}>{fmt(invSp)}</div></div>
-              </div>
-
-              {nwHistory.length > 1 && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={S.lbl}>{"EVOLUÇÃO DO PATRIMÔNIO"}</div>
-                  {(function() {
-                    var hist = nwHistory.slice(-12);
-                    var maxV = Math.max.apply(null, hist.map(function(h) { return h.balance; }).concat([1]));
-                    var minV = Math.min.apply(null, hist.map(function(h) { return h.balance; }));
-                    var range = maxV - minV || 1;
-                    return (
-                      <div style={{ marginTop: 6 }}>
-                        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 70 }}>
-                          {hist.map(function(h, idx) {
-                            var barH = ((h.balance - minV) / range) * 60 + 10;
-                            var isLast = idx === hist.length - 1;
-                            var isUp = idx > 0 && h.balance >= hist[idx-1].balance;
-                            return (
-                              <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                <div style={{ width: "100%", height: barH, background: isLast ? BD : (isUp ? OK + "80" : ER + "60"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
-                                <div style={{ fontSize: 7, color: isLast ? BD : TM, marginTop: 2, fontWeight: isLast ? 700 : 400 }}>{sd(h.date).slice(0,5)}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, ...S.cap }}>
-                          <span>{"Mín: " + fmt(minV)}</span>
-                          <span style={{ fontWeight: 700, color: BD }}>{"Atual: " + fmt(nwBalance)}</span>
-                          <span>{"Máx: " + fmt(maxV)}</span>
-                        </div>
-                        {hist.length >= 2 && (
-                          <div style={{ marginTop: 6, padding: "6px 10px", background: nwBalance > hist[0].balance ? OK + "12" : ER + "12", borderRadius: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: nwBalance > hist[0].balance ? OK : ER }}>
-                              {nwBalance > hist[0].balance ? "▲ +" : "▼ "}
-                              {fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0,5) + " (" + pct(Math.abs((nwBalance - hist[0].balance) / hist[0].balance)) + ")"}
-                            </span>
-                          </div>
-                        )}
-                        <div style={{ marginTop: 10 }}>
-                          <div style={S.lbl}>{"GERENCIAR HISTÓRICO"}</div>
-                          {nwHistory.slice().reverse().map(function(h2, idx2) {
-                            return (
-                              <div key={idx2} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid " + BR }}>
-                                <div>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(h2.balance)}</span>
-                                  <span style={{ ...S.cap, marginLeft: 8 }}>{sd(h2.date)}</span>
-                                </div>
-                                <span onClick={function() {
-                                  var newHist = nwHistory.filter(function(x) { return x.date !== h2.date; });
-                                  var newBal = newHist.length > 0 ? newHist[newHist.length - 1].balance : 0;
-                                  saveCfg({ ...cfg, netWorth: { balance: newBal, history: newHist } });
-                                }} style={{ cursor: "pointer", color: ER, fontSize: 16, padding: "0 6px", fontWeight: 700 }} title="Remover entrada">{"×"}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-
-            {/* Simulador de aportes */}
-            {(function() {
-              var simA = parseFloat(String(simAporte).replace(",", ".")) || 0;
-              var simR = (parseFloat(String(simTaxa).replace(",", ".")) || 0) / 100;
-              var simN = parseInt(simTempo) || 0;
-              var simFV = simN > 0 ? (nwBalance * Math.pow(1 + simR, simN) + (simR > 0 ? simA * (Math.pow(1 + simR, simN) - 1) / simR : simA * simN)) : nwBalance;
-              var simTotalAport = simA * simN;
-              var simJuros = simFV - nwBalance - simTotalAport;
-              var simAnos = simN > 0 ? (simN / 12).toFixed(1) : "0";
-              var numBars = Math.min(simN, 12);
-              var step = numBars > 0 ? Math.ceil(simN / numBars) : 1;
-              var simBars = [];
-              for (var bi = 0; bi < numBars; bi++) {
-                var mn = Math.min((bi + 1) * step, simN);
-                var bv = mn > 0 ? (nwBalance * Math.pow(1 + simR, mn) + (simR > 0 ? simA * (Math.pow(1 + simR, mn) - 1) / simR : simA * mn)) : nwBalance;
-                var bp = nwBalance + simA * mn;
-                simBars.push({ m: mn, fv: bv, principal: bp, juros: bv - bp });
-              }
-              var barMax = simFV > 0 ? simFV : 1;
-              var jurosRatio = simFV > 0 ? simJuros / simFV : 0;
-              return (
-                <div style={S.cardA(BL)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div>
-                      <div style={S.lbl}>{"SIMULADOR DE APORTES"}</div>
-                      <div style={{ ...S.cap, marginTop: 2 }}>{"Juros compostos sobre patrimônio atual"}</div>
-                    </div>
-                    <span style={{ fontSize: 20 }}>{"📈"}</span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-                    <div>
-                      <div style={S.lbl}>{"APORTE/MÊS"}</div>
-                      <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: TM, fontWeight: 600 }}>{"R$"}</span>
-                        <input style={{ ...S.inp, paddingLeft: 26, fontSize: 13 }} value={simAporte} inputMode="decimal"
-                          onChange={function(e) { sSimA(e.target.value); }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div style={S.lbl}>{"TAXA MÊS"}</div>
-                      <div style={{ position: "relative" }}>
-                        <input style={{ ...S.inp, paddingRight: 24, fontSize: 13 }} value={simTaxa} inputMode="decimal"
-                          onChange={function(e) { sSimT(e.target.value); }} />
-                        <span style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: TM, fontWeight: 600 }}>{"%"}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div style={S.lbl}>{"TEMPO (M)"}</div>
-                      <input style={{ ...S.inp, fontSize: 13 }} value={simTempo} inputMode="numeric"
-                        onChange={function(e) { sSimTp(e.target.value); }} />
-                    </div>
-                  </div>
-
-                  <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginBottom: 12, border: "1px solid " + BL + "30" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                      <div style={S.cap}>{"Patrimônio em " + String(simAnos) + " anos"}</div>
-                      <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: BD }}>{fmt(simFV)}</div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
-                      <div style={{ textAlign: "center", padding: "6px 4px", background: "#fff", borderRadius: 6, border: "1px solid " + BR }}>
-                        <div style={{ ...S.cap, marginBottom: 2 }}>{"Patrimônio hoje"}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: T2 }}>{fmt(nwBalance)}</div>
-                      </div>
-                      <div style={{ textAlign: "center", padding: "6px 4px", background: "#fff", borderRadius: 6, border: "1px solid " + BR }}>
-                        <div style={{ ...S.cap, marginBottom: 2 }}>{"Total aportado"}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: BL }}>{fmt(simTotalAport)}</div>
-                      </div>
-                      <div style={{ textAlign: "center", padding: "6px 4px", background: "#fff", borderRadius: 6, border: "1px solid " + BR }}>
-                        <div style={{ ...S.cap, marginBottom: 2 }}>{"Juros gerados"}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: OK }}>{fmt(simJuros > 0 ? simJuros : 0)}</div>
-                      </div>
-                    </div>
-                    <div style={S.lbl}>{"COMPOSIÇÃO DO PATRIMÔNIO FINAL"}</div>
-                    <div style={{ height: 10, borderRadius: 5, overflow: "hidden", display: "flex", marginTop: 4 }}>
-                      <div style={{ width: String(simFV > 0 ? (nwBalance / simFV) * 100 : 0) + "%", background: "#003F5D", transition: "width 0.4s" }} />
-                      <div style={{ width: String(simFV > 0 ? (simTotalAport / simFV) * 100 : 0) + "%", background: "#A3CEEF", transition: "width 0.4s" }} />
-                      <div style={{ flex: 1, background: "#006DB2", transition: "width 0.4s" }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
-                      {[["#003F5D", "Patrimônio atual"], ["#A3CEEF", "Aportes"], ["#006DB2", "Juros (" + pct(jurosRatio) + ")"]].map(function(it) {
-                        return (
-                          <div key={it[1]} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: 2, background: it[0] }} />
-                            <span style={{ fontSize: 9, color: TM }}>{it[1]}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {simBars.length > 0 && (
-                    <div>
-                      <div style={S.lbl}>{"EVOLUÇÃO DO PATRIMÔNIO"}</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 90, marginTop: 6 }}>
-                        {simBars.map(function(bar, idx) {
-                          var totalH = barMax > 0 ? (bar.fv / barMax) * 80 : 0;
-                          var principalH = bar.fv > 0 ? (bar.principal / bar.fv) * totalH : 0;
-                          var jurosH = totalH - principalH;
-                          var lbl = bar.m >= 12 ? String(Math.round(bar.m / 12)) + "a" : String(bar.m) + "m";
-                          return (
-                            <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                              <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden" }}>
-                                <div style={{ height: principalH, background: BL + "80" }} />
-                                <div style={{ height: jurosH, background: OK }} />
-                              </div>
-                              <div style={{ fontSize: 7, color: TM, marginTop: 2 }}>{lbl}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                        {[[BL + "80", "Principal"], [OK, "Juros"]].map(function(it) {
-                          return (
-                            <div key={it[1]} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                              <div style={{ width: 8, height: 8, borderRadius: 2, background: it[0] }} />
-                              <span style={{ fontSize: 9, color: TM }}>{it[1]}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Renda Passiva */}
-            {(function() {
-              var rpTaxa = 0.007;
-              var rpMensal = nwBalance * rpTaxa;
-              var fxTotal = fxd.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-              var coverPct = fxTotal > 0 ? rpMensal / fxTotal : 0;
-              var milestones = fxd.slice().sort(function(a, b) { return a.amount - b.amount; });
-              var coveredFx = [];
-              var remaining2 = rpMensal;
-              milestones.forEach(function(f) {
-                var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
-                if (remaining2 >= myA) { coveredFx.push(f); remaining2 -= myA; }
-              });
-              return (
-                <div style={S.cardA("#7C3AED")}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div>
-                      <div style={S.lbl}>{"RENDA PASSIVA DO PL"}</div>
-                      <div style={{ ...S.cap, marginTop: 2 }}>{"PL atual × 0,7% a.m. (padrão conservador)"}</div>
-                    </div>
-                    <span style={{ fontSize: 20 }}>{"🏦"}</span>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
-                      <div style={S.cap}>{"Renda passiva/mês"}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: BD, fontFamily: "'Montserrat',sans-serif" }}>{fmt(rpMensal)}</div>
-                    </div>
-                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
-                      <div style={S.cap}>{"Cobre " + pct(Math.min(coverPct, 1)) + " das fixas"}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: coverPct >= 1 ? OK : "#7C3AED", fontFamily: "'Montserrat',sans-serif" }}>{fmt(fxTotal)}</div>
-                    </div>
-                  </div>
-                  <PB value={rpMensal} max={Math.max(fxTotal, 1)} color="#7C3AED" noWarn={true} />
-                  {fxd.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={S.lbl}>{"CONTAS QUE JÁ CONSEGUIRIA PAGAR"}</div>
-                      {coveredFx.length === 0 ? (
-                        <div style={{ ...S.cap, marginTop: 6, color: ER }}>{"Ainda não cobre nenhuma conta fixa. Continue investindo!"}</div>
-                      ) : (
-                        <div style={{ marginTop: 6 }}>
-                          {coveredFx.map(function(f) {
-                            var cat2 = cats.find(function(c) { return c.id === f.cat; });
-                            var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
-                            return (
-                              <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid #F0F0F0" }}>
-                                <span style={{ color: OK, fontSize: 12 }}>{"✅"}</span>
-                                <span style={{ fontSize: 12, color: T3, flex: 1 }}>{cat2 ? cat2.icon + " " : ""}{f.name}</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmt(myA)}</span>
-                              </div>
-                            );
-                          })}
-                          <div style={{ marginTop: 8, padding: "8px 10px", background: "#F0FDF4", borderRadius: 6, border: "1px solid #86EFAC" }}>
-                            <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>
-                              {"💡 Com " + fmt(nwBalance) + " investido você já paga " + String(coveredFx.length) + " conta" + (coveredFx.length > 1 ? "s" : "") + " fixa" + (coveredFx.length > 1 ? "s" : "") + " todo mês — sem trabalhar."}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {coveredFx.length < fxd.length && (
-                        <div style={{ marginTop: 8 }}>
-                          <div style={S.lbl}>{"🎮 PRÓXIMAS CONQUISTAS"}</div>
-                          <div style={{ ...S.cap, marginBottom: 8 }}>{"Da menor para a maior — tangibilize o caminho"}</div>
-                          {(function() {
-                            var uncovered = fxd.filter(function(f) { return coveredFx.indexOf(f) < 0; })
-                              .map(function(f2) {
-                                var myA2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
-                                var plNeeded2 = Math.ceil(myA2 / rpTaxa);
-                                return { f: f2, myA: myA2, plNeeded: plNeeded2, rpGerada: plNeeded2 * rpTaxa };
-                              })
-                              .filter(function(item) { return item.plNeeded > nwBalance; })
-                              .sort(function(a, b) { return a.myA - b.myA; });
-                            if (uncovered.length === 0) return (
-                              <div style={{ textAlign: "center", padding: "12px 0", color: OK, fontSize: 12, fontWeight: 600 }}>{"🏆 Você já cobre todas as contas fixas com sua renda passiva!"}</div>
-                            );
-                            return uncovered.slice(0, 5).map(function(item) {
-                              var faltaPL = item.plNeeded - nwBalance;
-                              var progressPct = Math.min(nwBalance / item.plNeeded, 1);
-                              var cat3 = cats.find(function(c) { return c.id === item.f.cat; });
-                              return (
-                                <div key={item.f.id} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                      <span style={{ fontSize: 16 }}>{cat3 ? cat3.icon : "💳"}</span>
-                                      <div>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: TX }}>{item.f.name}</div>
-                                        <div style={S.cap}>{fmt(item.myA) + "/mês"}</div>
-                                      </div>
-                                    </div>
-                                    <div style={{ textAlign: "right" }}>
-                                      <div style={{ fontSize: 11, fontWeight: 700, color: PETR }}>{"PL: " + fmt(item.plNeeded)}</div>
-                                      <div style={{ fontSize: 10, color: TEAL, fontWeight: 600 }}>{"→ gera " + fmt(item.rpGerada) + "/mês"}</div>
-                                      <div style={{ ...S.cap, color: ER }}>{"falta " + fmt(faltaPL) + " no PL"}</div>
-                                    </div>
-                                  </div>
-                                  <div style={{ height: 6, background: BR, borderRadius: 3, overflow: "hidden" }}>
-                                    <div style={{ width: pct(progressPct), height: "100%", background: TEAL, borderRadius: 3, transition: "width 0.5s" }} />
-                                  </div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                                    <span style={{ fontSize: 9, color: TM }}>{fmt(nwBalance) + " atual"}</span>
-                                    <span style={{ fontSize: 9, color: TM }}>{pct(progressPct) + " do caminho"}</span>
-                                  </div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {fxd.length === 0 && (
-                    <div style={{ ...S.cap, textAlign: "center", padding: 12, color: TM }}>{"Cadastre contas fixas para ver quais o seu PL já consegue pagar."}</div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Termômetro de Liberdade Financeira */}
-            {(function() {
-              var rpTaxa2 = 0.007;
-              var rpMensal2 = nwBalance * rpTaxa2;
-              var ifTargetVal = parseFloat(String(ifTarget).replace(",", ".")) || 0;
-              var totalExp = ifTargetVal > 0 ? ifTargetVal : (totDb > 0 ? totDb : totalInc * 0.75);
-              var fiPct = totalExp > 0 ? Math.min(rpMensal2 / totalExp, 1) : 0;
-              var plFor100 = totalExp > 0 ? Math.ceil(totalExp / rpTaxa2) : 0;
-              var plFor25 = Math.ceil(plFor100 * 0.25);
-              var plFor50 = Math.ceil(plFor100 * 0.5);
-              var milestones2 = [
-                { pct: 0.25, label: "25% IF", desc: "Renda passiva cobre 1/4 dos gastos", color: "#60A5FA" },
-                { pct: 0.50, label: "50% IF", desc: "Meio caminho andado", color: WN },
-                { pct: 0.75, label: "75% IF", desc: "Quase lá!", color: "#A78BFA" },
-                { pct: 1.00, label: "🏆 IF Total", desc: "Liberdade financeira completa", color: OK },
-              ];
-              var nextMilestone = milestones2.find(function(m) { return fiPct < m.pct; }) || milestones2[3];
-              var plToNext = Math.max(0, Math.ceil((nextMilestone.pct * totalExp) / rpTaxa2) - nwBalance);
-              return (
-                <div style={S.cardA(OK)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div>
-                      <div style={S.lbl}>{"TERMÔMETRO DE LIBERDADE FINANCEIRA"}</div>
-                      <div style={{ ...S.cap, marginTop: 2 }}>{"Quanto da sua vida o PL já financia"}</div>
-                    </div>
-                    <button onClick={function() { sShowIfEdit(!showIfEdit); }}
-                      style={{ ...S.btnO, padding: "5px 10px", fontSize: 11 }}>
-                      {showIfEdit ? "Fechar" : "🎯 Definir meta"}
-                    </button>
-                  </div>
-                  {showIfEdit && (
-                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginBottom: 12, border: "1px solid " + BR }}>
-                      <div style={S.lbl}>{"GASTO MENSAL DESEJADO NA IF (R$)"}</div>
-                      <div style={{ ...S.cap, marginBottom: 8 }}>{"Quanto você quer gastar por mês quando atingir a independência financeira"}</div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <input style={{ ...S.inp, flex: 1 }} placeholder="Ex: 15000" value={ifTarget} inputMode="decimal"
-                          onChange={function(e) { sIfTarget(e.target.value); }} />
-                        <button style={S.btn(BD)} onClick={function() { sShowIfEdit(false); }}>{"OK"}</button>
-                        {ifTarget && <button style={S.btnO} onClick={function() { sIfTarget(""); }}>{"Limpar"}</button>}
-                      </div>
-                      {!ifTarget && <div style={{ ...S.cap, marginTop: 6, color: WN }}>{"Sem meta definida — usando gastos do mês atual como referência"}</div>}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                    <div style={{ fontSize: 36, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: fiPct >= 1 ? OK : fiPct >= 0.5 ? WN : BL }}>
-                      {pct(fiPct)}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: TX }}>{"de Independência Financeira"}</div>
-                      <div style={S.cap}>{"Renda passiva " + fmt(rpMensal2) + " / Gastos " + fmt(totalExp)}</div>
-                    </div>
-                  </div>
-                  <div style={{ position: "relative", height: 20, background: "#F0F0F0", borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pct(fiPct), background: fiPct >= 1 ? OK : "linear-gradient(90deg, " + BL + ", #7C3AED)", borderRadius: 10, transition: "width 0.8s ease" }} />
-                    {milestones2.map(function(m) {
-                      return (
-                        <div key={m.label} style={{ position: "absolute", left: pct(m.pct), top: 0, bottom: 0, width: 2, background: "#ffffff60" }} />
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    {milestones2.map(function(m) {
-                      var reached = fiPct >= m.pct;
-                      return (
-                        <div key={m.label} style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: reached ? m.color : TM }}>{m.label}</div>
-                          {reached && <div style={{ fontSize: 9, color: OK }}>{"✅"}</div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {fiPct < 1 && (
-                    <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", border: "1px solid " + BL + "30" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: BD, marginBottom: 4 }}>{"Próximo marco: " + nextMilestone.label}</div>
-                      <div style={S.cap}>{nextMilestone.desc}</div>
-                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={S.cap}>{"PL necessário"}</span>
-                          <div style={{ textAlign: "right" }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{fmt(Math.ceil(nextMilestone.pct * totalExp / rpTaxa2))}</span>
-                            <span style={{ fontSize: 10, color: TEAL, fontWeight: 600, marginLeft: 6 }}>{"→ " + fmt(Math.ceil(nextMilestone.pct * totalExp / rpTaxa2) * rpTaxa2) + "/mês"}</span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={S.cap}>{"Falta acumular"}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: ER }}>{fmt(plToNext)}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={S.cap}>{"Renda passiva atual"}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: TEAL }}>{fmt(rpMensal2) + "/mês"}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {fiPct >= 1 && (
-                    <div style={{ background: "#F0FDF4", borderRadius: 8, padding: "12px", border: "1px solid #86EFAC", textAlign: "center" }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#166534" }}>{"🏆 Parabéns! Você atingiu a Independência Financeira!"}</div>
-                      <div style={{ ...S.cap, color: "#166534", marginTop: 4 }}>{"Sua renda passiva cobre 100% dos seus gastos."}</div>
-                    </div>
-                  )}
-                  {plFor100 > 0 && fiPct < 1 && (
-                    <div style={{ marginTop: 10, ...S.cap, textAlign: "center", color: TM }}>{"IF Total: PL de " + fmt(plFor100) + " gerando " + fmt(totalExp) + "/mês"}</div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Parcelas ativas */}
-            {activeInst.length > 0 && (
-              <div style={S.cardA("#D97706")}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={S.lbl}>{"PARCELAS ATIVAS"}</div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={S.cap}>{"Custo mensal"}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#D97706" }}>{fmt(totalInstMonthly)}</div>
-                  </div>
-                </div>
-                {activeInst.map(function(it, idx) {
-                  var cat2 = cats.find(function(c) { return c.id === it.cat; });
-                  return (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #F0F0F0" }}>
-                      <span style={{ fontSize: 14 }}>{cat2 ? cat2.icon : "💳"}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: TX }}>{it.desc}</div>
-                        <div style={S.cap}>{String(it.remaining) + " parcelas restantes"}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#D97706" }}>{fmt(it.amount) + "/mês"}</div>
-                        <div style={S.cap}>{"Total: " + fmt(it.amount * it.remaining)}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div style={{ borderTop: "1px solid #F0F0F0", paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ ...S.cap, fontWeight: 700 }}>{"Compromisso total"}</span>
-                  <span style={{ fontWeight: 700, color: "#D97706" }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Comparativo */}
-            {prevSp && (
-              <div style={S.card}>
-                <div style={S.lbl}>{"COMPARATIVO " + MA[mo === 0 ? 11 : mo - 1].toUpperCase() + " → " + MA[mo].toUpperCase()}</div>
-                <div style={{ marginTop: 8 }}>
-                  {GR.map(function(g) {
-                    var c2 = spent[g.id]; var pv = prevSp[g.id]; var diff = c2 - pv;
-                    var pD = pv > 0 ? diff / pv : 0;
-                    var isGood = g.id === "investimentos" ? diff > 0 : diff < 0;
-                    return (
-                      <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
-                        <div style={{ width: 4, height: 28, borderRadius: 2, background: g.color }} />
-                        <span style={{ flex: 1, fontSize: 13, color: T3 }}>{g.label}</span>
-                        <span style={{ ...S.cap, minWidth: 70, textAlign: "right" }}>{fmt(pv)}</span>
-                        <span style={{ color: "#BBBBBB" }}>{"→"}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, minWidth: 70, textAlign: "right" }}>{fmt(c2)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: isGood ? OK : ER, minWidth: 55, textAlign: "right" }}>{(diff > 0 ? "▲" : "▼") + " " + pct(Math.abs(pD))}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Gráfico anual */}
-            {chD.length > 0 && (
-              <div style={S.card}>
-                <div style={S.h2}>{"Projeção Anual " + String(yr)}</div>
-                <div style={{ ...S.cap, marginBottom: 10 }}>{"Fixas + parcelas projetadas"}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                  {[["Ess.", "#0D9488"], ["Inv.", "#1A2B5F"], ["Des.", "#D97706"], ["Créd.", "#2563EB"]].map(function(it) {
-                    return (
-                      <div key={it[0]} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: it[0] === "Créd." ? 7 : 2, background: it[1] }} />
-                        <span style={{ fontSize: 10, color: TM }}>{it[0]}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 170, padding: "0 1px", position: "relative" }}>
-                  {chD.map(function(d, idx) {
-                    var bH = chMx > 0 ? (d.td / chMx) * 150 : 0;
-                    var eH = d.td > 0 ? (d.e / d.td) * bH : 0;
-                    var iH = d.td > 0 ? (d.i / d.td) * bH : 0;
-                    var dH = d.td > 0 ? (d.d / d.td) * bH : 0;
-                    var cH = chMx > 0 ? (d.cr / chMx) * 150 : 0;
-                    var cu = idx === mo;
-                    var isH = hovM === idx;
-                    return (
-                      <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", cursor: "pointer" }}
-                        onClick={function() { sHM(isH ? null : idx); }}
-                        onMouseEnter={function() { sHM(idx); }}
-                        onMouseLeave={function() { sHM(null); }}>
-                        <div style={{ position: "absolute", bottom: cH, left: 0, right: 0, height: 2, background: "#2563EB", borderRadius: 1, zIndex: 2 }} />
-                        <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", opacity: d.real ? 1 : 0.35, outline: isH ? "2px solid " + BL : "none", outlineOffset: 1, transformOrigin: "bottom", animation: "growBar 0.6s ease " + String(idx * 0.04) + "s both" }}>
-                          <div style={{ height: eH, background: "#0D9488" }} />
-                          <div style={{ height: iH, background: "#1A2B5F" }} />
-                          <div style={{ height: dH, background: "#D97706" }} />
-                        </div>
-                        <div style={{ fontSize: 8, color: cu ? BD : "#BBBBBB", marginTop: 2, fontWeight: cu ? 800 : 400 }}>{d.mes}</div>
-                        {isH && d.td > 0 && <ChartTip d={d} i={idx} cats={cats} />}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ ...S.lbl, marginTop: 14 }}>{"SALDO MENSAL"}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 2, height: 80 }}>
-                  {chD.map(function(d, idx) {
-                    var h = chMs > 0 ? (Math.abs(d.s) / chMs) * 30 : 0;
-                    var pos = d.s >= 0;
-                    var cu = idx === mo;
-                    return (
-                      <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "center" }}>
-                        <div style={{ height: 30, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                          {pos && <div style={{ width: "100%", height: h, background: OK, borderRadius: "2px 2px 0 0", opacity: cu ? 1 : 0.5 }} />}
-                        </div>
-                        <div style={{ width: "100%", height: 1, background: BR }} />
-                        <div style={{ height: 30, display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
-                          {!pos && <div style={{ width: "100%", height: h, background: ER, borderRadius: "0 0 2px 2px", opacity: cu ? 1 : 0.5 }} />}
-                        </div>
-                        <div style={{ fontSize: 8, color: cu ? BD : "#BBBBBB", fontWeight: cu ? 800 : 400 }}>{d.mes}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ overflowX: "auto", marginTop: 8 }}>
-                  <table style={{ borderCollapse: "collapse", fontSize: 10, width: "100%", minWidth: 430 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: 4, textAlign: "left", color: TM, borderBottom: "1px solid #F0F0F0" }}>{""}</th>
-                        {chD.map(function(d, idx) {
-                          return <th key={idx} style={{ padding: 4, textAlign: "center", color: idx === mo ? BD : TM, borderBottom: "1px solid #F0F0F0", fontWeight: idx === mo ? 800 : 400 }}>{d.mes}</th>;
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[{ l: "Déb.", k: "td", c: ER }, { l: "Créd.", k: "cr", c: OK }, { l: "Saldo", k: "s", c: BD }].map(function(row) {
-                        return (
-                          <tr key={row.k}>
-                            <td style={{ padding: 4, fontWeight: 700, color: row.c, borderBottom: "1px solid #FAFAFA" }}>{row.l}</td>
-                            {chD.map(function(d, idx) {
-                              var val = d[row.k] || 0;
-                              var cellColor = row.k === "s" ? (val >= 0 ? OK : ER) : T3;
-                              return <td key={idx} style={{ padding: 4, textAlign: "center", borderBottom: "1px solid #FAFAFA", color: cellColor, fontWeight: idx === mo ? 700 : 400 }}>{fK(val)}</td>;
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <ProjecaoPrumo
+            cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp}
+            nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
+            totDb={totDb} ifTarget={ifTarget} sIfTarget={sIfTarget}
+            showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
+            activeInst={activeInst} totalInstMonthly={totalInstMonthly}
+            prevSp={prevSp} spent={spent} mo={mo} yr={yr}
+            chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
+            showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
+            simAporte={simAporte} sSimA={sSimA} simTaxa={simTaxa} sSimT={sSimT} simTempo={simTempo} sSimTp={sSimTp}
+            saveCfg={saveCfg}
+          />
         )}
 
-        {/* ═══ ANÁLISE ANUAL ═══ */}
+        {/* ═══ ANÁLISE ═══ */}
         {tab === "analise" && (
-          <div>
-            {/* Comparativo visual mensal */}
-            {chD.length > 0 && (function() {
-              var realMonths = chD.filter(function(d) { return d.real || d.td > 0 || d.cr > 0; });
-              if (realMonths.length === 0) return null;
-              var allMax = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
-              var groups = [
-                { key: "e", label: "Essenciais", color: TEAL },
-                { key: "i", label: "Investimentos", color: BD },
-                { key: "d", label: "Não Essenciais", color: AMB },
-                { key: "cr", label: "Crédito", color: OK },
-              ];
-              return (
-                <div style={S.card}>
-                  <div style={{ ...S.h2, marginBottom: 2 }}>{"Comparativo Visual " + String(yr)}</div>
-                  <div style={{ ...S.cap, marginBottom: 14 }}>{"Somente meses com dados reais"}</div>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-                    {groups.map(function(g) {
-                      return (
-                        <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color }} />
-                          <span style={{ fontSize: 10, color: TM }}>{g.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {chD.map(function(d, idx) {
-                    if (!d.real && d.td === 0 && d.cr === 0) return null;
-                    var isCur = idx === mo;
-                    return (
-                      <div key={idx} style={{ marginBottom: 16, padding: isCur ? "10px 10px 10px 10px" : "6px 0", background: isCur ? BG : "transparent", borderRadius: isCur ? 8 : 0, border: isCur ? "1px solid " + BR : "none" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontFamily: "'Montserrat',sans-serif", fontSize: 13, fontWeight: 700, color: isCur ? BD : T2 }}>{MA[idx]}{isCur ? " ◀" : ""}</span>
-                            {!d.real && <span style={{ ...S.cap, background: WN + "20", color: WN, padding: "1px 6px", borderRadius: 6, fontSize: 9, fontWeight: 700 }}>{"projeção"}</span>}
-                          </div>
-                          <div style={{ display: "flex", gap: 12 }}>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={S.cap}>{"Crédito"}</div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: OK }}>{fmt(d.cr)}</div>
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={S.cap}>{"Débito"}</div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: ER }}>{fmt(d.td)}</div>
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={S.cap}>{"Saldo"}</div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</div>
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          {groups.map(function(g) {
-                            var val = d[g.key] || 0;
-                            if (val === 0) return null;
-                            var barW = allMax > 0 ? (val / allMax) * 100 : 0;
-                            return (
-                              <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 70, fontSize: 10, color: TM, textAlign: "right", flexShrink: 0 }}>{g.label}</div>
-                                <div style={{ flex: 1, height: 20, background: BR, borderRadius: 4, overflow: "hidden" }}>
-                                  <div style={{ width: String(barW) + "%", height: "100%", background: g.color, borderRadius: 4, transition: "width 0.4s", display: "flex", alignItems: "center", paddingLeft: 6 }}>
-                                    {barW > 20 && <span style={{ fontSize: 10, color: "#fff", fontWeight: 600 }}>{fmt(val)}</span>}
-                                  </div>
-                                </div>
-                                {barW <= 20 && <span style={{ fontSize: 10, color: T3, fontWeight: 600, flexShrink: 0 }}>{fmt(val)}</span>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div style={{ borderTop: "2px solid " + BR, paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: BD }}>{"Total ano"}</span>
-                    <div style={{ display: "flex", gap: 16 }}>
-                      {[
-                        { l: "Débito", v: chD.reduce(function(a, d) { return a + d.td; }, 0), c: ER },
-                        { l: "Crédito", v: chD.reduce(function(a, d) { return a + d.cr; }, 0), c: OK },
-                        { l: "Saldo", v: chD.reduce(function(a, d) { return a + d.s; }, 0), c: BD },
-                      ].map(function(it) {
-                        return (
-                          <div key={it.l} style={{ textAlign: "right" }}>
-                            <div style={S.cap}>{it.l}</div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: it.c }}>{fmt(it.v)}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Categoria que mais variou */}
-            {yrD && (
-              <div style={S.cardA(TEAL)}>
-                <div style={S.lbl}>{"DESTAQUES POR CATEGORIA"}</div>
-                <div style={{ ...S.cap, marginBottom: 10, marginTop: 2 }}>{"Maiores variações no ano"}</div>
-                {(function() {
-                  var catStats = cats.map(function(cat2) {
-                    var months = yrD.map(function(mDt) {
-                      return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
-                        .reduce(function(a, t) { return a + myP(t); }, 0);
-                    }).filter(function(v) { return v > 0; });
-                    if (months.length < 3) return null;
-                    var avg2 = months.reduce(function(a, v) { return a + v; }, 0) / months.length;
-                    var max2 = Math.max.apply(null, months);
-                    var min2 = Math.min.apply(null, months);
-                    var variance = max2 - min2;
-                    var maxMo = yrD.findIndex(function(mDt) {
-                      return (mDt.tx || []).filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
-                        .reduce(function(a, t) { return a + myP(t); }, 0) === max2;
-                    });
-                    return { cat: cat2, avg: avg2, max: max2, min: min2, variance: variance, maxMo: maxMo };
-                  }).filter(Boolean).sort(function(a, b) { return b.variance - a.variance; });
-
-                  return catStats.slice(0, 5).map(function(cs) {
-                    var grp = GR.find(function(g) { return g.id === cs.cat.group; });
-                    return (
-                      <div key={cs.cat.id} style={{ padding: "10px 0", borderBottom: "1px solid " + BR }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 16 }}>{cs.cat.icon}</span>
-                          <div style={{ flex: 1 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: TX }}>{cs.cat.name}</span>
-                            <span style={{ ...S.tag(grp ? grp.color : TM), marginLeft: 6 }}>{grp ? grp.label : ""}</span>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: TX }}>{"Média: " + fmt(cs.avg)}</div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <div style={{ flex: 1, background: OK + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
-                            <div style={{ ...S.cap }}>{"Mín"}</div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: OK }}>{fmt(cs.min)}</div>
-                          </div>
-                          <div style={{ flex: 1, background: ER + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
-                            <div style={{ ...S.cap }}>{"Máx (" + (cs.maxMo >= 0 ? MA[cs.maxMo] : "-") + ")"}</div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: ER }}>{fmt(cs.max)}</div>
-                          </div>
-                          <div style={{ flex: 1, background: WN + "12", borderRadius: 6, padding: "4px 8px", textAlign: "center" }}>
-                            <div style={{ ...S.cap }}>{"Variação"}</div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: WN }}>{fmt(cs.variance)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            )}
-
-            {/* AI Insights */}
-            <div style={S.cardA(BD)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div>
-                  <div style={S.lbl}>{"✨ INSIGHTS COM IA"}</div>
-                  <div style={{ ...S.cap, marginTop: 2 }}>{"Análise do seu padrão financeiro anual"}</div>
-                </div>
-                <button
-                  onClick={function() {
-                  sAiLoading(false);
-                }}
-                style={{ ...S.btn(TM), padding: "8px 14px", fontSize: 12, opacity: 0.5, cursor: "not-allowed" }}
-                disabled={true}
-              >
-                {"🧠 Gerar análise"}
-              </button>
-            </div>
-            <div style={{ textAlign: "center", padding: "20px 0" }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{"🧠"}</div>
-              <div style={{ fontSize: 12, color: TM, lineHeight: 1.6 }}>{"Análise inteligente do seu padrão financeiro anual."}</div>
-              <div style={{ marginTop: 8, fontSize: 11, color: WN, fontWeight: 600, background: WN + "15", display: "inline-block", padding: "4px 12px", borderRadius: 12 }}>{"🔜 Em breve"}</div>
-            </div>
-            </div>
-          </div>
+          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrD} cats={cats} myP={myP} />
         )}
 
         {/* ═══ METAS ═══ */}
@@ -2418,79 +2581,108 @@ export default function App() {
           </div>
         )}
 
-        {/* ═══ INPUT ═══ */}
+        {/* ═══ LANÇAMENTOS (INPUT) ═══ */}
         {tab === "input" && (
-          <div>
-            <div style={S.cardA("#0D9488")}>
-              <div style={S.lbl}>{"NOVO GASTO"}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 8 }}>
-                <input style={S.inp} placeholder="Descrição" value={fm.desc} onChange={function(e) { sFm({ ...fm, desc: e.target.value }); }} />
-                <div style={S.g2}>
-                  <input style={S.inp} placeholder="Valor (R$)" value={fm.valor} inputMode="decimal" onChange={function(e) { sFm({ ...fm, valor: e.target.value }); }} />
-                  <input style={S.inp} type="date" value={fm.date} onChange={function(e) { sFm({ ...fm, date: e.target.value }); }} />
+          <div className="prumo-form-grid">
+            {/* NOVO GASTO */}
+            <div className="prumo-card l-neg">
+              <div className="prumo-card-hd" style={{ marginBottom: 4 }}>
+                <div>
+                  <div className="prumo-lbl">{"Novo gasto"}</div>
+                  <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Adicionar despesa"}</h2>
                 </div>
-                <div style={S.g2}>
-                  <CatS value={fm.cat} onChange={function(e) { sFm({ ...fm, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
-                  <select style={S.inp} value={fm.pay} onChange={function(e) { sFm({ ...fm, pay: e.target.value }); }}>
+              </div>
+              <div className="prumo-form">
+                <input className="prumo-input" placeholder="Descrição (ex: Mercado Pão de Açúcar)" value={fm.desc} onChange={function(e) { sFm({ ...fm, desc: e.target.value }); }} />
+                <div className="prumo-grid-2">
+                  <input className="prumo-input mono right" placeholder="0,00" value={fm.valor} inputMode="decimal" onChange={function(e) { sFm({ ...fm, valor: e.target.value }); }} />
+                  <input className="prumo-input" type="date" value={fm.date} onChange={function(e) { sFm({ ...fm, date: e.target.value }); }} />
+                </div>
+                <div className="prumo-grid-2">
+                  <CatS prumo value={fm.cat} onChange={function(e) { sFm({ ...fm, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
+                  <select className="prumo-input" value={fm.pay} onChange={function(e) { sFm({ ...fm, pay: e.target.value }); }}>
                     {PAYS.map(function(p) { return <option key={p}>{p}</option>; })}
                   </select>
                 </div>
-                <input style={{ ...S.inp, fontSize: 13 }} placeholder="Nota (opcional)" value={fm.note} onChange={function(e) { sFm({ ...fm, note: e.target.value }); }} />
-                <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer" }}>
-                  <input type="checkbox" checked={fm.hs} style={S.ck} onChange={function(e) { sFm({ ...fm, hs: e.target.checked }); }} />{"Dividir"}
-                </label>
-                {fm.hs && <SE splits={fm.sp} onChange={function(s) { sFm({ ...fm, sp: s }); }} />}
-                <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer" }}>
-                  <input type="checkbox" checked={fm.reimb} style={S.ck} onChange={function(e) { sFm({ ...fm, reimb: e.target.checked }); }} />{"Reembolsado"}
-                </label>
-                <div style={S.g2}>
-                  <input style={S.inp} placeholder="Parcela atual" value={fm.ic} onChange={function(e) { sFm({ ...fm, ic: e.target.value }); }} />
-                  <input style={S.inp} placeholder="Total parcelas" value={fm.it} onChange={function(e) { sFm({ ...fm, it: e.target.value }); }} />
+                <input className="prumo-input" style={{ fontSize: 13 }} placeholder="Nota (opcional)" value={fm.note} onChange={function(e) { sFm({ ...fm, note: e.target.value }); }} />
+                <div className="prumo-grid-2">
+                  <input className="prumo-input mono" placeholder="Parcela atual" value={fm.ic} onChange={function(e) { sFm({ ...fm, ic: e.target.value }); }} />
+                  <input className="prumo-input mono" placeholder="Total parcelas" value={fm.it} onChange={function(e) { sFm({ ...fm, it: e.target.value }); }} />
                 </div>
-                <button style={S.btn("#0D9488")} onClick={addTx}>{"Adicionar"}</button>
-                {err && tab === "input" && <div style={{ color: ER, fontSize: 12, fontWeight: 600 }}>{"⚠️ " + err}</div>}
+                <div style={{ display: "flex", gap: 18, flexWrap: "wrap", paddingTop: 4 }}>
+                  <label className="prumo-check">
+                    <input type="checkbox" checked={fm.hs} onChange={function(e) { sFm({ ...fm, hs: e.target.checked }); }} />{"Dividir"}
+                  </label>
+                  <label className="prumo-check">
+                    <input type="checkbox" checked={fm.reimb} onChange={function(e) { sFm({ ...fm, reimb: e.target.checked }); }} />{"Reembolsado"}
+                  </label>
+                </div>
+                {fm.hs && <SE prumo splits={fm.sp} onChange={function(s) { sFm({ ...fm, sp: s }); }} />}
+                {err && tab === "input" && <div className="prumo-form-err">{"⚠️ " + err}</div>}
+                <button className="prumo-btn brand" style={{ padding: "13px 18px", fontSize: 13, marginTop: 2 }} onClick={addTx}>{"Adicionar lançamento"}</button>
               </div>
             </div>
 
-            <div style={S.cardA(BL)}>
-              <div style={S.lbl}>{"CRÉDITO EXTRA"}</div>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
-                <input style={{ ...S.inp, flex: 2, minWidth: 90 }} placeholder="Descrição" value={cf.desc} onChange={function(e) { sCf({ ...cf, desc: e.target.value }); }} />
-                <input style={{ ...S.inp, flex: 1, minWidth: 60 }} placeholder="Valor" value={cf.valor} inputMode="decimal" onChange={function(e) { sCf({ ...cf, valor: e.target.value }); }} />
-                <select style={{ ...S.inp, flex: 1, minWidth: 80 }} value={cf.type} onChange={function(e) { sCf({ ...cf, type: e.target.value }); }}>
-                  {["Bônus", "Variável", "Reembolso", "Outro"].map(function(t) { return <option key={t}>{t}</option>; })}
-                </select>
-                <button style={S.btn(BL)} onClick={addCr}>{"+"}</button>
+            {/* CRÉDITO EXTRA */}
+            <div className="prumo-card l-pos">
+              <div className="prumo-card-hd" style={{ marginBottom: 4 }}>
+                <div>
+                  <div className="prumo-lbl">{"Crédito extra"}</div>
+                  <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Receitas adicionais"}</h2>
+                </div>
               </div>
-              {crs.length > 0 && (
-                <div style={{ marginTop: 6 }}>
-                  {crs.map(function(c) {
-                    return (
-                      <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #F0F0F0", fontSize: 13 }}>
-                        <span style={{ color: T3 }}>{c.desc + " "}<span style={S.tag(BL)}>{c.type}</span></span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span style={{ fontWeight: 700, color: BL }}>{fmt(c.amount)}</span>
-                          <span onClick={function() { rmCr(c.id); }} style={{ cursor: "pointer", color: ER }}>{"×"}</span>
+              <div className="prumo-form">
+                <div className="prumo-grid-3">
+                  <input className="prumo-input" placeholder="Descrição" value={cf.desc} onChange={function(e) { sCf({ ...cf, desc: e.target.value }); }} />
+                  <input className="prumo-input mono right" placeholder="Valor" value={cf.valor} inputMode="decimal" onChange={function(e) { sCf({ ...cf, valor: e.target.value }); }} />
+                  <select className="prumo-input" value={cf.type} onChange={function(e) { sCf({ ...cf, type: e.target.value }); }}>
+                    {["Bônus", "Variável", "Reembolso", "Outro"].map(function(t) { return <option key={t}>{t}</option>; })}
+                  </select>
+                  <button className="prumo-btn-add" onClick={addCr} title="Adicionar crédito">{"+"}</button>
+                </div>
+                {crs.length === 0 ? (
+                  <div className="prumo-cap" style={{ padding: "12px 0 4px" }}>{"Nenhum crédito extra registrado neste mês."}</div>
+                ) : (
+                  <div style={{ marginTop: 4 }}>
+                    {crs.map(function(c) {
+                      return (
+                        <div key={c.id} className="prumo-cred-row">
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: "var(--ink)" }}>{c.desc}</div>
+                            <div style={{ marginTop: 3 }}><span className="prumo-cred-tag">{c.type}</span></div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span className="prumo-num" style={{ color: "var(--pos)", fontSize: 14 }}>{"+" + fmt(c.amount)}</span>
+                            <button className="prumo-icon-x" onClick={function() { rmCr(c.id); }} title="Remover">{"×"}</button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div style={S.cardA("#D97706")}>
-              <div style={S.lbl}>{"IMPORTAR EXTRATO NUBANK"}</div>
+            {/* IMPORTAR CSV NUBANK */}
+            <div className="prumo-card l-accent full">
+              <div className="prumo-card-hd" style={{ marginBottom: 4 }}>
+                <div>
+                  <div className="prumo-lbl">{"Importar extrato Nubank"}</div>
+                  <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>
+                    {!csvR ? "Upload de CSV" : String(csvR.length) + " transações detectadas"}
+                  </h2>
+                </div>
+              </div>
               {!csvR ? (
-                <div style={{ marginTop: 8 }}>
-                  <p style={S.cap}>{"Dedup automático."}</p>
+                <div className="prumo-form">
+                  <div className="prumo-cap">{"Dedup automático. Duplicatas são ignoradas, projeções de parcelas são substituídas pelos lançamentos reais."}</div>
                   <input ref={fr} type="file" accept=".csv" onChange={handleCSV} style={{ display: "none" }} />
-                  <button style={{ ...S.btn("#D97706"), marginTop: 6 }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar CSV"}</button>
+                  <button className="prumo-btn accent" style={{ alignSelf: "flex-start", padding: "11px 18px" }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar CSV"}</button>
                 </div>
               ) : (
-                <div style={{ marginTop: 8 }}>
-                  <p style={{ ...S.cap, marginBottom: 6 }}>{String(csvR.length) + " transações"}</p>
-                  <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                <div className="prumo-form">
+                  <div className="prumo-cap">{"Categorize cada transação antes de importar. Marque ‘Dividir’ se for despesa compartilhada."}</div>
+                  <div style={{ maxHeight: 480, overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
                     {csvR.map(function(row, idx) {
                       var desc = row.title || row["Título"] || row["Descrição"] || row.description || "?";
                       var amt = row.amount || row.Valor || row.valor || "?";
@@ -2498,29 +2690,29 @@ export default function App() {
                       var inst = pi(desc);
                       var c2 = csvSp[row._idx] || { on: false, sp: [{ person: "Duda", pct: 30 }] };
                       return (
-                        <div key={idx} style={{ padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600, color: TX }}>{desc}</div>
-                              <div style={{ display: "flex", gap: 3 }}>
-                                {dt && <span style={S.tag(TM)}>{dt}</span>}
-                                {inst && <span style={S.tag("#7C3AED")}>{"P " + String(inst.c) + "/" + String(inst.t)}</span>}
+                        <div key={idx} className="prumo-csv-row">
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{desc}</div>
+                              <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap" }}>
+                                {dt && <span className="prumo-tag-mono">{dt}</span>}
+                                {inst && <span className="prumo-tag-mono acc">{"P " + String(inst.c) + "/" + String(inst.t)}</span>}
                               </div>
                             </div>
-                            <span style={{ color: "#D97706", fontWeight: 700, fontSize: 16 }}>{amt}</span>
+                            <span className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 15 }}>{amt}</span>
                           </div>
-                          <CatS value={csvC[row._idx] || ""} onChange={function(e) { sCC({ ...csvC, [row._idx]: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
-                          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer", marginTop: 6 }}>
-                            <input type="checkbox" checked={c2.on} style={S.ck} onChange={function(e) { sCSp({ ...csvSp, [row._idx]: { ...c2, on: e.target.checked } }); }} />{"Dividir"}
+                          <CatS prumo value={csvC[row._idx] || ""} onChange={function(e) { sCC({ ...csvC, [row._idx]: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
+                          <label className="prumo-check" style={{ marginTop: 8 }}>
+                            <input type="checkbox" checked={c2.on} onChange={function(e) { sCSp({ ...csvSp, [row._idx]: { ...c2, on: e.target.checked } }); }} />{"Dividir"}
                           </label>
-                          {c2.on && <SE compact splits={c2.sp} onChange={function(s) { sCSp({ ...csvSp, [row._idx]: { ...c2, sp: s } }); }} />}
+                          {c2.on && <SE prumo compact splits={c2.sp} onChange={function(s) { sCSp({ ...csvSp, [row._idx]: { ...c2, sp: s } }); }} />}
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                    <button style={S.btn(OK)} onClick={impAll}>{"✅ Importar"}</button>
-                    <button style={S.btnO} onClick={function() { sCR(null); }}>{"Cancelar"}</button>
+                  <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                    <button className="prumo-btn brand" style={{ flex: 1, padding: "12px 18px" }} onClick={impAll}>{"✓ Importar tudo"}</button>
+                    <button className="prumo-btn ghost" onClick={function() { sCR(null); }}>{"Cancelar"}</button>
                   </div>
                 </div>
               )}
