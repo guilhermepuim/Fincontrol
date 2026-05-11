@@ -341,15 +341,19 @@ select.prumo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='
 .prumo-sim-bar-pos { width: 100%; background: var(--pos); border-radius: 2px 2px 0 0; }
 .prumo-sim-bar-neg { width: 100%; background: var(--neg); border-radius: 0 0 2px 2px; }
 
-/* IF MILESTONES ─────────────────────────────────── */
-.prumo-if-bar { position: relative; height: 22px; background: var(--surface-2); border-radius: 11px; overflow: hidden; margin-bottom: 10px; }
-.prumo-if-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--brand), var(--accent)); border-radius: 11px; transition: width .8s ease; }
+/* IF MILESTONES (refeito v2 — limpo e bem posicionado) ─ */
+.prumo-if-wrap { padding: 4px 0 0; }
+.prumo-if-bar { position: relative; height: 14px; background: var(--surface-2); border-radius: 7px; overflow: visible; }
+.prumo-if-track { position: absolute; inset: 0; border-radius: 7px; overflow: hidden; }
+.prumo-if-fill { height: 100%; background: linear-gradient(90deg, var(--brand), var(--accent)); border-radius: 7px; transition: width .8s ease; }
 .prumo-if-fill.full { background: var(--pos); }
-.prumo-if-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: oklch(1 0 0 / .55); }
-.prumo-if-marks-row { display: flex; justify-content: space-between; padding: 0 0 8px; }
-.prumo-if-mark-lbl { text-align: center; font-size: 10px; font-family: var(--f-mono); font-weight: 600; letter-spacing: .05em; }
-.prumo-if-mark-lbl.reached { color: var(--pos); }
-.prumo-if-mark-lbl.muted { color: var(--ink-3); }
+.prumo-if-pointer { position: absolute; top: -4px; bottom: -4px; width: 4px; background: var(--ink); border-radius: 2px; transform: translateX(-50%); transition: left .8s ease; box-shadow: 0 0 0 3px var(--surface); z-index: 2; }
+.prumo-if-marks { position: relative; height: 28px; margin-top: 10px; }
+.prumo-if-mark-pos { position: absolute; top: 0; transform: translateX(-50%); text-align: center; }
+.prumo-if-mark-pos .tick { width: 1px; height: 5px; background: var(--line-2); margin: 0 auto 3px; }
+.prumo-if-mark-pos .lbl { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; color: var(--ink-3); font-weight: 600; white-space: nowrap; }
+.prumo-if-mark-pos.reached .lbl { color: var(--pos); }
+.prumo-if-mark-pos.reached .tick { background: var(--pos); }
 
 /* MONTH BLOCK (análise visual mensal) ──────────── */
 .prumo-month-block { padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -663,9 +667,40 @@ function DashboardPrumo(props) {
   }
   var saldoDelta = prevSaldo !== null ? saldoLivre - prevSaldo : null;
 
-  /* ─── Reserva (estimativa: saldo investimentos / despesa essencial mensal) ─── */
+  /* ─── Reserva: configurável (atual / média 6m / média 12m / manual) ─── */
+  var yrD = props.yrD;
+  var myP = props.myP;
+  var reservaModo = (cfg && cfg.reservaModo) ? cfg.reservaModo : "current";
+  var reservaManual = (cfg && cfg.reservaManual) ? cfg.reservaManual : 0;
+
+  var calcEssMes = function(mData) {
+    if (!mData) return 0;
+    var txList = mData.tx || [];
+    var sum = 0;
+    txList.forEach(function(t) {
+      if (t.reimbursed || t.src === "proj") return;
+      var c = cats.find(function(cc) { return cc.id === t.cat; });
+      if (c && c.group === "essenciais") sum += myP ? myP(t) : t.amount;
+    });
+    return sum;
+  };
+
+  var avgRecent = function(nMonths) {
+    if (!yrD || yrD.length === 0) return 0;
+    var monthsWithData = yrD.map(calcEssMes).filter(function(v) { return v > 0; });
+    if (monthsWithData.length === 0) return 0;
+    var slice = monthsWithData.slice(-nMonths);
+    return slice.reduce(function(a, v) { return a + v; }, 0) / slice.length;
+  };
+
   var reservaTotal = nw && nw.balance ? nw.balance : 0;
-  var despEssMensal = spent.essenciais > 0 ? spent.essenciais : (totalInc * 0.5);
+  var despEssMensal;
+  if (reservaModo === "avg6") despEssMensal = avgRecent(6);
+  else if (reservaModo === "avg12") despEssMensal = avgRecent(12);
+  else if (reservaModo === "manual" && reservaManual > 0) despEssMensal = reservaManual;
+  else despEssMensal = spent.essenciais;
+  if (!despEssMensal || despEssMensal <= 0) despEssMensal = totalInc * 0.5;
+
   var mesesCobertos = despEssMensal > 0 ? reservaTotal / despEssMensal : 0;
   var reservaPct = Math.min(mesesCobertos / 12, 1) * 100;
   var reservaStatus = "Insuficiente";
@@ -850,7 +885,19 @@ function DashboardPrumo(props) {
 
       {/* RESERVA */}
       <div className="prumo-card l-pos">
-        <div className="prumo-lbl">{"Reserva de emergência"}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+          <div className="prumo-lbl">{"Reserva de emergência"}</div>
+          <select
+            value={reservaModo}
+            onChange={function(e) { saveCfg({ ...cfg, reservaModo: e.target.value }); }}
+            style={{ fontSize: 9, padding: "3px 18px 3px 7px", border: "1px solid var(--line-2)", borderRadius: 6, background: "var(--surface)", color: "var(--ink-3)", fontFamily: "var(--f-mono)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 600, cursor: "pointer", outline: "none", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'><path fill='%2362728a' d='M0 0l4 5 4-5z'/></svg>\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 6px center" }}
+          >
+            <option value="current">{"MÊS ATUAL"}</option>
+            <option value="avg6">{"MÉDIA 6M"}</option>
+            <option value="avg12">{"MÉDIA 12M"}</option>
+            <option value="manual">{"MANUAL"}</option>
+          </select>
+        </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
           <span style={{ fontFamily: "var(--f-display)", fontSize: 38, fontWeight: 500, color: "var(--pos)", lineHeight: 1, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>
             {mesesCobertos.toFixed(1).replace(".", ",")}
@@ -867,13 +914,33 @@ function DashboardPrumo(props) {
           <span className="prumo-cap">{"6m"}</span>
           <span className="prumo-cap" style={{ color: "var(--pos)", fontWeight: 700 }}>{"12m+"}</span>
         </div>
+        {reservaModo === "manual" && (
+          <div style={{ marginTop: 10 }}>
+            <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Definir essencial/mês (manual)"}</div>
+            <div className="prumo-input-affix">
+              <span className="prefix">{"R$"}</span>
+              <input
+                className="prumo-input mono right with-prefix"
+                placeholder="0"
+                inputMode="decimal"
+                defaultValue={reservaManual > 0 ? String(reservaManual).replace(".", ",") : ""}
+                onBlur={function(e) {
+                  var raw = String(e.target.value).replace(/\./g, "").replace(",", ".");
+                  var v = parseFloat(raw);
+                  saveCfg({ ...cfg, reservaManual: isNaN(v) ? 0 : v });
+                }}
+                style={{ fontSize: 12, padding: "8px 11px 8px 30px" }}
+              />
+            </div>
+          </div>
+        )}
         <div style={{ borderTop: "1px solid var(--line)", marginTop: 12, paddingTop: 12, display: "flex", justifyContent: "space-between" }}>
           <div>
             <div className="prumo-cap">{"Reserva"}</div>
             <div className="prumo-num" style={{ fontSize: 13 }}>{fmt(reservaTotal)}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className="prumo-cap">{"Essencial/mês"}</div>
+            <div className="prumo-cap">{reservaModo === "avg6" ? "Média 6m" : reservaModo === "avg12" ? "Média 12m" : reservaModo === "manual" ? "Manual" : "Mês atual"}</div>
             <div className="prumo-num" style={{ fontSize: 13 }}>{fmt(despEssMensal)}</div>
           </div>
         </div>
@@ -1031,6 +1098,35 @@ function AnalisePrumo(props) {
   var totCr = chD.reduce(function(a, d) { return a + d.cr; }, 0);
   var totSd = chD.reduce(function(a, d) { return a + d.s; }, 0);
 
+  /* Gastos por dia da semana (ano todo) */
+  var dowStats = [
+    { name: "Dom", total: 0, count: 0, avg: 0 },
+    { name: "Seg", total: 0, count: 0, avg: 0 },
+    { name: "Ter", total: 0, count: 0, avg: 0 },
+    { name: "Qua", total: 0, count: 0, avg: 0 },
+    { name: "Qui", total: 0, count: 0, avg: 0 },
+    { name: "Sex", total: 0, count: 0, avg: 0 },
+    { name: "Sáb", total: 0, count: 0, avg: 0 },
+  ];
+  if (yrD) {
+    yrD.forEach(function(mDt) {
+      (mDt.tx || []).forEach(function(t) {
+        if (t.reimbursed || t.src === "proj" || !t.date) return;
+        var c = cats.find(function(cc) { return cc.id === t.cat; });
+        if (c && c.group === "investimentos") return;
+        var d = new Date(t.date);
+        if (isNaN(d.getTime())) return;
+        var dow = d.getDay();
+        var v = myP(t);
+        dowStats[dow].total += v;
+        dowStats[dow].count += 1;
+      });
+    });
+    dowStats.forEach(function(s) { s.avg = s.count > 0 ? s.total / s.count : 0; });
+  }
+  var dowMax = Math.max.apply(null, dowStats.map(function(d) { return d.total; }).concat([1]));
+  var dowTopIdx = dowStats.reduce(function(idx, d, i) { return d.total > dowStats[idx].total ? i : idx; }, 0);
+
   /* Destaques por categoria */
   var catStats = [];
   if (yrD) {
@@ -1116,6 +1212,53 @@ function AnalisePrumo(props) {
               <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Débito"}</div><div className="prumo-num" style={{ color: "var(--neg)", fontSize: 13 }}>{fmt(totDb)}</div></div>
               <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Crédito"}</div><div className="prumo-num" style={{ color: "var(--pos)", fontSize: 13 }}>{fmt(totCr)}</div></div>
               <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Saldo"}</div><div className="prumo-num" style={{ color: totSd >= 0 ? "var(--pos)" : "var(--neg)", fontSize: 13 }}>{fmt(totSd)}</div></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gastos por dia da semana (ano todo) */}
+      {yrD && dowStats.some(function(d) { return d.count > 0; }) && (
+        <div className="prumo-card l-warn full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Gastos por dia da semana"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Padrão de consumo no ano"}</h2>
+            </div>
+            <div className="prumo-chip warn">{"Pico: " + dowStats[dowTopIdx].name}</div>
+          </div>
+          <div className="prumo-cap" style={{ marginBottom: 14 }}>{"Investimentos não contam · valores totais do ano"}</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 130, padding: "20px 0 0" }}>
+            {dowStats.map(function(d, idx) {
+              var bH = dowMax > 0 ? (d.total / dowMax) * 110 : 0;
+              var isPeak = idx === dowTopIdx && d.total > 0;
+              return (
+                <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
+                  {d.total > 0 && (
+                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: isPeak ? "var(--ink)" : "var(--ink-3)", fontWeight: isPeak ? 700 : 500, marginBottom: 4, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>{fK(d.total)}</div>
+                  )}
+                  <div style={{ width: "100%", height: bH, minHeight: 3, background: isPeak ? "var(--accent)" : "var(--brand)", borderRadius: "4px 4px 0 0", opacity: isPeak ? 1 : 0.75, transition: "height 0.4s" }} />
+                  <div style={{ fontSize: 10, color: isPeak ? "var(--ink)" : "var(--ink-3)", marginTop: 5, fontWeight: isPeak ? 800 : 600, fontFamily: "var(--f-ui)" }}>{d.name}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 12 }}>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Detalhes por dia"}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+              {dowStats.map(function(d, idx) {
+                if (d.count === 0) return null;
+                return (
+                  <div key={idx} className="prumo-mini-stat" style={{ textAlign: "left", padding: "9px 11px" }}>
+                    <div className="lbl" style={{ textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{d.name}</span>
+                      {idx === dowTopIdx && <span style={{ color: "var(--accent-2)" }}>{"●"}</span>}
+                    </div>
+                    <div className="val" style={{ textAlign: "left", fontSize: 13 }}>{fmt(d.total)}</div>
+                    <div className="prumo-cap" style={{ fontSize: 10, marginTop: 2, fontFamily: "var(--f-mono)" }}>{String(d.count) + " tx · média " + fmt(d.avg)}</div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1414,17 +1557,24 @@ function ProjecaoPrumo(props) {
             <div className="prumo-cap">{"Renda passiva " + fmt(fi.rpMensal) + " / Gastos " + fmt(fi.totalExp)}</div>
           </div>
         </div>
-        <div className="prumo-if-bar">
-          <div className={"prumo-if-fill" + (fi.fiPct >= 1 ? " full" : "")} style={{ width: pct(fi.fiPct) }} />
-          {fi.milestones.map(function(m) { return <div key={m.label} className="prumo-if-mark" style={{ left: pct(m.pct) }} />; })}
-        </div>
-        <div className="prumo-if-marks-row">
-          {fi.milestones.map(function(m) {
-            var reached = fi.fiPct >= m.pct;
-            return (
-              <div key={m.label} className={"prumo-if-mark-lbl " + (reached ? "reached" : "muted")}>{m.label}{reached ? " ✓" : ""}</div>
-            );
-          })}
+        <div className="prumo-if-wrap">
+          <div className="prumo-if-bar">
+            <div className="prumo-if-track">
+              <div className={"prumo-if-fill" + (fi.fiPct >= 1 ? " full" : "")} style={{ width: pct(fi.fiPct) }} />
+            </div>
+            {fi.fiPct > 0 && <div className="prumo-if-pointer" style={{ left: pct(Math.min(fi.fiPct, 1)) }} />}
+          </div>
+          <div className="prumo-if-marks">
+            {fi.milestones.map(function(m) {
+              var reached = fi.fiPct >= m.pct;
+              return (
+                <div key={m.label} className={"prumo-if-mark-pos" + (reached ? " reached" : "")} style={{ left: pct(m.pct) }}>
+                  <div className="tick"></div>
+                  <div className="lbl">{m.label + (reached ? " ✓" : "")}</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
         {fi.fiPct < 1 && (
           <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 12, border: "1px solid var(--line)", marginTop: 10 }}>
@@ -1772,6 +1922,7 @@ function ProjecaoPrumo(props) {
 
 /* ══ VIDA PRUMO (Patrimônio Líquido) ══ */
 function VidaPrumo(props) {
+  var [evolMode, sEvolMode] = useState("monthly");
   var cfg = props.cfg;
   var saveCfg = props.saveCfg;
   var nwHistory = props.nwHistory;
@@ -1802,19 +1953,16 @@ function VidaPrumo(props) {
     var v = parseFloat(clean);
     var newPat = { ...pat };
     newPat[field] = isNaN(v) ? 0 : v;
-    // recalcula PL e sincroniza com cfg.netWorth.balance
     var newTotAtivos = (newPat.reserva || 0) + (newPat.invFixed || 0) + (newPat.invVariable || 0) + (newPat.invOther || 0) + (newPat.imoveis || 0) + (newPat.veiculos || 0) + (newPat.outrosAtivos || 0);
     var newTotPassivos = (newPat.financiamentos || 0) + (newPat.emprestimos || 0) + (newPat.cartao || 0) + (newPat.outrosPassivos || 0);
     var newPL = newTotAtivos - newTotPassivos;
     var nw = cfg.netWorth || { balance: 0, history: [] };
-    saveCfg({ ...cfg, patrimonio: newPat, netWorth: { ...nw, balance: newPL } });
-  };
-
-  var snapshot = function() {
-    var nw = cfg.netWorth || { balance: 0, history: [] };
-    var hist = (nw.history || []).slice();
-    hist.push({ date: new Date().toISOString(), balance: pl });
-    saveCfg({ ...cfg, netWorth: { ...nw, balance: pl, history: hist } });
+    // Atualiza histórico: 1 ponto por dia (substitui o do dia se já existe)
+    var today = new Date().toISOString().slice(0, 10);
+    var hist = (nw.history || []).filter(function(h) { return String(h.date).slice(0, 10) !== today; });
+    hist.push({ date: new Date().toISOString(), balance: newPL });
+    hist = hist.slice(-365);
+    saveCfg({ ...cfg, patrimonio: newPat, netWorth: { ...nw, balance: newPL, history: hist } });
   };
 
   // Composição: % de cada bucket no total de ativos
@@ -1826,11 +1974,23 @@ function VidaPrumo(props) {
   var pctVeic = totAtivos > 0 ? (pat.veiculos || 0) / totAtivos * 100 : 0;
   var pctOutrosA = totAtivos > 0 ? (pat.outrosAtivos || 0) / totAtivos * 100 : 0;
 
-  // Histórico recente
-  var hist12 = nwHistory.slice(-12);
-  var maxH = hist12.length > 0 ? Math.max.apply(null, hist12.map(function(h) { return h.balance; }).concat([1])) : 1;
-  var minH = hist12.length > 0 ? Math.min.apply(null, hist12.map(function(h) { return h.balance; })) : 0;
-  var rangeH = maxH - minH || 1;
+  // Histórico agregado (último ponto de cada mês ou ano)
+  var aggregated = (function() {
+    if (!nwHistory || nwHistory.length === 0) return [];
+    var byKey = {};
+    nwHistory.forEach(function(h) {
+      var d = new Date(h.date);
+      if (isNaN(d.getTime())) return;
+      var key = evolMode === "annual"
+        ? String(d.getFullYear())
+        : String(d.getFullYear()) + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      byKey[key] = { key: key, date: h.date, balance: h.balance };
+    });
+    return Object.values(byKey).sort(function(a, b) { return a.key.localeCompare(b.key); });
+  })();
+  var aggMax = aggregated.length > 0 ? Math.max.apply(null, aggregated.map(function(h) { return h.balance; }).concat([1])) : 1;
+  var aggMin = aggregated.length > 0 ? Math.min.apply(null, aggregated.map(function(h) { return h.balance; })) : 0;
+  var aggRange = aggMax - aggMin || 1;
 
   var inputRow = function(field, label, color) {
     return (
@@ -1864,9 +2024,8 @@ function VidaPrumo(props) {
           <div>
             <div className="prumo-lbl">{"Patrimônio líquido"}</div>
             <div className="prumo-big brand" style={{ marginTop: 6, fontSize: 42 }}>{fmt(pl)}</div>
-            <div className="prumo-cap" style={{ marginTop: 6 }}>{"Ativos − Passivos = PL"}</div>
+            <div className="prumo-cap" style={{ marginTop: 6 }}>{"Ativos − Passivos · atualizado automaticamente"}</div>
           </div>
-          <button className="prumo-btn brand" onClick={snapshot} title="Registrar PL atual no histórico">{"📸 Registrar snapshot"}</button>
         </div>
         <div className="prumo-mini-stat-row" style={{ marginTop: 14 }}>
           <div className="prumo-mini-stat"><div className="lbl">{"Total Ativos"}</div><div className="val pos">{fmt(totAtivos)}</div></div>
@@ -1954,36 +2113,50 @@ function VidaPrumo(props) {
       </div>
 
       {/* EVOLUÇÃO DO PL */}
-      {hist12.length > 1 && (
+      {aggregated.length > 1 && (
         <div className="prumo-card full">
           <div className="prumo-card-hd">
             <div>
               <div className="prumo-lbl">{"Evolução do PL"}</div>
-              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Últimos snapshots"}</h2>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{evolMode === "annual" ? "Por ano" : "Por mês"}</h2>
             </div>
-            <div className="prumo-cap">{String(hist12.length) + " pontos"}</div>
+            <div style={{ display: "flex", gap: 4, background: "var(--surface-2)", padding: 3, borderRadius: 999, border: "1px solid var(--line)" }}>
+              <button
+                onClick={function() { sEvolMode("monthly"); }}
+                style={{ padding: "5px 12px", border: "none", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", background: evolMode === "monthly" ? "var(--ink)" : "transparent", color: evolMode === "monthly" ? "var(--surface)" : "var(--ink-2)", fontFamily: "var(--f-ui)" }}>{"Mensal"}</button>
+              <button
+                onClick={function() { sEvolMode("annual"); }}
+                style={{ padding: "5px 12px", border: "none", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", background: evolMode === "annual" ? "var(--ink)" : "transparent", color: evolMode === "annual" ? "var(--surface)" : "var(--ink-2)", fontFamily: "var(--f-ui)" }}>{"Anual"}</button>
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 120, marginTop: 10 }}>
-            {hist12.map(function(h, idx) {
-              var barH = ((h.balance - minH) / rangeH) * 100 + 8;
-              var isLast = idx === hist12.length - 1;
-              var isUp = idx > 0 && h.balance >= hist12[idx - 1].balance;
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 140, marginTop: 14 }}>
+            {aggregated.map(function(h, idx) {
+              var barH = ((h.balance - aggMin) / aggRange) * 110 + 14;
+              var isLast = idx === aggregated.length - 1;
+              var isUp = idx > 0 && h.balance >= aggregated[idx - 1].balance;
+              var lbl;
+              if (evolMode === "annual") {
+                lbl = h.key;
+              } else {
+                var parts = h.key.split("-");
+                lbl = MS[parseInt(parts[1], 10) - 1].slice(0, 3) + "/" + parts[0].slice(2);
+              }
               return (
-                <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div key={h.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
                   <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "oklch(0.58 0.13 155 / .55)" : "oklch(0.58 0.16 25 / .45)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
-                  <div style={{ fontSize: 9, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 4, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)" }}>{sd(h.date).slice(0, 5)}</div>
+                  <div style={{ fontSize: 9, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 4, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{lbl}</div>
                 </div>
               );
             })}
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11 }}>
-            <span className="prumo-cap">{"Mín: " + fmt(minH)}</span>
-            {hist12.length >= 2 && (
-              <span className={"prumo-chip " + (pl > hist12[0].balance ? "pos" : "neg")}>
-                {(pl > hist12[0].balance ? "▲ +" : "▼ ") + fmt(Math.abs(pl - hist12[0].balance)) + " desde " + sd(hist12[0].date).slice(0, 5)}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 11, flexWrap: "wrap", gap: 8 }}>
+            <span className="prumo-cap">{"Mín: " + fmt(aggMin)}</span>
+            {aggregated.length >= 2 && (
+              <span className={"prumo-chip " + (pl > aggregated[0].balance ? "pos" : "neg")}>
+                {(pl > aggregated[0].balance ? "▲ +" : "▼ ") + fmt(Math.abs(pl - aggregated[0].balance)) + " no período"}
               </span>
             )}
-            <span className="prumo-cap">{"Máx: " + fmt(maxH)}</span>
+            <span className="prumo-cap">{"Máx: " + fmt(aggMax)}</span>
           </div>
         </div>
       )}
@@ -2065,7 +2238,6 @@ export default function App() {
   var [simAporte, sSimA] = useState("1000");
   var [simTaxa, sSimT] = useState("1");
   var [simTempo, sSimTp] = useState("60");
-  var [ifTarget, sIfTarget] = useState("");
   var [showIfEdit, sShowIfEdit] = useState(false);
   var [rollover, setRollover] = useState({});
   var [chatOpen, sChatOpen] = useState(false);
@@ -2089,6 +2261,7 @@ export default function App() {
   }, []);
 
   useEffect(function() {
+    if (!user || !user.uid) return;
     var active = true;
     (async function() {
       sLd(true);
@@ -2103,9 +2276,10 @@ export default function App() {
       sCfg(c); sMd(m); sMp(mp); sPv(pm); sSI(String(c.salary)); setRollover(rv); sLd(false);
     })();
     return function() { active = false; };
-  }, [yr, mo]);
+  }, [yr, mo, user && user.uid]);
 
   useEffect(function() {
+    if (!user || !user.uid) return;
     var active = true;
     (async function() {
       var r = [];
@@ -2115,11 +2289,14 @@ export default function App() {
       if (active) sYrD(r);
     })();
     return function() { active = false; };
-  }, [yr, mo]);
+  }, [yr, mo, user && user.uid]);
 
   var saveMd = useCallback(function(d) { sMd(d); sv("fc2-m-" + mK, d); }, [mK]);
   var saveCfg = useCallback(function(c) { sCfg(c); sv("fc2-cfg", c); }, []);
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
+
+  var ifTarget = (cfg && cfg.ifTarget) ? cfg.ifTarget : "";
+  var sIfTarget = function(v) { saveCfg({ ...cfg, ifTarget: v }); };
 
   if (user === undefined) {
     return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
@@ -2689,9 +2866,9 @@ export default function App() {
             cfg={cfg} sal={sal} totalInc={totalInc} extraCr={extraCr} bud={bud} budWithRollover={budWithRollover}
             spent={spent} prevSp={prevSp} GR={GR} cats={cats} spC={spC} totDb={totDb}
             savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd} fs={fs}
-            md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo}
+            md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
             sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg} DS={DS}
-            nw={nw} monthlyInvest={monthlyInvest}
+            nw={nw} monthlyInvest={monthlyInvest} yrD={yrD} myP={myP}
           />
         )}
 
