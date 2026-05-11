@@ -670,6 +670,7 @@ function DashboardPrumo(props) {
   /* ─── Reserva: configurável (atual / média 6m / média 12m / manual) ─── */
   var yrD = props.yrD;
   var myP = props.myP;
+  var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
   var reservaModo = (cfg && cfg.reservaModo) ? cfg.reservaModo : "current";
   var reservaManual = (cfg && cfg.reservaManual) ? cfg.reservaManual : 0;
 
@@ -693,7 +694,11 @@ function DashboardPrumo(props) {
     return slice.reduce(function(a, v) { return a + v; }, 0) / slice.length;
   };
 
-  var reservaTotal = nw && nw.balance ? nw.balance : 0;
+  // RESERVA puramente de patrimonio.reserva (não usa PL total)
+  var reservaTotal = pat.reserva || 0;
+  // Base que gera renda passiva no termômetro IF: pat.invVariable
+  var pBaseIncome = pat.invVariable || 0;
+
   var despEssMensal;
   if (reservaModo === "avg6") despEssMensal = avgRecent(6);
   else if (reservaModo === "avg12") despEssMensal = avgRecent(12);
@@ -775,7 +780,7 @@ function DashboardPrumo(props) {
   };
 
   /* ─── Termômetro IF ─── */
-  var rendaPassiva = reservaTotal * 0.007;
+  var rendaPassiva = pBaseIncome * 0.007;
   var ifPct = despEssMensal > 0 ? Math.min(rendaPassiva / despEssMensal, 1) * 100 : 0;
   var ifFillPct = Math.max(0, Math.min(100, ifPct));
 
@@ -1350,9 +1355,9 @@ function calcSimAportes(nwBalance, simAporte, simTaxa, simTempo) {
   return { simA: simA, simR: simR, simN: simN, simFV: simFV, simTotalAport: simTotalAport, simJuros: simJuros, simAnos: simAnos, simBars: simBars, barMax: barMax, jurosRatio: jurosRatio };
 }
 
-function calcRendaPassiva(nwBalance, fxd, spt) {
+function calcRendaPassiva(pBase, fxd, spt) {
   var rpTaxa = 0.007;
-  var rpMensal = nwBalance * rpTaxa;
+  var rpMensal = pBase * rpTaxa;
   var fxTotal = fxd.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
   var coverPct = fxTotal > 0 ? rpMensal / fxTotal : 0;
   var milestones = fxd.slice().sort(function(a, b) { return a.amount - b.amount; });
@@ -1368,14 +1373,14 @@ function calcRendaPassiva(nwBalance, fxd, spt) {
       var plNeeded2 = Math.ceil(myA2 / rpTaxa);
       return { f: f2, myA: myA2, plNeeded: plNeeded2, rpGerada: plNeeded2 * rpTaxa };
     })
-    .filter(function(item) { return item.plNeeded > nwBalance; })
+    .filter(function(item) { return item.plNeeded > pBase; })
     .sort(function(a, b) { return a.myA - b.myA; });
   return { rpTaxa: rpTaxa, rpMensal: rpMensal, fxTotal: fxTotal, coverPct: coverPct, coveredFx: coveredFx, uncovered: uncovered };
 }
 
-function calcIF(nwBalance, totDb, totalInc, ifTarget) {
+function calcIF(pBase, totDb, totalInc, ifTarget) {
   var rpTaxa = 0.007;
-  var rpMensal = nwBalance * rpTaxa;
+  var rpMensal = pBase * rpTaxa;
   var ifTargetVal = parseFloat(String(ifTarget).replace(",", ".")) || 0;
   var totalExp = ifTargetVal > 0 ? ifTargetVal : (totDb > 0 ? totDb : totalInc * 0.75);
   var fiPct = totalExp > 0 ? Math.min(rpMensal / totalExp, 1) : 0;
@@ -1387,7 +1392,7 @@ function calcIF(nwBalance, totDb, totalInc, ifTarget) {
     { pct: 1.00, label: "IF Total", desc: "Liberdade financeira completa" },
   ];
   var nextMilestone = milestones2.find(function(m) { return fiPct < m.pct; }) || milestones2[3];
-  var plToNext = Math.max(0, Math.ceil((nextMilestone.pct * totalExp) / rpTaxa) - nwBalance);
+  var plToNext = Math.max(0, Math.ceil((nextMilestone.pct * totalExp) / rpTaxa) - pBase);
   return { rpMensal: rpMensal, totalExp: totalExp, fiPct: fiPct, plFor100: plFor100, milestones: milestones2, nextMilestone: nextMilestone, plToNext: plToNext };
 }
 
@@ -1431,8 +1436,10 @@ function ProjecaoPrumo(props) {
   var saveCfg = props.saveCfg;
 
   var sim = calcSimAportes(nwBalance, simAporte, simTaxa, simTempo);
-  var rp = calcRendaPassiva(nwBalance, fxd, spt);
-  var fi = calcIF(nwBalance, totDb, totalInc, ifTarget);
+  var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
+  var pBase = pat.invVariable || 0;
+  var rp = calcRendaPassiva(pBase, fxd, spt);
+  var fi = calcIF(pBase, totDb, totalInc, ifTarget);
 
   var hist = nwHistory.slice(-12);
   var maxV = nwHistory.length > 0 ? Math.max.apply(null, hist.map(function(h) { return h.balance; }).concat([1])) : 1;
@@ -1477,7 +1484,7 @@ function ProjecaoPrumo(props) {
         )}
         <div className="prumo-mini-stat-row cols-2" style={{ marginTop: 10 }}>
           <div className="prumo-mini-stat"><div className="lbl">{"Investido este mês"}</div><div className="val brand">{fmt(invSp)}</div></div>
-          <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva (0,7%)"}</div><div className="val pos">{fmt(nwBalance * 0.007) + "/m"}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva (RV · 0,7%)"}</div><div className="val pos">{fmt(pBase * 0.007) + "/m"}</div></div>
         </div>
         {nwHistory.length > 1 && (
           <div style={{ marginTop: 14 }}>
@@ -1581,7 +1588,7 @@ function ProjecaoPrumo(props) {
             <div className="prumo-lbl" style={{ color: "var(--brand)", marginBottom: 6 }}>{"Próximo marco: " + fi.nextMilestone.label}</div>
             <div className="prumo-cap" style={{ marginBottom: 8 }}>{fi.nextMilestone.desc}</div>
             <div className="prumo-mini-stat-row">
-              <div className="prumo-mini-stat"><div className="lbl">{"PL necessário"}</div><div className="val brand">{fmt(Math.ceil(fi.nextMilestone.pct * fi.totalExp / 0.007))}</div></div>
+              <div className="prumo-mini-stat"><div className="lbl">{"RV necessária"}</div><div className="val brand">{fmt(Math.ceil(fi.nextMilestone.pct * fi.totalExp / 0.007))}</div></div>
               <div className="prumo-mini-stat"><div className="lbl">{"Falta acumular"}</div><div className="val neg">{fmt(fi.plToNext)}</div></div>
               <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva"}</div><div className="val pos">{fmt(fi.rpMensal) + "/m"}</div></div>
             </div>
@@ -1594,7 +1601,7 @@ function ProjecaoPrumo(props) {
           </div>
         )}
         {fi.plFor100 > 0 && fi.fiPct < 1 && (
-          <div className="prumo-cap" style={{ textAlign: "center", marginTop: 10, fontSize: 11 }}>{"IF Total: PL de " + fmt(fi.plFor100) + " gerando " + fmt(fi.totalExp) + "/mês"}</div>
+          <div className="prumo-cap" style={{ textAlign: "center", marginTop: 10, fontSize: 11 }}>{"IF Total: RV de " + fmt(fi.plFor100) + " gerando " + fmt(fi.totalExp) + "/mês"}</div>
         )}
       </div>
 
@@ -1678,10 +1685,11 @@ function ProjecaoPrumo(props) {
         <div className="prumo-card-hd">
           <div>
             <div className="prumo-lbl">{"Renda passiva do PL"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"PL × 0,7% a.m. (conservador)"}</h2>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Renda variável × 0,7% a.m."}</h2>
           </div>
           <span style={{ fontSize: 22 }}>{"🏦"}</span>
         </div>
+        <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Base de cálculo: " + fmt(pBase) + " em renda variável (definido na aba Vida)"}</div>
         <div className="prumo-mini-stat-row cols-2" style={{ marginBottom: 12 }}>
           <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva/mês"}</div><div className="val brand" style={{ fontSize: 18 }}>{fmt(rp.rpMensal)}</div></div>
           <div className="prumo-mini-stat"><div className="lbl">{"Total fixas/mês"}</div><div className="val" style={{ color: rp.coverPct >= 1 ? "var(--pos)" : "var(--ink)", fontSize: 18 }}>{fmt(rp.fxTotal)}</div></div>
@@ -1694,7 +1702,7 @@ function ProjecaoPrumo(props) {
           <div style={{ marginTop: 14 }}>
             <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Contas que já conseguiria pagar"}</div>
             {rp.coveredFx.length === 0 ? (
-              <div className="prumo-cap" style={{ color: "var(--neg)" }}>{"Ainda não cobre nenhuma fixa. Continue investindo."}</div>
+              <div className="prumo-cap" style={{ color: "var(--neg)" }}>{"Ainda não cobre nenhuma fixa. Continue investindo em renda variável."}</div>
             ) : (
               <div>
                 {rp.coveredFx.map(function(f) {
@@ -1710,7 +1718,7 @@ function ProjecaoPrumo(props) {
                 })}
                 <div className="prumo-success" style={{ marginTop: 10 }}>
                   <div className="prumo-success-strong">
-                    {"💡 Com " + fmt(nwBalance) + " investido você já paga " + String(rp.coveredFx.length) + " conta" + (rp.coveredFx.length > 1 ? "s" : "") + " fixa" + (rp.coveredFx.length > 1 ? "s" : "") + " todo mês — sem trabalhar."}
+                    {"💡 Com " + fmt(pBase) + " em renda variável você já paga " + String(rp.coveredFx.length) + " conta" + (rp.coveredFx.length > 1 ? "s" : "") + " fixa" + (rp.coveredFx.length > 1 ? "s" : "") + " todo mês — sem trabalhar."}
                   </div>
                 </div>
               </div>
@@ -1718,10 +1726,10 @@ function ProjecaoPrumo(props) {
             {rp.uncovered.length > 0 && (
               <div style={{ marginTop: 16 }}>
                 <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"🎯 Próximas conquistas"}</div>
-                <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Da menor para a maior — tangibilize o caminho"}</div>
+                <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Da menor para a maior — quanto falta acumular em RV"}</div>
                 {rp.uncovered.slice(0, 5).map(function(item) {
-                  var faltaPL = item.plNeeded - nwBalance;
-                  var progressPct = Math.min(nwBalance / item.plNeeded, 1);
+                  var faltaPL = item.plNeeded - pBase;
+                  var progressPct = Math.min(pBase / item.plNeeded, 1);
                   var cat3 = cats.find(function(c) { return c.id === item.f.cat; });
                   return (
                     <div key={item.f.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
@@ -1734,7 +1742,7 @@ function ProjecaoPrumo(props) {
                           </div>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <div className="prumo-num" style={{ color: "var(--brand)", fontSize: 12 }}>{"PL: " + fmt(item.plNeeded)}</div>
+                          <div className="prumo-num" style={{ color: "var(--brand)", fontSize: 12 }}>{"RV: " + fmt(item.plNeeded)}</div>
                           <div className="prumo-cap" style={{ color: "var(--neg)", fontSize: 10 }}>{"falta " + fmt(faltaPL)}</div>
                         </div>
                       </div>
@@ -1742,7 +1750,7 @@ function ProjecaoPrumo(props) {
                         <i style={{ width: pct(progressPct), background: "var(--pos)" }} />
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 9, fontFamily: "var(--f-mono)", color: "var(--ink-3)" }}>
-                        <span>{fmt(nwBalance) + " atual"}</span>
+                        <span>{fmt(pBase) + " atual"}</span>
                         <span>{pct(progressPct) + " do caminho"}</span>
                       </div>
                     </div>
