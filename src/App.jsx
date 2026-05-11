@@ -2172,6 +2172,513 @@ function VidaPrumo(props) {
   );
 }
 
+/* ══ FIXAS PRUMO ══ */
+function FixasPrumo(props) {
+  var cfg = props.cfg;
+  var cats = props.cats;
+  var fxd = props.fxd;
+  var fs = props.fs;
+  var md = props.md;
+  var saveMd = props.saveMd;
+  var ff = props.ff;
+  var sFf = props.sFf;
+  var showFx = props.showFx;
+  var sSFx = props.sSFx;
+  var err = props.err;
+  var sErr = props.sErr;
+  var tab = props.tab;
+  var addFx = props.addFx;
+  var rmFx = props.rmFx;
+  var togFP = props.togFP;
+  var spt = props.spt;
+  var gsp = props.gsp;
+  var addPart = props.addPart;
+  var pO = props.pO;
+  var sPO = props.sPO;
+  var pV = props.pV;
+  var sPV = props.sPV;
+  var fxPd = props.fxPd;
+  var fxMy = props.fxMy;
+  var mo = props.mo;
+
+  return (
+    <div className="prumo-form-grid">
+      {/* HEADER + STATS + FORM */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Contas fixas · " + MS[mo]}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{fxd.length > 0 ? String(fxPd) + " de " + String(fxd.length) + " pagas" : "Nenhuma conta cadastrada"}</h2>
+          </div>
+          <button className={"prumo-btn " + (showFx ? "ghost" : "brand")} onClick={function() { sSFx(!showFx); sErr(""); }}>{showFx ? "Cancelar" : "+ Nova fixa"}</button>
+        </div>
+        {fxd.length > 0 && (
+          <div className="prumo-mini-stat-row cols-2" style={{ marginTop: 10 }}>
+            <div className="prumo-mini-stat"><div className="lbl">{"Progresso do mês"}</div><div className="val brand">{pct(fxd.length > 0 ? fxPd / fxd.length : 0)}</div></div>
+            <div className="prumo-mini-stat"><div className="lbl">{"Total/mês (sua parte)"}</div><div className="val">{fmt(fxMy)}</div></div>
+          </div>
+        )}
+        {fxd.length > 0 && (
+          <div className="prumo-meter" style={{ marginTop: 12, height: 8 }}>
+            <i style={{ width: pct(fxd.length > 0 ? fxPd / fxd.length : 0), background: "var(--brand)" }} />
+          </div>
+        )}
+        {showFx && (
+          <div style={{ background: "var(--surface-2)", borderRadius: 14, padding: 16, marginTop: 14, border: "1px solid var(--line)" }}>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Nova conta fixa"}</div>
+            <div className="prumo-form">
+              <div className="prumo-grid-2">
+                <input className="prumo-input" placeholder="Nome (ex: Aluguel)" value={ff.name} onChange={function(e) { sFf({ ...ff, name: e.target.value }); }} />
+                <input className="prumo-input mono right" placeholder="0,00" value={ff.amount} inputMode="decimal" onChange={function(e) { sFf({ ...ff, amount: e.target.value }); }} />
+              </div>
+              <div className="prumo-grid-2">
+                <CatS prumo value={ff.cat} onChange={function(e) { sFf({ ...ff, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
+                <select className="prumo-input" value={ff.pay} onChange={function(e) { sFf({ ...ff, pay: e.target.value }); }}>
+                  {PAYS.map(function(p) { return <option key={p}>{p}</option>; })}
+                </select>
+              </div>
+              <div className="prumo-lbl" style={{ marginTop: 4 }}>{"Modo de acompanhamento"}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[{ m: "budget", l: "Orçamento", d: "Paga em PIX/Boleto, acompanha valor pago" }, { m: "checklist", l: "Checklist", d: "Cartão de crédito, só marca como pago" }].map(function(o) {
+                  var active = (ff.mode || "budget") === o.m;
+                  return (
+                    <div key={o.m} onClick={function() { sFf({ ...ff, mode: o.m }); }}
+                      style={{ flex: 1, padding: 12, borderRadius: 10, cursor: "pointer", border: active ? "2px solid var(--brand)" : "1px solid var(--line)", background: active ? "var(--brand-tint)" : "var(--surface)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--brand)" : "var(--ink)" }}>{o.l}</div>
+                      <div className="prumo-cap" style={{ fontSize: 11, marginTop: 2 }}>{o.d}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <label className="prumo-check" style={{ marginTop: 4 }}>
+                <input type="checkbox" checked={ff.hs} onChange={function(e) { sFf({ ...ff, hs: e.target.checked }); }} />{"Dividir com outra pessoa"}
+              </label>
+              {ff.hs && <SE prumo splits={ff.sp} onChange={function(s) { sFf({ ...ff, sp: s }); }} />}
+              {err && tab === "fixas" && <div className="prumo-form-err">{"⚠️ " + err}</div>}
+              <button className="prumo-btn brand" style={{ padding: "12px 18px", fontSize: 13, marginTop: 2 }} onClick={addFx}>{"Salvar fixa"}</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* LISTA DE FIXAS */}
+      {fxd.length === 0 ? (
+        <div className="prumo-card full" style={{ textAlign: "center", padding: 32 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{"📋"}</div>
+          <div className="prumo-cap">{"Nenhuma conta fixa cadastrada. Use o botão acima para adicionar a primeira."}</div>
+        </div>
+      ) : (
+        <div className="prumo-card full" style={{ padding: 0 }}>
+          <div style={{ padding: "16px 18px 8px" }}>
+            <div className="prumo-lbl">{"Suas fixas deste mês"}</div>
+          </div>
+          {fxd.map(function(f) {
+            var cat2 = cats.find(function(c) { return c.id === f.cat; });
+            var ip = fs[f.id] === "paid";
+            var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
+            var sp2 = gsp(f);
+            var mode = f.mode || "budget";
+            var parts = fs[f.id + "_p"] || [];
+            var pSum = parts.reduce(function(a, p) { return a + p.amount; }, 0);
+            var isO = pO === f.id;
+            var partPct = f.amount > 0 ? Math.min(pSum / f.amount, 1) : 0;
+            var remainAmt = Math.max(0, f.amount - pSum);
+            return (
+              <div key={f.id} style={{ padding: "12px 18px", borderTop: "1px solid var(--line)", opacity: ip ? 0.55 : 1, background: ip ? "var(--surface-2)" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <label className="prumo-check" style={{ paddingTop: 2 }}>
+                    <input type="checkbox" checked={ip} onChange={function() { togFP(f.id); }} />
+                  </label>
+                  <div style={{ fontSize: 20, lineHeight: 1, paddingTop: 2 }}>{cat2 ? cat2.icon : "📄"}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, textDecoration: ip ? "line-through" : "none", color: "var(--ink)" }}>{f.name}</span>
+                      <span className={"prumo-chip " + (mode === "budget" ? "pos" : "brand")} style={{ fontSize: 10 }}>{mode === "budget" ? "Orçamento" : "Cartão"}</span>
+                      {sp2.map(function(s, j) {
+                        return <span key={j} className="prumo-chip warn" style={{ fontSize: 10 }}>{"÷ " + s.person + " " + String(s.pct) + "%"}</span>;
+                      })}
+                    </div>
+                    {!ip && mode === "budget" && (
+                      <div style={{ marginTop: 8 }}>
+                        <div className="prumo-meter" style={{ height: 6 }}>
+                          <i style={{ width: pct(partPct), background: partPct >= 1 ? "var(--pos)" : "var(--brand)" }} />
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)" }}>{fmt(pSum) + " pago"}</span>
+                          {remainAmt > 0 ? (
+                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--accent-2)" }}>{"falta " + fmt(remainAmt)}</span>
+                          ) : (
+                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--pos)" }}>{"✓ Quitada"}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div className="prumo-num" style={{ fontSize: 14, color: "var(--ink)" }}>{fmt(f.amount)}</div>
+                    {f.hasSplit && <div className="prumo-cap" style={{ fontSize: 10, color: "var(--brand)" }}>{"Você: " + fmt(myA)}</div>}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    {!ip && mode === "budget" && (
+                      <button onClick={function() { sPO(isO ? null : f.id); sPV(""); }}
+                        style={{ background: isO ? "var(--brand)" : "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: isO ? "var(--surface)" : "var(--brand)", width: 26, height: 26, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "var(--f-ui)" }}
+                        title="Registrar pagamento parcial">{isO ? "×" : "+"}</button>
+                    )}
+                    <button onClick={function() { rmFx(f.id); }} className="prumo-icon-x" title="Remover">{"×"}</button>
+                  </div>
+                </div>
+                {isO && (
+                  <div style={{ display: "flex", gap: 6, marginTop: 10, marginLeft: 56 }}>
+                    <div className="prumo-input-affix" style={{ flex: 1 }}>
+                      <span className="prefix">{"R$"}</span>
+                      <input className="prumo-input mono right with-prefix" placeholder="0,00" value={pV} inputMode="decimal"
+                        autoFocus
+                        onChange={function(e) { sPV(e.target.value); }}
+                        onKeyDown={function(e) { if (e.key === "Enter") addPart(f.id); }} />
+                    </div>
+                    <button className="prumo-btn brand" onClick={function() { addPart(f.id); }}>{"Registrar"}</button>
+                  </div>
+                )}
+                {parts.length > 0 && (
+                  <div style={{ marginLeft: 56, marginTop: 8, paddingLeft: 12, borderLeft: "2px solid var(--line-2)" }}>
+                    {parts.map(function(p, pi3) {
+                      return (
+                        <div key={pi3} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", fontSize: 11 }}>
+                          <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)" }}>{sd(p.date) + " — " + fmt(p.amount)}</span>
+                          <button onClick={function() { saveMd({ ...md, fs: { ...fs, [f.id + "_p"]: parts.filter(function(_, idx2) { return idx2 !== pi3; }) } }); }}
+                            className="prumo-icon-x" style={{ width: 18, height: 18, fontSize: 11 }}>{"×"}</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══ DEVEDORES PRUMO ══ */
+function DevedoresPrumo(props) {
+  var debtors = props.debtors;
+  var df = props.df;
+  var sDf = props.sDf;
+  var showDebt = props.showDebt;
+  var sSDbt = props.sSDbt;
+  var addDebt = props.addDebt;
+  var togFR = props.togFR;
+  var togDR = props.togDR;
+  var togRcv = props.togRcv;
+  var rmD = props.rmD;
+  var mo = props.mo;
+
+  var devEntries = Object.entries(debtors);
+  var totalPending = devEntries.reduce(function(a, e) { return a + e[1].pending; }, 0);
+  var totalAll = devEntries.reduce(function(a, e) { return a + e[1].total; }, 0);
+  var totalReceived = totalAll - totalPending;
+
+  return (
+    <div className="prumo-form-grid">
+      {/* HERO + FORM */}
+      <div className="prumo-card l-warn full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Devedores · " + MS[mo]}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{devEntries.length > 0 ? fmt(totalPending) + " a receber" : "Nenhuma dívida"}</h2>
+          </div>
+          <button className={"prumo-btn " + (showDebt ? "ghost" : "accent")} onClick={function() { sSDbt(!showDebt); }}>{showDebt ? "Cancelar" : "+ Devedor manual"}</button>
+        </div>
+        {devEntries.length > 0 && (
+          <div className="prumo-mini-stat-row" style={{ marginTop: 10 }}>
+            <div className="prumo-mini-stat"><div className="lbl">{"Pessoas"}</div><div className="val">{String(devEntries.length)}</div></div>
+            <div className="prumo-mini-stat"><div className="lbl">{"Pendente"}</div><div className="val warn">{fmt(totalPending)}</div></div>
+            <div className="prumo-mini-stat"><div className="lbl">{"Já recebido"}</div><div className="val pos">{fmt(totalReceived)}</div></div>
+          </div>
+        )}
+        {showDebt && (
+          <div style={{ background: "var(--surface-2)", borderRadius: 14, padding: 16, marginTop: 14, border: "1px solid var(--line)" }}>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Novo devedor manual"}</div>
+            <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Use isso para dívidas que não vêm de splits automáticos de lançamentos"}</div>
+            <div className="prumo-form">
+              <input className="prumo-input" placeholder="Descrição (ex: Empréstimo para João)" value={df.desc} onChange={function(e) { sDf({ ...df, desc: e.target.value }); }} />
+              <div className="prumo-grid-2">
+                <input className="prumo-input mono right" placeholder="0,00" value={df.amount} inputMode="decimal" onChange={function(e) { sDf({ ...df, amount: e.target.value }); }} />
+                <input className="prumo-input" placeholder="Quem deve?" value={df.person} onChange={function(e) { sDf({ ...df, person: e.target.value }); }} />
+              </div>
+              <button className="prumo-btn brand" style={{ padding: "12px 18px", fontSize: 13, marginTop: 2 }} onClick={addDebt}>{"Adicionar"}</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* LISTA */}
+      {devEntries.length === 0 ? (
+        <div className="prumo-card full" style={{ textAlign: "center", padding: 32 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{"🤝"}</div>
+          <div className="prumo-cap">{"Sem dívidas a receber neste mês. Splits de despesas e devedores manuais aparecem aqui."}</div>
+        </div>
+      ) : devEntries.map(function(e2) {
+        var person = e2[0];
+        var data = e2[1];
+        var initial = String(person || "?").charAt(0).toUpperCase();
+        var paidPct = data.total > 0 ? (data.total - data.pending) / data.total : 0;
+        var allDone = data.pending === 0 && data.total > 0;
+        return (
+          <div key={person} className={"prumo-card " + (allDone ? "l-pos" : "l-warn") + " full"}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div className="prumo-dev-av" style={{ width: 42, height: 42, fontSize: 16 }}>{initial}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>{person}</h3>
+                <div className="prumo-cap" style={{ marginTop: 2 }}>{String(data.items.length) + " lançamento" + (data.items.length === 1 ? "" : "s")}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div className="prumo-lbl" style={{ fontSize: 9 }}>{allDone ? "Quitado" : "Pendente"}</div>
+                <div className="prumo-big" style={{ color: allDone ? "var(--pos)" : "var(--accent-2)", fontSize: 26, marginTop: 2 }}>{fmt(data.pending)}</div>
+              </div>
+            </div>
+            <div className="prumo-meter" style={{ height: 8 }}>
+              <i style={{ width: pct(paidPct), background: allDone ? "var(--pos)" : "var(--brand)" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 11 }}>
+              <span className="prumo-cap">{fmt(data.total - data.pending) + " recebido"}</span>
+              <span className="prumo-cap">{pct(paidPct) + " do total"}</span>
+            </div>
+            <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 8 }}>
+              {data.items.map(function(it, idx) {
+                return (
+                  <div key={idx} className="prumo-tx" style={{ opacity: it.rcv ? 0.55 : 1, padding: "10px 0" }}>
+                    <label className="prumo-check">
+                      <input type="checkbox" checked={it.rcv || false}
+                        onChange={function() {
+                          if (it.src === "fx") togFR(it.id);
+                          else if (it.src === "manual") togDR(it.id);
+                          else togRcv(it.id);
+                        }} />
+                    </label>
+                    <div className="prumo-tx-meat">
+                      <div className="prumo-tx-desc" style={{ textDecoration: it.rcv ? "line-through" : "none" }}>{it.desc}</div>
+                      <div style={{ display: "flex", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
+                        {it.src === "fx" && <span className="prumo-chip" style={{ fontSize: 9 }}>{"Conta fixa"}</span>}
+                        {it.src === "manual" && <span className="prumo-chip brand" style={{ fontSize: 9 }}>{"Manual"}</span>}
+                        {!it.src && <span className="prumo-chip warn" style={{ fontSize: 9 }}>{"Split"}</span>}
+                      </div>
+                    </div>
+                    <div className={"prumo-tx-amt"} style={{ color: it.rcv ? "var(--pos)" : "var(--accent-2)" }}>{fmt(it.debt)}</div>
+                    {it.src === "manual" && (
+                      <button onClick={function() { rmD(it.id); }} className="prumo-icon-x">{"×"}</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ══ METAS PRUMO ══ */
+function MetasPrumo(props) {
+  var goals = props.goals;
+  var gf = props.gf;
+  var sGf = props.sGf;
+  var showGoal = props.showGoal;
+  var sSGl = props.sSGl;
+  var addGoal = props.addGoal;
+  var updGS = props.updGS;
+  var updGD = props.updGD;
+  var rmG = props.rmG;
+  var cats = props.cats;
+  var spC = props.spC;
+  var catLimits = props.catLimits;
+  var editLimId = props.editLimId;
+  var sELimId = props.sELimId;
+  var editLimV = props.editLimV;
+  var sELimV = props.sELimV;
+  var setCatLimit = props.setCatLimit;
+
+  var goalsActive = goals.filter(function(g) { return (g.saved || 0) < g.target; });
+  var goalsDone = goals.filter(function(g) { return (g.saved || 0) >= g.target; });
+
+  return (
+    <div className="prumo-form-grid">
+      {/* HERO METAS */}
+      <div className="prumo-card l-accent full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Metas"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{goals.length === 0 ? "Sem metas" : String(goalsActive.length) + " em andamento · " + String(goalsDone.length) + " atingidas"}</h2>
+          </div>
+          <button className={"prumo-btn " + (showGoal ? "ghost" : "accent")} onClick={function() { sSGl(!showGoal); }}>{showGoal ? "Cancelar" : "+ Nova meta"}</button>
+        </div>
+        {showGoal && (
+          <div style={{ background: "var(--surface-2)", borderRadius: 14, padding: 16, marginTop: 14, border: "1px solid var(--line)" }}>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Nova meta"}</div>
+            <div className="prumo-form">
+              <input className="prumo-input" placeholder="Nome da meta (ex: Viagem Europa 2027)" value={gf.name} onChange={function(e) { sGf({ ...gf, name: e.target.value }); }} />
+              <div className="prumo-grid-2">
+                <div>
+                  <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Valor alvo"}</div>
+                  <div className="prumo-input-affix">
+                    <span className="prefix">{"R$"}</span>
+                    <input className="prumo-input mono right with-prefix" placeholder="0,00" value={gf.target} inputMode="decimal" onChange={function(e) { sGf({ ...gf, target: e.target.value }); }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Já guardou"}</div>
+                  <div className="prumo-input-affix">
+                    <span className="prefix">{"R$"}</span>
+                    <input className="prumo-input mono right with-prefix" placeholder="0,00" value={gf.saved} inputMode="decimal" onChange={function(e) { sGf({ ...gf, saved: e.target.value }); }} />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Prazo final"}</div>
+                <input className="prumo-input" type="date" value={gf.deadline} onChange={function(e) { sGf({ ...gf, deadline: e.target.value }); }} />
+              </div>
+              <button className="prumo-btn brand" style={{ padding: "12px 18px", fontSize: 13, marginTop: 2 }} onClick={addGoal}>{"Salvar meta"}</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* LISTA DE METAS */}
+      {goals.length === 0 ? (
+        <div className="prumo-card full" style={{ textAlign: "center", padding: 32 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{"🎯"}</div>
+          <div className="prumo-cap">{"Sem metas ainda. Defina objetivos com prazo para acompanhar o progresso."}</div>
+        </div>
+      ) : goals.map(function(g) {
+        var r = g.target > 0 ? (g.saved || 0) / g.target : 0;
+        var remain = g.target - (g.saved || 0);
+        var done = remain <= 0;
+        var mL = 0;
+        if (g.deadline) {
+          var dl = new Date(g.deadline); var td2 = new Date();
+          mL = Math.max(0, (dl.getFullYear() - td2.getFullYear()) * 12 + (dl.getMonth() - td2.getMonth()));
+        }
+        var mN = mL > 0 && remain > 0 ? remain / mL : 0;
+        return (
+          <div key={g.id} className={"prumo-card " + (done ? "l-pos" : "l-accent")}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ fontFamily: "var(--f-display)", fontSize: 16, fontWeight: 600, margin: 0, color: "var(--ink)" }}>{g.name}</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                  <span className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)", textTransform: "uppercase", letterSpacing: ".08em" }}>{"Prazo"}</span>
+                  <input type="date" value={g.deadline || ""} onChange={function(e) { updGD(g.id, e.target.value); }}
+                    style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "3px 7px", color: "var(--ink-2)", fontSize: 11, outline: "none", fontFamily: "var(--f-mono)" }} />
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div className="prumo-num" style={{ fontSize: 13, color: "var(--ink-3)" }}>{fmt(g.saved || 0)}</div>
+                <div className="prumo-num" style={{ fontSize: 11, color: "var(--ink-4)" }}>{"de " + fmt(g.target)}</div>
+                <div style={{ fontFamily: "var(--f-display)", fontSize: 22, fontWeight: 700, color: done ? "var(--pos)" : "var(--accent-2)", marginTop: 4, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>{pct(r)}</div>
+              </div>
+            </div>
+            <div className="prumo-meter" style={{ height: 8 }}>
+              <i style={{ width: pct(Math.min(r, 1)), background: done ? "var(--pos)" : "var(--accent)" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11 }}>
+              <span className="prumo-cap">{done ? "✓ Meta atingida" : "Falta " + fmt(remain)}</span>
+              {!done && mL > 0 && remain > 0 && <span className="prumo-num" style={{ color: "var(--brand)" }}>{fmt(mN) + "/mês · " + String(mL) + "m"}</span>}
+              {!done && mL === 0 && remain > 0 && <span className="prumo-chip neg" style={{ fontSize: 10 }}>{"Prazo vencido"}</span>}
+            </div>
+            {!done && (
+              <div style={{ display: "flex", gap: 6, marginTop: 12, alignItems: "center" }}>
+                <div className="prumo-input-affix" style={{ flex: 1 }}>
+                  <span className="prefix">{"R$"}</span>
+                  <input className="prumo-input mono right with-prefix" placeholder="atualizar valor guardado" id={"g-" + g.id} inputMode="decimal" style={{ fontSize: 12 }} />
+                </div>
+                <button onClick={function() { var el = document.getElementById("g-" + g.id); var v2 = parseFloat(String(el.value || "").replace(/\./g, "").replace(",", ".")); if (!isNaN(v2)) { updGS(g.id, v2); el.value = ""; } }} className="prumo-btn brand">{"Salvar"}</button>
+                <button onClick={function() { rmG(g.id); }} className="prumo-icon-x">{"×"}</button>
+              </div>
+            )}
+            {done && (
+              <button onClick={function() { rmG(g.id); }} className="prumo-btn ghost" style={{ marginTop: 10, fontSize: 11 }}>{"🗑 Arquivar meta atingida"}</button>
+            )}
+          </div>
+        );
+      })}
+
+      {/* LIMITES POR CATEGORIA */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Limites por categoria"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Cap mensal por categoria"}</h2>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Defina o teto mensal de cada categoria e acompanhe estouros"}</div>
+        {GR.map(function(g) {
+          var visibleCats = cats.filter(function(c) { return c.group === g.id && ((spC[c.id] || 0) > 0 || catLimits[c.id]); });
+          if (visibleCats.length === 0) return null;
+          return (
+            <div key={g.id} style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 2, background: g.color }} />
+                <span className="prumo-lbl" style={{ marginBottom: 0 }}>{g.label}</span>
+              </div>
+              {visibleCats.map(function(cat2) {
+                var lim = catLimits[cat2.id];
+                var spent2 = spC[cat2.id] || 0;
+                var isEditLim2 = editLimId === cat2.id;
+                var usedPct = lim > 0 ? Math.min(spent2 / lim, 1) : 0;
+                var overLimit = lim && spent2 > lim;
+                return (
+                  <div key={cat2.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 16 }}>{cat2.icon}</span>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{cat2.name}</span>
+                      <span className="prumo-num" style={{ fontSize: 13, color: overLimit ? "var(--neg)" : "var(--ink)" }}>{fmt(spent2)}</span>
+                      <button onClick={function() { sELimId(isEditLim2 ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
+                        className={"prumo-chip " + (lim ? "brand" : "")} style={{ cursor: "pointer", fontSize: 10, border: lim ? "1px solid oklch(0.38 0.07 235 / .25)" : "1px solid var(--line)" }}>
+                        {lim ? "🎯 " + fmt(lim) : "+ definir"}
+                      </button>
+                    </div>
+                    {lim && (
+                      <div style={{ marginTop: 8 }}>
+                        <div className="prumo-meter">
+                          <i style={{ width: pct(usedPct), background: overLimit ? "var(--neg)" : (g.id === "investimentos" ? "var(--pos)" : g.color) }} />
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                          <span className="prumo-cap" style={{ fontSize: 10 }}>{pct(usedPct) + " utilizado"}</span>
+                          {overLimit ? (
+                            <span className="prumo-chip neg" style={{ fontSize: 10 }}>{"+" + fmt(spent2 - lim) + " estourado"}</span>
+                          ) : (
+                            <span className="prumo-chip pos" style={{ fontSize: 10 }}>{"sobram " + fmt(lim - spent2)}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {isEditLim2 && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                        <div className="prumo-input-affix" style={{ flex: 1 }}>
+                          <span className="prefix">{"R$"}</span>
+                          <input className="prumo-input mono right with-prefix" placeholder="limite mensal" value={editLimV} inputMode="decimal"
+                            autoFocus
+                            onChange={function(e) { sELimV(e.target.value); }}
+                            onKeyDown={function(e) { if (e.key === "Enter") setCatLimit(cat2.id, editLimV); }}
+                            style={{ fontSize: 12 }} />
+                        </div>
+                        <button className="prumo-btn brand" onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
+                        {lim && <button className="prumo-btn ghost" onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ══ MAIN APP ══ */
 
 /* ══ LOGIN SCREEN ══ */
@@ -2908,124 +3415,6 @@ export default function App() {
         )}
 
         {/* ═══ METAS ═══ */}
-        {tab === "metas" && (
-          <div>
-            {/* Metas */}}
-            <div style={S.cardA("#7C3AED")}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={S.lbl}>{"METAS"}</div>
-                <button style={S.btn("#7C3AED")} onClick={function() { sSGl(!showGoal); }}>{showGoal ? "Cancelar" : "+ Meta"}</button>
-              </div>
-              {showGoal && (
-                <div style={{ background: BG, borderRadius: 8, padding: 12, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <input style={S.inp} placeholder="Nome da meta" value={gf.name} onChange={function(e) { sGf({ ...gf, name: e.target.value }); }} />
-                  <div style={S.g2}>
-                    <input style={S.inp} placeholder="Valor alvo (R$)" value={gf.target} inputMode="decimal" onChange={function(e) { sGf({ ...gf, target: e.target.value }); }} />
-                    <input style={S.inp} placeholder="Já guardou" value={gf.saved} inputMode="decimal" onChange={function(e) { sGf({ ...gf, saved: e.target.value }); }} />
-                  </div>
-                  <input style={S.inp} type="date" value={gf.deadline} onChange={function(e) { sGf({ ...gf, deadline: e.target.value }); }} />
-                  <button style={S.btn("#7C3AED")} onClick={addGoal}>{"Salvar"}</button>
-                </div>
-              )}
-              {goals.length === 0 && !showGoal && <p style={{ ...S.cap, textAlign: "center", padding: 8 }}>{"Nenhuma meta."}</p>}
-              {goals.map(function(g) {
-                var r = g.target > 0 ? (g.saved || 0) / g.target : 0;
-                var remain = g.target - (g.saved || 0);
-                var mL = 0;
-                if (g.deadline) {
-                  var dl = new Date(g.deadline); var td2 = new Date();
-                  mL = Math.max(0, (dl.getFullYear() - td2.getFullYear()) * 12 + (dl.getMonth() - td2.getMonth()));
-                }
-                var mN = mL > 0 && remain > 0 ? remain / mL : 0;
-                return (
-                  <div key={g.id} style={{ padding: "12px 0", borderBottom: "1px solid #F0F0F0" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: TX }}>{g.name}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                          <span style={S.cap}>{"Prazo:"}</span>
-                          <input type="date" value={g.deadline || ""} onChange={function(e) { updGD(g.id, e.target.value); }}
-                            style={{ background: "#FAFAFA", border: "1px solid " + BR, borderRadius: 4, padding: "2px 6px", color: T3, fontSize: 11, outline: "none" }} />
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: TX }}>{fmt(g.saved || 0) + " / " + fmt(g.target)}</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: r >= 1 ? OK : "#A78BFA" }}>{pct(r)}</div>
-                      </div>
-                    </div>
-                    <PB value={g.saved || 0} max={g.target} color="#7C3AED" />
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, ...S.cap }}>
-                      <span>{"Falta " + fmt(remain)}</span>
-                      {mL > 0 && remain > 0 && <span style={{ color: "#7C3AED", fontWeight: 700 }}>{fmt(mN) + "/mês (" + String(mL) + "m)"}</span>}
-                      {mL === 0 && remain > 0 && <span style={{ color: ER, fontWeight: 700 }}>{"Prazo vencido"}</span>}
-                      {remain <= 0 && <span style={{ color: OK, fontWeight: 700 }}>{"✅ Atingida!"}</span>}
-                    </div>
-                    <div style={{ display: "flex", gap: 5, marginTop: 6, alignItems: "center" }}>
-                      <input style={{ ...S.inp, width: 100, fontSize: 12 }} placeholder="Atualizar R$" id={"g-" + g.id} inputMode="decimal" />
-                      <button onClick={function() { var el = document.getElementById("g-" + g.id); var v2 = parseFloat((el.value || "").replace(",", ".")); if (!isNaN(v2)) { updGS(g.id, v2); el.value = ""; } }} style={S.btn("#7C3AED")}>{"💾"}</button>
-                      <span onClick={function() { rmG(g.id); }} style={{ cursor: "pointer", color: "#BBBBBB" }}>{"×"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Limites de gastos por categoria */}
-            <div style={S.cardA(BL)}>
-              <div style={S.lbl}>{"LIMITES POR CATEGORIA"}</div>
-              <div style={{ ...S.cap, marginBottom: 10, marginTop: 2 }}>{"Defina limites mensais e acompanhe o progresso"}</div>
-              {GR.map(function(g) {
-                var catsWithLim = cats.filter(function(c) { return c.group === g.id && catLimits[c.id]; });
-                var catsNoLim = cats.filter(function(c) { return c.group === g.id && !catLimits[c.id] && (spC[c.id] || 0) > 0; });
-                if (catsWithLim.length === 0 && catsNoLim.length === 0) return null;
-                return (
-                  <div key={g.id} style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: g.color, marginBottom: 6, textTransform: "uppercase" }}>{g.label}</div>
-                    {cats.filter(function(c) { return c.group === g.id && ((spC[c.id] || 0) > 0 || catLimits[c.id]); }).map(function(cat2) {
-                      var lim = catLimits[cat2.id];
-                      var spent2 = spC[cat2.id] || 0;
-                      var isEditLim2 = editLimId === cat2.id;
-                      return (
-                        <div key={cat2.id} style={{ padding: "8px 0", borderBottom: "1px solid #F0F0F0" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: lim ? 4 : 0 }}>
-                            <span>{cat2.icon}</span>
-                            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: TX }}>{cat2.name}</span>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: lim && spent2 > lim ? ER : TX }}>{fmt(spent2)}</span>
-                            <button onClick={function() { sELimId(isEditLim2 ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
-                              style={{ background: lim ? BG : "#F5F5F5", border: "1px solid " + (lim ? BL : BR), borderRadius: 4, padding: "3px 8px", fontSize: 10, fontWeight: 600, color: lim ? BL : TM, cursor: "pointer" }}>
-                              {lim ? "🎯 " + fmt(lim) : "+ Limite"}
-                            </button>
-                          </div>
-                          {lim && (
-                            <div>
-                              <PB value={spent2} max={lim} color={g.color} noWarn={g.id === "investimentos"} />
-                              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                                <span style={S.cap}>{pct(Math.min(spent2 / lim, 1)) + " utilizado"}</span>
-                                {spent2 > lim ? (
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: ER }}>{"⚠️ +" + fmt(spent2 - lim) + " estourado"}</span>
-                                ) : (
-                                  <span style={{ fontSize: 10, fontWeight: 600, color: OK }}>{"✅ sobram " + fmt(lim - spent2)}</span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          {isEditLim2 && (
-                            <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
-                              <input style={{ ...S.inp, flex: 1, fontSize: 12 }} placeholder="Limite mensal (R$)" value={editLimV} inputMode="decimal"
-                                onChange={function(e) { sELimV(e.target.value); }} />
-                              <button style={S.btn(BL)} onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
-                              {lim && <button style={{ ...S.btnO, padding: "8px 10px", fontSize: 12 }} onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* ═══ LANÇAMENTOS (INPUT) ═══ */}
         {tab === "input" && (
@@ -3167,116 +3556,34 @@ export default function App() {
         )}
 
         {/* ═══ FIXAS ═══ */}
+
+        {/* ═══ FIXAS ═══ */}
         {tab === "fixas" && (
-          <div>
-            <div style={S.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={S.h2}>{"Contas Fixas — " + MS[mo]}</div>
-                <button style={S.btn(BL)} onClick={function() { sSFx(!showFx); sErr(""); }}>{showFx ? "Cancelar" : "+ Nova"}</button>
-              </div>
-              {showFx && (
-                <div style={{ background: BG, borderRadius: 8, padding: 12, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <div style={S.g2}>
-                    <input style={S.inp} placeholder="Nome" value={ff.name} onChange={function(e) { sFf({ ...ff, name: e.target.value }); }} />
-                    <input style={S.inp} placeholder="Valor (R$)" value={ff.amount} inputMode="decimal" onChange={function(e) { sFf({ ...ff, amount: e.target.value }); }} />
-                  </div>
-                  <div style={S.g2}>
-                    <CatS value={ff.cat} onChange={function(e) { sFf({ ...ff, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
-                    <select style={S.inp} value={ff.pay} onChange={function(e) { sFf({ ...ff, pay: e.target.value }); }}>
-                      {PAYS.map(function(p) { return <option key={p}>{p}</option>; })}
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", gap: 5 }}>
-                    {[{ m: "budget", l: "💰 PIX/Boleto", d: "Orçamento" }, { m: "checklist", l: "💳 Cartão", d: "Checklist" }].map(function(o) {
-                      return (
-                        <div key={o.m} onClick={function() { sFf({ ...ff, mode: o.m }); }}
-                          style={{ flex: 1, padding: 8, borderRadius: 6, cursor: "pointer", border: ff.mode === o.m ? "2px solid " + BL : "1px solid " + BR, background: ff.mode === o.m ? BG : "#fff" }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: ff.mode === o.m ? BL : TM }}>{o.l}</div>
-                          <div style={S.cap}>{o.d}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer" }}>
-                    <input type="checkbox" checked={ff.hs} style={S.ck} onChange={function(e) { sFf({ ...ff, hs: e.target.checked }); }} />{"Dividir"}
-                  </label>
-                  {ff.hs && <SE splits={ff.sp} onChange={function(s) { sFf({ ...ff, sp: s }); }} />}
-                  <button style={S.btn(BL)} onClick={addFx}>{"Salvar"}</button>
-                  {err && tab === "fixas" && <div style={{ color: ER, fontSize: 12 }}>{"⚠️ " + err}</div>}
-                </div>
-              )}
-              {fxd.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", ...S.cap, marginBottom: 3 }}>
-                    <span>{String(fxPd) + "/" + String(fxd.length)}</span>
-                    <span>{fmt(fxMy) + "/mês"}</span>
-                  </div>
-                  <PB value={fxPd} max={fxd.length} color={BL} />
-                </div>
-              )}
-              {fxd.map(function(f) {
-                var cat2 = cats.find(function(c) { return c.id === f.cat; });
-                var ip = fs[f.id] === "paid";
-                var myA = f.hasSplit ? f.amount - spt(f) : f.amount;
-                var sp2 = gsp(f);
-                var mode = f.mode || "budget";
-                var parts = fs[f.id + "_p"] || [];
-                var pSum = parts.reduce(function(a, p) { return a + p.amount; }, 0);
-                var isO = pO === f.id;
-                return (
-                  <div key={f.id} style={{ padding: "10px 0", borderBottom: "1px solid #F0F0F0" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: ip ? 0.5 : 1 }}>
-                      <input type="checkbox" checked={ip} style={{ ...S.ck, width: 18, height: 18 }} onChange={function() { togFP(f.id); }} />
-                      <span style={{ fontSize: 15 }}>{cat2 ? cat2.icon : "📄"}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, textDecoration: ip ? "line-through" : "none", color: TX }}>{f.name}</div>
-                        <div style={{ display: "flex", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
-                          <span style={S.tag(mode === "budget" ? "#0D9488" : "#7C3AED")}>{mode === "budget" ? "💰" : "💳"}</span>
-                          {sp2.map(function(s, j) { return <span key={j} style={S.tag("#D97706")}>{"÷" + s.person + " " + String(s.pct) + "%"}</span>; })}
-                        </div>
-                        {!ip && mode === "budget" && (
-                          <div style={{ marginTop: 5 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", ...S.cap, marginBottom: 2 }}>
-                              <span>{fmt(pSum)}</span><span>{fmt(f.amount)}</span>
-                            </div>
-                            <PB value={pSum} max={f.amount} color={BL} />
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: TX }}>{fmt(f.amount)}</div>
-                        {f.hasSplit && <div style={{ ...S.cap, color: BL }}>{"Você: " + fmt(myA)}</div>}
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        {!ip && <span onClick={function() { sPO(isO ? null : f.id); sPV(""); }} style={{ cursor: "pointer", fontSize: 16, color: BL }}>{"+"}</span>}
-                        <span onClick={function() { rmFx(f.id); }} style={{ cursor: "pointer", color: "#BBBBBB" }}>{"×"}</span>
-                      </div>
-                    </div>
-                    {isO && (
-                      <div style={{ display: "flex", gap: 5, marginTop: 6, marginLeft: 40 }}>
-                        <input style={{ ...S.inp, flex: 1 }} placeholder="Valor" value={pV} inputMode="decimal" onChange={function(e) { sPV(e.target.value); }} />
-                        <button style={S.btn(BL)} onClick={function() { addPart(f.id); }}>{"OK"}</button>
-                      </div>
-                    )}
-                    {parts.length > 0 && (
-                      <div style={{ marginLeft: 40, marginTop: 3 }}>
-                        {parts.map(function(p, pi3) {
-                          return (
-                            <div key={pi3} style={{ display: "flex", justifyContent: "space-between", ...S.cap, padding: "1px 0" }}>
-                              <span>{sd(p.date) + " — " + fmt(p.amount)}</span>
-                              <span onClick={function() { saveMd({ ...md, fs: { ...fs, [f.id + "_p"]: parts.filter(function(_, idx2) { return idx2 !== pi3; }) } }); }}
-                                style={{ cursor: "pointer", color: ER, padding: "0 3px" }}>{"×"}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {fxd.length === 0 && <p style={{ ...S.cap, textAlign: "center", padding: 16 }}>{"Nenhuma conta fixa."}</p>}
-            </div>
-          </div>
+          <FixasPrumo
+            cfg={cfg} cats={cats} fxd={fxd} fs={fs} md={md} saveMd={saveMd}
+            ff={ff} sFf={sFf} showFx={showFx} sSFx={sSFx} err={err} sErr={sErr} tab={tab}
+            addFx={addFx} rmFx={rmFx} togFP={togFP} spt={spt} gsp={gsp} addPart={addPart}
+            pO={pO} sPO={sPO} pV={pV} sPV={sPV}
+            fxPd={fxPd} fxMy={fxMy} mo={mo}
+          />
+        )}
+
+        {/* ═══ DEVEDORES ═══ */}
+        {tab === "deve" && (
+          <DevedoresPrumo
+            debtors={debtors} df={df} sDf={sDf} showDebt={showDebt} sSDbt={sSDbt}
+            addDebt={addDebt} togFR={togFR} togDR={togDR} togRcv={togRcv} rmD={rmD} mo={mo}
+          />
+        )}
+
+        {/* ═══ METAS ═══ */}
+        {tab === "metas" && (
+          <MetasPrumo
+            goals={goals} gf={gf} sGf={sGf} showGoal={showGoal} sSGl={sSGl} addGoal={addGoal}
+            updGS={updGS} updGD={updGD} rmG={rmG}
+            cats={cats} spC={spC} catLimits={catLimits}
+            editLimId={editLimId} sELimId={sELimId} editLimV={editLimV} sELimV={sELimV} setCatLimit={setCatLimit}
+          />
         )}
 
         {/* ═══ MENSAL ═══ */}
@@ -3436,74 +3743,6 @@ export default function App() {
         )}
 
         {/* ═══ DEVEDORES ═══ */}
-        {tab === "deve" && (
-          <div>
-            <div style={S.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={S.h2}>{"Devedores — " + MS[mo]}</div>
-                <button style={S.btn("#D97706")} onClick={function() { sSDbt(!showDebt); }}>{showDebt ? "Cancelar" : "+ Novo"}</button>
-              </div>
-              {showDebt && (
-                <div style={{ background: BG, borderRadius: 8, padding: 10, marginBottom: 12, border: "1px solid " + BR, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <input style={S.inp} placeholder="Descrição" value={df.desc} onChange={function(e) { sDf({ ...df, desc: e.target.value }); }} />
-                  <div style={S.g2}>
-                    <input style={S.inp} placeholder="Valor (R$)" value={df.amount} inputMode="decimal" onChange={function(e) { sDf({ ...df, amount: e.target.value }); }} />
-                    <input style={S.inp} placeholder="Quem deve?" value={df.person} onChange={function(e) { sDf({ ...df, person: e.target.value }); }} />
-                  </div>
-                  <button style={S.btn("#D97706")} onClick={addDebt}>{"Adicionar"}</button>
-                </div>
-              )}
-            </div>
-
-            {Object.keys(debtors).length === 0 ? (
-              <div style={{ ...S.card, textAlign: "center", padding: 28 }}>
-                <p style={S.cap}>{"Nenhuma dívida registrada."}</p>
-              </div>
-            ) : (
-              Object.entries(debtors).map(function(e2) {
-                var person = e2[0];
-                var data = e2[1];
-                return (
-                  <div key={person} style={S.cardA("#D97706")}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Montserrat',sans-serif", color: TX }}>{person}</div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={S.cap}>{"Pendente"}</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: "#D97706" }}>{fmt(data.pending)}</div>
-                      </div>
-                    </div>
-                    <PB value={data.total - data.pending} max={data.total} color={OK} />
-                    <div style={{ marginTop: 8 }}>
-                      {data.items.map(function(it, idx) {
-                        return (
-                          <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: "1px solid #F0F0F0" }}>
-                            <input type="checkbox" checked={it.rcv || false} style={S.ck}
-                              onChange={function() {
-                                if (it.src === "fx") togFR(it.id);
-                                else if (it.src === "manual") togDR(it.id);
-                                else togRcv(it.id);
-                              }} />
-                            <div style={{ flex: 1, opacity: it.rcv ? 0.5 : 1, textDecoration: it.rcv ? "line-through" : "none" }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: TX }}>{it.desc}</div>
-                              <div style={{ display: "flex", gap: 3 }}>
-                                <span style={S.cap}>{fmt(it.debt)}</span>
-                                {it.src === "manual" && <span style={S.tag("#7C3AED")}>{"Manual"}</span>}
-                              </div>
-                            </div>
-                            <span style={{ fontWeight: 700, color: it.rcv ? OK : "#D97706", fontSize: 13 }}>{fmt(it.debt)}</span>
-                            {it.src === "manual" && (
-                              <span onClick={function() { rmD(it.id); }} style={{ cursor: "pointer", color: ER }}>{"×"}</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
 
       </div>
         </main>
