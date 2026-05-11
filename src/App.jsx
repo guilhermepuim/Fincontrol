@@ -329,8 +329,8 @@ select.prumo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='
 /* COMPARE ROWS (barras horizontais comparativo) ─ */
 .prumo-cmp-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .prumo-cmp-row:last-child { border-bottom: none; }
-.prumo-cmp-bar-wrap { flex: 1; height: 22px; background: var(--surface-2); border-radius: 5px; overflow: hidden; position: relative; }
-.prumo-cmp-bar { height: 100%; border-radius: 5px; display: flex; align-items: center; padding-left: 8px; transition: width .4s ease; }
+.prumo-cmp-bar-wrap { flex: 1; height: 22px; background: var(--surface-2); border-radius: 5px; overflow: hidden; position: relative; min-width: 110px; }
+.prumo-cmp-bar { height: 100%; border-radius: 5px; display: flex; align-items: center; padding-left: 8px; transition: width .4s ease; min-width: 100px; box-sizing: border-box; }
 .prumo-cmp-bar-lbl { font-size: 10px; color: var(--surface); font-weight: 600; font-family: var(--f-mono); white-space: nowrap; }
 
 /* SIM CHART (saldo positivo/negativo) ──────────── */
@@ -611,6 +611,8 @@ function Donut(props) {
 
 /* ══ DASHBOARD PRUMO ══ */
 function DashboardPrumo(props) {
+  var [editPctId, sEditPctId] = useState(null);
+  var [pctDraft, sPctDraft] = useState("");
   var cfg = props.cfg;
   var sal = props.sal;
   var totalInc = props.totalInc;
@@ -743,14 +745,24 @@ function DashboardPrumo(props) {
   var ifFillPct = Math.max(0, Math.min(100, ifPct));
 
   /* ─── Renda salário inline edit ─── */
+  var saveSalary = function() {
+    var raw = String(salI).replace(/\./g, "").replace(",", ".");
+    var v = parseFloat(raw);
+    if (!isNaN(v) && v > 0) saveCfg({ ...cfg, salary: v });
+    sES(false);
+  };
   var renderRendaEdit = function() {
     if (eSal) {
       return (
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
           <input style={{ background: "var(--surface)", border: "1px solid var(--line-2)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "var(--f-ui)", width: 130, textAlign: "right", outline: "none", color: "var(--ink)" }}
-            value={salI} onChange={function(e) { sSI(e.target.value); }}
-            onKeyDown={function(e) { if (e.key === "Enter") { saveCfg({ ...cfg, salary: parseFloat(salI) || DS }); sES(false); } }} />
-          <button className="prumo-btn brand" onClick={function() { saveCfg({ ...cfg, salary: parseFloat(salI) || DS }); sES(false); }}>{"OK"}</button>
+            autoFocus
+            value={salI}
+            inputMode="decimal"
+            onChange={function(e) { sSI(e.target.value); }}
+            onBlur={saveSalary}
+            onKeyDown={function(e) { if (e.key === "Enter") saveSalary(); }} />
+          <button className="prumo-btn brand" onMouseDown={function(e) { e.preventDefault(); }} onClick={saveSalary}>{"OK"}</button>
         </div>
       );
     }
@@ -790,10 +802,44 @@ function DashboardPrumo(props) {
         </div>
         <div className="prumo-ring-row">
           {rings.map(function(r) {
+            var isEditing = editPctId === r.id;
+            var savePct = function() {
+              var v = parseInt(pctDraft, 10);
+              if (!isNaN(v) && v >= 0 && v <= 100) {
+                var newPcts = { ...cfg.pcts, [r.id]: v };
+                saveCfg({ ...cfg, pcts: newPcts });
+              }
+              sEditPctId(null);
+            };
             return (
-              <div key={r.id} className="prumo-ring-card">
+              <div key={r.id} className="prumo-ring-card" style={{ position: "relative" }}>
                 <Donut pct={r.used} color={r.color} />
-                <div className="prumo-ring-lbl">{r.label + " · " + String(r.pct) + "%"}</div>
+                {isEditing ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center", margin: "6px 0 2px" }}>
+                    <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 600 }}>{r.label + " ·"}</span>
+                    <input
+                      autoFocus
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={pctDraft}
+                      onChange={function(e) { sPctDraft(e.target.value); }}
+                      onBlur={savePct}
+                      onKeyDown={function(e) { if (e.key === "Enter") savePct(); if (e.key === "Escape") sEditPctId(null); }}
+                      style={{ width: 38, padding: "2px 4px", border: "1px solid var(--brand)", borderRadius: 5, fontSize: 11, textAlign: "center", fontFamily: "var(--f-mono)", outline: "none" }}
+                    />
+                    <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 600 }}>{"%"}</span>
+                  </div>
+                ) : (
+                  <div className="prumo-ring-lbl" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                    <span>{r.label + " · " + String(r.pct) + "%"}</span>
+                    <button
+                      onClick={function() { sEditPctId(r.id); sPctDraft(String(r.pct)); }}
+                      style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "var(--ink-4)", fontSize: 10, lineHeight: 1 }}
+                      title="Editar meta"
+                    >{"✎"}</button>
+                  </div>
+                )}
                 <div className="prumo-ring-val">{String(r.used) + "%"}</div>
                 <div className="prumo-cap" style={{ fontSize: 10, marginTop: 2 }}>{fmt(r.s) + " / " + fmt(r.b)}</div>
               </div>
@@ -1054,10 +1100,9 @@ function AnalisePrumo(props) {
                         <div style={{ width: 78, fontSize: 10, color: "var(--ink-3)", textAlign: "right", flexShrink: 0, fontFamily: "var(--f-mono)", letterSpacing: ".05em", textTransform: "uppercase" }}>{g.label}</div>
                         <div className="prumo-cmp-bar-wrap">
                           <div className="prumo-cmp-bar" style={{ width: String(barW) + "%", background: g.color }}>
-                            {barW > 22 && <span className="prumo-cmp-bar-lbl">{fmt(val)}</span>}
+                            <span className="prumo-cmp-bar-lbl">{fmt(val)}</span>
                           </div>
                         </div>
-                        {barW <= 22 && <span className="prumo-num" style={{ fontSize: 11, flexShrink: 0, minWidth: 70, textAlign: "right" }}>{fmt(val)}</span>}
                       </div>
                     );
                   })}
@@ -1718,6 +1763,227 @@ function ProjecaoPrumo(props) {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══ VIDA PRUMO (Patrimônio Líquido) ══ */
+function VidaPrumo(props) {
+  var cfg = props.cfg;
+  var saveCfg = props.saveCfg;
+  var nwHistory = props.nwHistory;
+
+  var pat = cfg.patrimonio || {
+    reserva: 0,
+    invFixed: 0,
+    invVariable: 0,
+    invOther: 0,
+    imoveis: 0,
+    veiculos: 0,
+    outrosAtivos: 0,
+    financiamentos: 0,
+    emprestimos: 0,
+    cartao: 0,
+    outrosPassivos: 0,
+  };
+
+  var totAtivosFin = (pat.reserva || 0) + (pat.invFixed || 0) + (pat.invVariable || 0) + (pat.invOther || 0);
+  var totAtivosImob = (pat.imoveis || 0) + (pat.veiculos || 0) + (pat.outrosAtivos || 0);
+  var totAtivos = totAtivosFin + totAtivosImob;
+  var totPassivos = (pat.financiamentos || 0) + (pat.emprestimos || 0) + (pat.cartao || 0) + (pat.outrosPassivos || 0);
+  var pl = totAtivos - totPassivos;
+  var alavancagem = totAtivos > 0 ? totPassivos / totAtivos : 0;
+
+  var update = function(field, raw) {
+    var clean = String(raw).replace(/\./g, "").replace(",", ".");
+    var v = parseFloat(clean);
+    var newPat = { ...pat };
+    newPat[field] = isNaN(v) ? 0 : v;
+    // recalcula PL e sincroniza com cfg.netWorth.balance
+    var newTotAtivos = (newPat.reserva || 0) + (newPat.invFixed || 0) + (newPat.invVariable || 0) + (newPat.invOther || 0) + (newPat.imoveis || 0) + (newPat.veiculos || 0) + (newPat.outrosAtivos || 0);
+    var newTotPassivos = (newPat.financiamentos || 0) + (newPat.emprestimos || 0) + (newPat.cartao || 0) + (newPat.outrosPassivos || 0);
+    var newPL = newTotAtivos - newTotPassivos;
+    var nw = cfg.netWorth || { balance: 0, history: [] };
+    saveCfg({ ...cfg, patrimonio: newPat, netWorth: { ...nw, balance: newPL } });
+  };
+
+  var snapshot = function() {
+    var nw = cfg.netWorth || { balance: 0, history: [] };
+    var hist = (nw.history || []).slice();
+    hist.push({ date: new Date().toISOString(), balance: pl });
+    saveCfg({ ...cfg, netWorth: { ...nw, balance: pl, history: hist } });
+  };
+
+  // Composição: % de cada bucket no total de ativos
+  var pctReserva = totAtivos > 0 ? (pat.reserva || 0) / totAtivos * 100 : 0;
+  var pctInvFix = totAtivos > 0 ? (pat.invFixed || 0) / totAtivos * 100 : 0;
+  var pctInvVar = totAtivos > 0 ? (pat.invVariable || 0) / totAtivos * 100 : 0;
+  var pctInvOth = totAtivos > 0 ? (pat.invOther || 0) / totAtivos * 100 : 0;
+  var pctImoveis = totAtivos > 0 ? (pat.imoveis || 0) / totAtivos * 100 : 0;
+  var pctVeic = totAtivos > 0 ? (pat.veiculos || 0) / totAtivos * 100 : 0;
+  var pctOutrosA = totAtivos > 0 ? (pat.outrosAtivos || 0) / totAtivos * 100 : 0;
+
+  // Histórico recente
+  var hist12 = nwHistory.slice(-12);
+  var maxH = hist12.length > 0 ? Math.max.apply(null, hist12.map(function(h) { return h.balance; }).concat([1])) : 1;
+  var minH = hist12.length > 0 ? Math.min.apply(null, hist12.map(function(h) { return h.balance; })) : 0;
+  var rangeH = maxH - minH || 1;
+
+  var inputRow = function(field, label, color) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 2, background: color || "var(--ink-3)" }} />
+          <span style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>{label}</span>
+        </div>
+        <div className="prumo-input-affix" style={{ width: 150 }}>
+          <span className="prefix">{"R$"}</span>
+          <input
+            className="prumo-input mono right with-prefix"
+            placeholder="0"
+            inputMode="decimal"
+            defaultValue={(pat[field] || 0) > 0 ? String(pat[field] || 0).replace(".", ",") : ""}
+            onBlur={function(e) { update(field, e.target.value); }}
+            onKeyDown={function(e) { if (e.key === "Enter") e.target.blur(); }}
+            style={{ fontSize: 12, padding: "8px 11px 8px 30px" }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="prumo-form-grid">
+
+      {/* HERO PL */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Patrimônio líquido"}</div>
+            <div className="prumo-big brand" style={{ marginTop: 6, fontSize: 42 }}>{fmt(pl)}</div>
+            <div className="prumo-cap" style={{ marginTop: 6 }}>{"Ativos − Passivos = PL"}</div>
+          </div>
+          <button className="prumo-btn brand" onClick={snapshot} title="Registrar PL atual no histórico">{"📸 Registrar snapshot"}</button>
+        </div>
+        <div className="prumo-mini-stat-row" style={{ marginTop: 14 }}>
+          <div className="prumo-mini-stat"><div className="lbl">{"Total Ativos"}</div><div className="val pos">{fmt(totAtivos)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Total Passivos"}</div><div className="val neg">{fmt(totPassivos)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Alavancagem"}</div><div className={"val " + (alavancagem >= 0.5 ? "neg" : alavancagem >= 0.3 ? "warn" : "pos")}>{pct(alavancagem)}</div></div>
+        </div>
+
+        {/* Composição em barra empilhada */}
+        {totAtivos > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Composição dos ativos"}</div>
+            <div style={{ height: 14, borderRadius: 7, overflow: "hidden", display: "flex", background: "var(--surface-2)" }}>
+              {pctReserva > 0 && <div style={{ width: pctReserva + "%", background: "var(--pos)" }} title={"Reserva " + pct(pctReserva / 100)} />}
+              {pctInvFix > 0 && <div style={{ width: pctInvFix + "%", background: "var(--brand)" }} title={"Renda Fixa " + pct(pctInvFix / 100)} />}
+              {pctInvVar > 0 && <div style={{ width: pctInvVar + "%", background: "var(--brand-2)" }} title={"Renda Variável " + pct(pctInvVar / 100)} />}
+              {pctInvOth > 0 && <div style={{ width: pctInvOth + "%", background: "var(--ink-2)" }} title={"Outros invest. " + pct(pctInvOth / 100)} />}
+              {pctImoveis > 0 && <div style={{ width: pctImoveis + "%", background: "var(--accent)" }} title={"Imóveis " + pct(pctImoveis / 100)} />}
+              {pctVeic > 0 && <div style={{ width: pctVeic + "%", background: "var(--accent-2)" }} title={"Veículos " + pct(pctVeic / 100)} />}
+              {pctOutrosA > 0 && <div style={{ width: pctOutrosA + "%", background: "var(--ink-3)" }} title={"Outros ativos " + pct(pctOutrosA / 100)} />}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+              {[
+                { l: "Reserva", c: "var(--pos)", v: pctReserva },
+                { l: "Renda Fixa", c: "var(--brand)", v: pctInvFix },
+                { l: "Renda Var.", c: "var(--brand-2)", v: pctInvVar },
+                { l: "Outros inv.", c: "var(--ink-2)", v: pctInvOth },
+                { l: "Imóveis", c: "var(--accent)", v: pctImoveis },
+                { l: "Veículos", c: "var(--accent-2)", v: pctVeic },
+                { l: "Outros at.", c: "var(--ink-3)", v: pctOutrosA },
+              ].filter(function(x) { return x.v > 0; }).map(function(x) {
+                return (
+                  <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ width: 9, height: 9, borderRadius: 2, background: x.c }} />
+                    <span style={{ fontSize: 10, color: "var(--ink-2)", fontFamily: "var(--f-mono)" }}>{x.l + " " + x.v.toFixed(1) + "%"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ATIVOS FINANCEIROS */}
+      <div className="prumo-card l-pos">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Ativos financeiros"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Reserva + investimentos"}</h2>
+          </div>
+          <div className="prumo-num" style={{ color: "var(--pos)", fontSize: 15 }}>{fmt(totAtivosFin)}</div>
+        </div>
+        {inputRow("reserva", "Reserva de emergência", "var(--pos)")}
+        {inputRow("invFixed", "Renda fixa", "var(--brand)")}
+        {inputRow("invVariable", "Renda variável", "var(--brand-2)")}
+        {inputRow("invOther", "Outros investimentos", "var(--ink-2)")}
+      </div>
+
+      {/* ATIVOS IMOBILIZADOS */}
+      <div className="prumo-card l-warn">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Ativos imobilizados"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Bens não-líquidos"}</h2>
+          </div>
+          <div className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 15 }}>{fmt(totAtivosImob)}</div>
+        </div>
+        {inputRow("imoveis", "Imóveis", "var(--accent)")}
+        {inputRow("veiculos", "Veículos", "var(--accent-2)")}
+        {inputRow("outrosAtivos", "Outros bens", "var(--ink-3)")}
+      </div>
+
+      {/* PASSIVOS */}
+      <div className="prumo-card l-neg full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Passivos"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Dívidas e compromissos"}</h2>
+          </div>
+          <div className="prumo-num" style={{ color: "var(--neg)", fontSize: 15 }}>{fmt(totPassivos)}</div>
+        </div>
+        {inputRow("financiamentos", "Financiamentos", "var(--neg)")}
+        {inputRow("emprestimos", "Empréstimos", "var(--neg)")}
+        {inputRow("cartao", "Saldo de cartão", "var(--neg)")}
+        {inputRow("outrosPassivos", "Outras dívidas", "var(--ink-3)")}
+      </div>
+
+      {/* EVOLUÇÃO DO PL */}
+      {hist12.length > 1 && (
+        <div className="prumo-card full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Evolução do PL"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Últimos snapshots"}</h2>
+            </div>
+            <div className="prumo-cap">{String(hist12.length) + " pontos"}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 120, marginTop: 10 }}>
+            {hist12.map(function(h, idx) {
+              var barH = ((h.balance - minH) / rangeH) * 100 + 8;
+              var isLast = idx === hist12.length - 1;
+              var isUp = idx > 0 && h.balance >= hist12[idx - 1].balance;
+              return (
+                <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "oklch(0.58 0.13 155 / .55)" : "oklch(0.58 0.16 25 / .45)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
+                  <div style={{ fontSize: 9, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 4, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)" }}>{sd(h.date).slice(0, 5)}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11 }}>
+            <span className="prumo-cap">{"Mín: " + fmt(minH)}</span>
+            {hist12.length >= 2 && (
+              <span className={"prumo-chip " + (pl > hist12[0].balance ? "pos" : "neg")}>
+                {(pl > hist12[0].balance ? "▲ +" : "▼ ") + fmt(Math.abs(pl - hist12[0].balance)) + " desde " + sd(hist12[0].date).slice(0, 5)}
+              </span>
+            )}
+            <span className="prumo-cap">{"Máx: " + fmt(maxH)}</span>
           </div>
         </div>
       )}
@@ -2409,8 +2675,8 @@ export default function App() {
           </div>
 
           {/* DESKTOP QUICK ADD */}
-          <div className="prumo-quick-add" onClick={function() { goTab("input"); }}>
-            <span className="ico-q">{"＋"}</span>
+          <div className="prumo-quick-add" onClick={function() { sChatOpen(true); }}>
+            <span className="ico-q">{"✦"}</span>
             <span className="qa-text">{"Lance: 'Mercado 234' · 'Café 18 PIX' · 'Uber 26 dividir Duda'..."}</span>
             <span className="kbd">{"N"}</span>
           </div>
@@ -2431,12 +2697,7 @@ export default function App() {
 
         {/* ═══ VIDA (PL) — placeholder ═══ */}
         {tab === "vida" && (
-          <div className="prumo-card l-brand">
-            <div className="prumo-lbl">{"Patrimônio Líquido"}</div>
-            <div className="prumo-big brand">{fmt(nw.balance || 0)}</div>
-            <div className="prumo-cap" style={{ marginTop: 8 }}>{"Tela completa em construção. Por enquanto, valor consolidado vindo de Configurações > Patrimônio."}</div>
-            <button className="prumo-btn ghost" style={{ marginTop: 14 }} onClick={function() { goTab("proj"); }}>{"Ir para Projeção →"}</button>
-          </div>
+          <VidaPrumo cfg={cfg} saveCfg={saveCfg} nwHistory={nwHistory} />
         )}
 
 
@@ -3069,8 +3330,8 @@ export default function App() {
           <span className="ico">{"◐"}</span>
           <span className="lbl-t">{"Início"}</span>
         </button>
-        <button className={"prumo-tab" + (tab === "input" ? " active" : "")} onClick={function() { goTab("input"); }}>
-          <span className="ico">{"≡"}</span>
+        <button className="prumo-tab" onClick={function() { sChatOpen(true); }}>
+          <span className="ico">{"✦"}</span>
           <span className="lbl-t">{"Lançar"}</span>
         </button>
         <button className="prumo-tab" disabled style={{ opacity: 0 }}>{" "}</button>
@@ -3085,7 +3346,7 @@ export default function App() {
       </nav>
 
       {/* MOBILE FAB */}
-      <button className="prumo-fab" onClick={function() { goTab("input"); }} aria-label="Lançar despesa">{"+"}</button>
+      <button className="prumo-fab" onClick={function() { sChatOpen(true); }} aria-label="Assistente">{"✦"}</button>
 
       {/* MOBILE SHEET "MAIS" */}
       {showMore && (
