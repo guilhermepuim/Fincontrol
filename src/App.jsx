@@ -54,16 +54,40 @@ var DC = [
   { id: "presentes", name: "Presentes", icon: "🎁", group: "desejos" },
   { id: "doacoes", name: "Doações / Caridade", icon: "❤️", group: "desejos" },
 ];
-var PAYS = ["Cartão Nubank", "PIX", "Boleto", "Dinheiro", "Cartão Porto", "Cartão Itaú", "Cartão Inter"];
+var PAYS = ["Cartão Nubank", "PIX", "Boleto", "Dinheiro", "Cartão Porto", "Cartão Itaú", "Cartão Inter"]; // mantido só pra fallback
+var DEFAULT_PAYMENTS = [
+  { id: "pix", name: "PIX", type: "pix" },
+  { id: "boleto", name: "Boleto", type: "boleto" },
+  { id: "dinheiro", name: "Dinheiro", type: "dinheiro" },
+  { id: "debito", name: "Débito", type: "debito" },
+  { id: "cartao_nubank", name: "Cartão Nubank", type: "credito", closing: 2 },
+];
+var PAYMENT_TYPES = [
+  { id: "pix", label: "PIX" },
+  { id: "boleto", label: "Boleto" },
+  { id: "dinheiro", label: "Dinheiro" },
+  { id: "debito", label: "Débito" },
+  { id: "credito", label: "Cartão de crédito" },
+];
+function inferPaymentType(name) {
+  var n = String(name || "").toLowerCase();
+  if (n.indexOf("pix") >= 0) return "pix";
+  if (n.indexOf("boleto") >= 0) return "boleto";
+  if (n.indexOf("dinheiro") >= 0 || n.indexOf("espécie") >= 0) return "dinheiro";
+  if (n.indexOf("débito") >= 0 || n.indexOf("debito") >= 0) return "debito";
+  return "credito"; // default
+}
 var MS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 var MA = MS.map(function(m) { return m.slice(0, 3); });
 var PC = ["#1B5FAA","#1A3A5C","#9A7420","#003F5D","#4E97D1","#C9A84C","#7BB4E3","#2D7A3E","#0F2540","#6A90B8"];
 
 /* ══ HELPERS ══ */
 
-// Resolve o valor de uma conta fixa para um mês específico (YYYY-MM), levando em conta endDate + amountHistory + overrides
+// Resolve o valor de uma conta fixa para um mês específico (YYYY-MM), levando em conta startDate + endDate + amountHistory + overrides
 function resolveFixedValueForMonth(fx, yyyymm) {
-  // endDate: se mês > endDate, fixa não existe (retorna null)
+  // startDate: se mês < startDate, fixa ainda não existia (retorna null)
+  if (fx.startDate && String(yyyymm) < String(fx.startDate)) return null;
+  // endDate: se mês > endDate, fixa não existe mais (retorna null)
   if (fx.endDate && String(yyyymm) > String(fx.endDate)) return null;
   // override pontual: mês específico tem valor diferente
   if (fx.overrides && fx.overrides[yyyymm] !== undefined) return fx.overrides[yyyymm];
@@ -544,6 +568,23 @@ function SE(props) {
 }
 
 function CatS(props) {
+  // Categorias sem parent são principais; com parent são subcategorias
+  var allCats = props.cats || [];
+  var renderOptions = function(groupId) {
+    var principais = allCats.filter(function(c) { return c.group === groupId && !c.parent; });
+    var nodes = [];
+    principais.forEach(function(p) {
+      // Própria categoria principal como opção
+      nodes.push(<option key={p.id} value={p.id}>{p.icon + " " + p.name}</option>);
+      // Subcategorias indentadas
+      var subs = allCats.filter(function(c) { return c.parent === p.id; });
+      subs.forEach(function(s) {
+        nodes.push(<option key={s.id} value={s.id}>{"\u00A0\u00A0\u00A0\u00A0└ " + (s.icon ? s.icon + " " : "") + s.name}</option>);
+      });
+    });
+    return nodes;
+  };
+
   if (props.prumo) {
     return (
       <select className="prumo-input" value={props.value} onChange={props.onChange} style={props.sx || null}>
@@ -551,9 +592,7 @@ function CatS(props) {
         {GR.map(function(g) {
           return (
             <optgroup key={g.id} label={g.label + " (" + String(props.pcts[g.id]) + "%)"}>
-              {props.cats.filter(function(c) { return c.group === g.id; }).map(function(c) {
-                return <option key={c.id} value={c.id}>{c.icon + " " + c.name}</option>;
-              })}
+              {renderOptions(g.id)}
             </optgroup>
           );
         })}
@@ -566,9 +605,7 @@ function CatS(props) {
       {GR.map(function(g) {
         return (
           <optgroup key={g.id} label={g.label + " (" + String(props.pcts[g.id]) + "%)"}>
-            {props.cats.filter(function(c) { return c.group === g.id; }).map(function(c) {
-              return <option key={c.id} value={c.id}>{c.icon + " " + c.name}</option>;
-            })}
+            {renderOptions(g.id)}
           </optgroup>
         );
       })}
@@ -2244,32 +2281,30 @@ function FixasPrumo(props) {
     var orig = fxdRaw[fxIdx];
     var clean = function(s) { return parseFloat(String(s).replace(/\./g, "").replace(",", ".")); };
     var newAmount = editFx.amount ? clean(editFx.amount) : NaN;
-    var newEndDate = editFx.endDate || null;
+    var newEndDate = editFx.endDate;
+    var newStartDate = editFx.startDate;
     var updatedFx = { ...orig };
 
     if (!isNaN(newAmount) && newAmount > 0 && newAmount !== orig.amount) {
       if (editFx.scope === "month") {
-        // override pontual neste mês
         var ov = { ...(orig.overrides || {}) };
         ov[currentYM] = newAmount;
         updatedFx.overrides = ov;
       } else if (editFx.scope === "future") {
-        // mudança permanente a partir deste mês
         var hist = (orig.amountHistory || []).slice();
         hist = hist.filter(function(h) { return h.from !== currentYM; });
         hist.push({ from: currentYM, amount: newAmount });
         updatedFx.amountHistory = hist;
       } else {
-        // permanent — muda o valor base
         updatedFx.amount = newAmount;
       }
     }
-    // endDate sempre aplica (ou remove)
-    if (editFx.endDate === "") {
-      delete updatedFx.endDate;
-    } else if (newEndDate) {
-      updatedFx.endDate = newEndDate;
-    }
+    // startDate
+    if (newStartDate === "") delete updatedFx.startDate;
+    else if (newStartDate) updatedFx.startDate = newStartDate;
+    // endDate
+    if (newEndDate === "") delete updatedFx.endDate;
+    else if (newEndDate) updatedFx.endDate = newEndDate;
     var newFxd = fxdRaw.slice();
     newFxd[fxIdx] = updatedFx;
     saveCfg({ ...cfg, fixed: newFxd });
@@ -2309,7 +2344,7 @@ function FixasPrumo(props) {
               <div className="prumo-grid-2">
                 <CatS prumo value={ff.cat} onChange={function(e) { sFf({ ...ff, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
                 <select className="prumo-input" value={ff.pay} onChange={function(e) { sFf({ ...ff, pay: e.target.value }); }}>
-                  {PAYS.map(function(p) { return <option key={p}>{p}</option>; })}
+                  {(cfg.payments || DEFAULT_PAYMENTS).map(function(p) { return <option key={p.id} value={p.name}>{p.name}</option>; })}
                 </select>
               </div>
               <div className="prumo-lbl" style={{ marginTop: 4 }}>{"Modo de acompanhamento"}</div>
@@ -2329,6 +2364,21 @@ function FixasPrumo(props) {
                 <input type="checkbox" checked={ff.hs} onChange={function(e) { sFf({ ...ff, hs: e.target.checked }); }} />{"Dividir com outra pessoa"}
               </label>
               {ff.hs && <SE prumo splits={ff.sp} onChange={function(s) { sFf({ ...ff, sp: s }); }} />}
+              <div className="prumo-lbl" style={{ marginTop: 4 }}>{"Período (opcional)"}</div>
+              <div className="prumo-grid-2">
+                <div>
+                  <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Existe desde"}</div>
+                  <input className="prumo-input" type="month" value={ff.startDate} placeholder={currentYM}
+                    onChange={function(e) { sFf({ ...ff, startDate: e.target.value }); }} />
+                  <div className="prumo-cap" style={{ fontSize: 10, marginTop: 3 }}>{"Vazio = começa em " + MS[mo].slice(0, 3) + "/" + String(yr)}</div>
+                </div>
+                <div>
+                  <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Prazo final"}</div>
+                  <input className="prumo-input" type="month" value={ff.endDate}
+                    onChange={function(e) { sFf({ ...ff, endDate: e.target.value }); }} />
+                  <div className="prumo-cap" style={{ fontSize: 10, marginTop: 3 }}>{"Útil pra financiamentos"}</div>
+                </div>
+              </div>
               {err && tab === "fixas" && <div className="prumo-form-err">{"⚠️ " + err}</div>}
               <button className="prumo-btn brand" style={{ padding: "12px 18px", fontSize: 13, marginTop: 2 }} onClick={addFx}>{"Salvar fixa"}</button>
             </div>
@@ -2414,7 +2464,7 @@ function FixasPrumo(props) {
                     <button onClick={function() {
                       var fxdRaw = cfg.fixed || [];
                       var orig = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
-                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), endDate: orig.endDate || "", scope: "future", origName: f.name });
+                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "future", origName: f.name });
                     }}
                       style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: "var(--ink-3)", width: 26, height: 26, cursor: "pointer", fontSize: 12, fontFamily: "var(--f-ui)" }}
                       title="Editar valor / prazo">{"✎"}</button>
@@ -2494,12 +2544,26 @@ function FixasPrumo(props) {
                 </div>
               </div>
               <div>
-                <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Prazo final (opcional)"}</div>
-                <div className="prumo-cap" style={{ marginBottom: 6 }}>{"A fixa some da projeção depois desse mês. Útil pra financiamentos."}</div>
-                <input className="prumo-input" type="month" value={editFx.endDate} onChange={function(e) { sEditFx({ ...editFx, endDate: e.target.value }); }} />
-                {editFx.endDate && (
-                  <button className="prumo-btn ghost" style={{ marginTop: 6, fontSize: 11 }} onClick={function() { sEditFx({ ...editFx, endDate: "" }); }}>{"Sem prazo"}</button>
-                )}
+                <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Período"}</div>
+                <div className="prumo-cap" style={{ marginBottom: 6 }}>{"A fixa só aparece na projeção dentro do período definido"}</div>
+                <div className="prumo-grid-2">
+                  <div>
+                    <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"Existe desde"}</div>
+                    <input className="prumo-input" type="month" value={editFx.startDate}
+                      onChange={function(e) { sEditFx({ ...editFx, startDate: e.target.value }); }} />
+                    {editFx.startDate && (
+                      <button className="prumo-btn ghost" style={{ marginTop: 4, fontSize: 10, padding: "4px 8px" }} onClick={function() { sEditFx({ ...editFx, startDate: "" }); }}>{"Limpar"}</button>
+                    )}
+                  </div>
+                  <div>
+                    <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"Prazo final"}</div>
+                    <input className="prumo-input" type="month" value={editFx.endDate}
+                      onChange={function(e) { sEditFx({ ...editFx, endDate: e.target.value }); }} />
+                    {editFx.endDate && (
+                      <button className="prumo-btn ghost" style={{ marginTop: 4, fontSize: 10, padding: "4px 8px" }} onClick={function() { sEditFx({ ...editFx, endDate: "" }); }}>{"Limpar"}</button>
+                    )}
+                  </div>
+                </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                 <button className="prumo-btn brand" style={{ flex: 1, padding: "12px 18px" }} onClick={applyFxEdit}>{"Salvar"}</button>
@@ -2831,6 +2895,449 @@ function MetasPrumo(props) {
   );
 }
 
+/* ══ CONFIGURAÇÕES PRUMO ══ */
+var EMOJI_PALETTE = ["🏠","🍽️","👶","🚗","🏥","📚","💳","📋","🐾","💼","🍔","🎉","🛍️","✈️","📺","💅","🎁","❤️","📈","🎯","💰","💵","🏢","🛒","🚖","💊","🔧","💡","⚡","📱","🎬","🎵","☕","🍺","🐶","🐱","🏋️","🧘","💄","✂️","💻","🎮","📷","🎨"];
+
+function ConfigPrumo(props) {
+  var cfg = props.cfg;
+  var saveCfg = props.saveCfg;
+
+  var [openCatId, sOpenCatId] = useState(null);
+  var [newCatGroup, sNewCatGroup] = useState(null); // mostra o form de categoria principal pra um grupo
+  var [newSubFor, sNewSubFor] = useState(null);     // mostra o form de subcategoria pra uma categoria principal
+  var [editCatId, sEditCatId] = useState(null);
+  var [editForm, sEditForm] = useState({ name: "", icon: "" });
+  var [draftCat, sDraftCat] = useState({ name: "", icon: "🏷️" });
+  var [draftSub, sDraftSub] = useState({ name: "", icon: "" });
+
+  var [editPayId, sEditPayId] = useState(null);
+  var [editPayForm, sEditPayForm] = useState({ name: "", type: "credito", closing: "" });
+  var [showNewPay, sShowNewPay] = useState(false);
+  var [draftPay, sDraftPay] = useState({ name: "", type: "credito", closing: "" });
+
+  var allCats = cfg.categories || [];
+  var payments = cfg.payments || DEFAULT_PAYMENTS;
+
+  var slugify = function(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || ("c_" + Math.random().toString(36).slice(2, 7));
+  };
+
+  var uniqueId = function(base) {
+    var id = base;
+    var n = 1;
+    while (allCats.some(function(c) { return c.id === id; })) {
+      n++;
+      id = base + "_" + String(n);
+    }
+    return id;
+  };
+
+  /* ═══ CATEGORIAS ═══ */
+  var addPrincipal = function(groupId) {
+    if (!draftCat.name.trim()) return;
+    var id = uniqueId(slugify(draftCat.name));
+    var newCat = { id: id, name: draftCat.name.trim(), icon: draftCat.icon || "🏷️", group: groupId };
+    saveCfg({ ...cfg, categories: allCats.concat([newCat]) });
+    sDraftCat({ name: "", icon: "🏷️" });
+    sNewCatGroup(null);
+  };
+
+  var addSubcategory = function(parentCat) {
+    if (!draftSub.name.trim()) return;
+    var id = uniqueId(slugify(parentCat.id + "_" + draftSub.name));
+    var newCat = { id: id, name: draftSub.name.trim(), icon: draftSub.icon || "", group: parentCat.group, parent: parentCat.id };
+    saveCfg({ ...cfg, categories: allCats.concat([newCat]) });
+    sDraftSub({ name: "", icon: "" });
+    sNewSubFor(null);
+  };
+
+  var startEditCat = function(cat) {
+    sEditCatId(cat.id);
+    sEditForm({ name: cat.name, icon: cat.icon || "" });
+  };
+
+  var saveCatEdit = function() {
+    if (!editCatId || !editForm.name.trim()) { sEditCatId(null); return; }
+    var updated = allCats.map(function(c) {
+      if (c.id !== editCatId) return c;
+      return { ...c, name: editForm.name.trim(), icon: editForm.icon };
+    });
+    saveCfg({ ...cfg, categories: updated });
+    sEditCatId(null);
+  };
+
+  var deleteCat = function(catId) {
+    var children = allCats.filter(function(c) { return c.parent === catId; });
+    var msg = children.length > 0
+      ? "Esta categoria tem " + String(children.length) + " subcategoria(s). Remover apaga subcategorias junto. Continuar?"
+      : "Remover esta categoria? Lançamentos antigos ficam órfãos.";
+    if (!window.confirm(msg)) return;
+    var updated = allCats.filter(function(c) { return c.id !== catId && c.parent !== catId; });
+    saveCfg({ ...cfg, categories: updated });
+  };
+
+  /* ═══ PAGAMENTOS ═══ */
+  var addPayment = function() {
+    if (!draftPay.name.trim()) return;
+    var id = slugify(draftPay.name);
+    var newP = { id: id, name: draftPay.name.trim(), type: draftPay.type };
+    if (draftPay.type === "credito" && draftPay.closing) {
+      var c = parseInt(draftPay.closing, 10);
+      if (!isNaN(c) && c >= 1 && c <= 31) newP.closing = c;
+    }
+    saveCfg({ ...cfg, payments: payments.concat([newP]) });
+    sDraftPay({ name: "", type: "credito", closing: "" });
+    sShowNewPay(false);
+  };
+
+  var startEditPay = function(p) {
+    sEditPayId(p.id);
+    sEditPayForm({ name: p.name, type: p.type || "credito", closing: p.closing ? String(p.closing) : "" });
+  };
+
+  var savePayEdit = function() {
+    if (!editPayId || !editPayForm.name.trim()) { sEditPayId(null); return; }
+    var updated = payments.map(function(p) {
+      if (p.id !== editPayId) return p;
+      var updatedP = { ...p, name: editPayForm.name.trim(), type: editPayForm.type };
+      if (editPayForm.type === "credito" && editPayForm.closing) {
+        var c = parseInt(editPayForm.closing, 10);
+        if (!isNaN(c) && c >= 1 && c <= 31) updatedP.closing = c;
+        else delete updatedP.closing;
+      } else {
+        delete updatedP.closing;
+      }
+      return updatedP;
+    });
+    saveCfg({ ...cfg, payments: updated });
+    sEditPayId(null);
+  };
+
+  var deletePay = function(payId) {
+    if (!window.confirm("Remover esta forma de pagamento? Lançamentos antigos mantêm o texto, mas o dropdown não vai mais oferecer essa opção.")) return;
+    var updated = payments.filter(function(p) { return p.id !== payId; });
+    saveCfg({ ...cfg, payments: updated });
+  };
+
+  /* ═══ RENDER ═══ */
+  return (
+    <div className="prumo-form-grid">
+
+      {/* HEADER */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Configurações"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Categorias, subcategorias e formas de pagamento"}</h2>
+          </div>
+        </div>
+        <div className="prumo-cap">{"Personalize o app de acordo com sua realidade. Mudanças aqui afetam todos os meses."}</div>
+      </div>
+
+      {/* CATEGORIAS */}
+      <div className="prumo-card full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Categorias"}</div>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Organizadas por grupo 50/25/25"}</h3>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Cada categoria pertence a um grupo. Subcategorias herdam o grupo da categoria pai."}</div>
+
+        {GR.map(function(g) {
+          var principais = allCats.filter(function(c) { return c.group === g.id && !c.parent; });
+          var isAddingHere = newCatGroup === g.id;
+          return (
+            <div key={g.id} style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid var(--line-2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color }} />
+                  <span style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{g.label}</span>
+                  <span className="prumo-chip" style={{ fontSize: 10 }}>{String(cfg.pcts[g.id] || 0) + "%"}</span>
+                </div>
+                <button onClick={function() { sNewCatGroup(isAddingHere ? null : g.id); sDraftCat({ name: "", icon: "🏷️" }); }}
+                  className={"prumo-btn " + (isAddingHere ? "ghost" : "brand")} style={{ fontSize: 11, padding: "5px 10px" }}>
+                  {isAddingHere ? "Cancelar" : "+ Categoria"}
+                </button>
+              </div>
+
+              {isAddingHere && (
+                <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 14, marginBottom: 12, border: "1px solid var(--line)" }}>
+                  <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Nova categoria em " + g.label}</div>
+                  <div className="prumo-form">
+                    <input className="prumo-input" placeholder="Nome (ex: Trabalho remoto)" value={draftCat.name}
+                      onChange={function(e) { sDraftCat({ ...draftCat, name: e.target.value }); }}
+                      onKeyDown={function(e) { if (e.key === "Enter") addPrincipal(g.id); }} />
+                    <div>
+                      <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Ícone"}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {EMOJI_PALETTE.slice(0, 24).map(function(emo) {
+                          var sel = draftCat.icon === emo;
+                          return (
+                            <button key={emo} onClick={function() { sDraftCat({ ...draftCat, icon: emo }); }}
+                              style={{ background: sel ? "var(--brand-tint)" : "var(--surface)", border: "1px solid " + (sel ? "var(--brand)" : "var(--line)"), borderRadius: 8, cursor: "pointer", padding: 6, fontSize: 18, width: 36, height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                              {emo}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button className="prumo-btn brand" style={{ padding: "10px 16px" }} onClick={function() { addPrincipal(g.id); }}>{"Adicionar"}</button>
+                  </div>
+                </div>
+              )}
+
+              {principais.length === 0 && !isAddingHere && (
+                <div className="prumo-cap" style={{ textAlign: "center", padding: 10 }}>{"Nenhuma categoria neste grupo ainda."}</div>
+              )}
+
+              {principais.map(function(cat) {
+                var isOpen = openCatId === cat.id;
+                var isEditing = editCatId === cat.id;
+                var subs = allCats.filter(function(c) { return c.parent === cat.id; });
+                var isAddingSub = newSubFor === cat.id;
+                return (
+                  <div key={cat.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+                    {isEditing ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <input className="prumo-input" style={{ width: 70, textAlign: "center", fontSize: 18, padding: 8 }}
+                          value={editForm.icon}
+                          onChange={function(e) { sEditForm({ ...editForm, icon: e.target.value }); }} />
+                        <input className="prumo-input" style={{ flex: 1, minWidth: 140 }}
+                          value={editForm.name}
+                          autoFocus
+                          onChange={function(e) { sEditForm({ ...editForm, name: e.target.value }); }}
+                          onKeyDown={function(e) { if (e.key === "Enter") saveCatEdit(); }} />
+                        <button className="prumo-btn brand" onClick={saveCatEdit}>{"OK"}</button>
+                        <button className="prumo-btn ghost" onClick={function() { sEditCatId(null); }}>{"Cancelar"}</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <button onClick={function() { sOpenCatId(isOpen ? null : cat.id); }}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, padding: 4, textAlign: "left", fontFamily: "var(--f-ui)" }}>
+                          <span style={{ fontSize: 11, color: "var(--ink-3)", width: 12 }}>{isOpen ? "▾" : "▸"}</span>
+                          <span style={{ fontSize: 18 }}>{cat.icon || "🏷️"}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{cat.name}</span>
+                          {subs.length > 0 && <span className="prumo-chip" style={{ fontSize: 10 }}>{String(subs.length) + " sub"}</span>}
+                        </button>
+                        <button onClick={function() { startEditCat(cat); }} className="prumo-icon-x" style={{ color: "var(--ink-3)", border: "1px solid var(--line)" }} title="Editar">{"✎"}</button>
+                        <button onClick={function() { deleteCat(cat.id); }} className="prumo-icon-x" title="Remover">{"×"}</button>
+                      </div>
+                    )}
+                    {isOpen && !isEditing && (
+                      <div style={{ marginTop: 8, marginLeft: 22, paddingLeft: 12, borderLeft: "2px solid var(--line-2)" }}>
+                        {subs.length === 0 && !isAddingSub && (
+                          <div className="prumo-cap" style={{ padding: 4, fontSize: 11 }}>{"Sem subcategorias"}</div>
+                        )}
+                        {subs.map(function(sub) {
+                          var subEditing = editCatId === sub.id;
+                          return (
+                            <div key={sub.id} style={{ padding: "5px 0", borderBottom: "1px dashed var(--line)" }}>
+                              {subEditing ? (
+                                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                  <input className="prumo-input" style={{ width: 60, textAlign: "center", fontSize: 14, padding: 6 }}
+                                    value={editForm.icon}
+                                    onChange={function(e) { sEditForm({ ...editForm, icon: e.target.value }); }} />
+                                  <input className="prumo-input" style={{ flex: 1, fontSize: 13, padding: 6 }}
+                                    value={editForm.name}
+                                    autoFocus
+                                    onChange={function(e) { sEditForm({ ...editForm, name: e.target.value }); }}
+                                    onKeyDown={function(e) { if (e.key === "Enter") saveCatEdit(); }} />
+                                  <button className="prumo-btn brand" style={{ padding: "5px 10px", fontSize: 11 }} onClick={saveCatEdit}>{"OK"}</button>
+                                </div>
+                              ) : (
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ color: "var(--ink-4)" }}>{"└"}</span>
+                                  <span style={{ fontSize: 13 }}>{sub.icon || ""}</span>
+                                  <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: "var(--ink-2)" }}>{sub.name}</span>
+                                  <button onClick={function() { startEditCat(sub); }} className="prumo-icon-x" style={{ width: 20, height: 20, fontSize: 11, color: "var(--ink-3)", border: "1px solid var(--line)" }}>{"✎"}</button>
+                                  <button onClick={function() { deleteCat(sub.id); }} className="prumo-icon-x" style={{ width: 20, height: 20, fontSize: 11 }}>{"×"}</button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {isAddingSub ? (
+                          <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                            <input className="prumo-input" style={{ width: 50, textAlign: "center", fontSize: 13, padding: 6 }}
+                              placeholder="🏷️"
+                              value={draftSub.icon}
+                              onChange={function(e) { sDraftSub({ ...draftSub, icon: e.target.value }); }} />
+                            <input className="prumo-input" style={{ flex: 1, fontSize: 12, padding: 6 }}
+                              placeholder={"Nova subcategoria de " + cat.name}
+                              value={draftSub.name}
+                              autoFocus
+                              onChange={function(e) { sDraftSub({ ...draftSub, name: e.target.value }); }}
+                              onKeyDown={function(e) { if (e.key === "Enter") addSubcategory(cat); }} />
+                            <button className="prumo-btn brand" style={{ padding: "5px 10px", fontSize: 11 }} onClick={function() { addSubcategory(cat); }}>{"OK"}</button>
+                            <button onClick={function() { sNewSubFor(null); }} className="prumo-icon-x" style={{ width: 22, height: 22 }}>{"×"}</button>
+                          </div>
+                        ) : (
+                          <button onClick={function() { sNewSubFor(cat.id); sDraftSub({ name: "", icon: "" }); }}
+                            className="prumo-btn ghost" style={{ marginTop: 6, fontSize: 11, padding: "4px 10px" }}>
+                            {"+ Subcategoria"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* FORMAS DE PAGAMENTO */}
+      <div className="prumo-card l-accent full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Formas de pagamento"}</div>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"PIX, Boleto, Dinheiro, Cartões"}</h3>
+          </div>
+          <button onClick={function() { sShowNewPay(!showNewPay); sDraftPay({ name: "", type: "credito", closing: "" }); }}
+            className={"prumo-btn " + (showNewPay ? "ghost" : "accent")} style={{ fontSize: 12, padding: "7px 12px" }}>
+            {showNewPay ? "Cancelar" : "+ Adicionar"}
+          </button>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Cartões de crédito têm fechamento — usado pra projetar parcelas no mês certo."}</div>
+
+        {showNewPay && (
+          <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 14, marginTop: 12, border: "1px solid var(--line)" }}>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Nova forma de pagamento"}</div>
+            <div className="prumo-form">
+              <input className="prumo-input" placeholder="Nome (ex: Cartão Itaú Black)"
+                value={draftPay.name}
+                onChange={function(e) { sDraftPay({ ...draftPay, name: e.target.value }); }} />
+              <div>
+                <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Tipo"}</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {PAYMENT_TYPES.map(function(t) {
+                    var sel = draftPay.type === t.id;
+                    return (
+                      <button key={t.id} onClick={function() { sDraftPay({ ...draftPay, type: t.id }); }}
+                        className={"prumo-chip " + (sel ? "brand" : "")} style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", border: sel ? "1px solid var(--brand)" : "1px solid var(--line)" }}>
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {draftPay.type === "credito" && (
+                <div>
+                  <div className="prumo-cap" style={{ marginBottom: 4 }}>{"Dia do fechamento (1-31)"}</div>
+                  <input className="prumo-input mono right" placeholder="Ex: 2" inputMode="numeric"
+                    value={draftPay.closing}
+                    onChange={function(e) { sDraftPay({ ...draftPay, closing: e.target.value }); }}
+                    style={{ maxWidth: 100 }} />
+                </div>
+              )}
+              <button className="prumo-btn brand" style={{ padding: "10px 16px" }} onClick={addPayment}>{"Adicionar"}</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 12 }}>
+          {payments.length === 0 ? (
+            <div className="prumo-cap" style={{ textAlign: "center", padding: 16 }}>{"Nenhuma forma de pagamento cadastrada."}</div>
+          ) : payments.map(function(p) {
+            var typeInfo = PAYMENT_TYPES.find(function(t) { return t.id === p.type; });
+            var isEditing = editPayId === p.id;
+            return (
+              <div key={p.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+                {isEditing ? (
+                  <div className="prumo-form" style={{ marginTop: 0 }}>
+                    <input className="prumo-input" value={editPayForm.name}
+                      onChange={function(e) { sEditPayForm({ ...editPayForm, name: e.target.value }); }} />
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {PAYMENT_TYPES.map(function(t) {
+                        var sel = editPayForm.type === t.id;
+                        return (
+                          <button key={t.id} onClick={function() { sEditPayForm({ ...editPayForm, type: t.id }); }}
+                            className={"prumo-chip " + (sel ? "brand" : "")} style={{ padding: "5px 10px", fontSize: 11, cursor: "pointer", border: sel ? "1px solid var(--brand)" : "1px solid var(--line)" }}>
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {editPayForm.type === "credito" && (
+                      <div className="prumo-input-affix" style={{ maxWidth: 200 }}>
+                        <input className="prumo-input mono" placeholder="Fechamento (dia)" inputMode="numeric"
+                          value={editPayForm.closing}
+                          onChange={function(e) { sEditPayForm({ ...editPayForm, closing: e.target.value }); }} />
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="prumo-btn brand" onClick={savePayEdit}>{"Salvar"}</button>
+                      <button className="prumo-btn ghost" onClick={function() { sEditPayId(null); }}>{"Cancelar"}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {p.type === "pix" ? "⚡" : p.type === "boleto" ? "📄" : p.type === "dinheiro" ? "💵" : p.type === "debito" ? "💳" : "💳"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.name}</div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                        <span className="prumo-chip" style={{ fontSize: 10 }}>{typeInfo ? typeInfo.label : p.type}</span>
+                        {p.type === "credito" && p.closing && (
+                          <span className="prumo-chip brand" style={{ fontSize: 10 }}>{"Fecha dia " + String(p.closing)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={function() { startEditPay(p); }} className="prumo-icon-x" style={{ color: "var(--ink-3)", border: "1px solid var(--line)" }} title="Editar">{"✎"}</button>
+                    <button onClick={function() { deletePay(p.id); }} className="prumo-icon-x" title="Remover">{"×"}</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* % POR GRUPO 50/25/25 */}
+      <div className="prumo-card full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Metas % do grupo"}</div>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Distribuição alvo da renda"}</h3>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Soma deve dar 100%. Você também pode editar direto no Dashboard."}</div>
+        {GR.map(function(g) {
+          return (
+            <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color }} />
+              <span style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", fontWeight: 600 }}>{g.label}</span>
+              <div className="prumo-input-affix" style={{ width: 100 }}>
+                <input
+                  className="prumo-input mono right"
+                  type="number"
+                  min="0"
+                  max="100"
+                  defaultValue={cfg.pcts[g.id] || 0}
+                  onBlur={function(e) {
+                    var v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0 && v <= 100) {
+                      saveCfg({ ...cfg, pcts: { ...cfg.pcts, [g.id]: v } });
+                    }
+                  }}
+                  style={{ fontSize: 13, padding: "8px 28px 8px 10px" }} />
+                <span className="suffix">{"%"}</span>
+              </div>
+            </div>
+          );
+        })}
+        <div style={{ marginTop: 8, textAlign: "right" }}>
+          <span className="prumo-cap">{"Total: " + String((cfg.pcts.essenciais || 0) + (cfg.pcts.investimentos || 0) + (cfg.pcts.desejos || 0)) + "%"}</span>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 /* ══ MAIN APP ══ */
 
 /* ══ LOGIN SCREEN ══ */
@@ -2899,7 +3406,7 @@ export default function App() {
   var emFm = { desc: "", valor: "", cat: "", pay: "Cartão Nubank", hs: false, sp: [{ person: "", pct: 0 }], date: "", reimb: false, ic: "", it: "", note: "" };
   var [fm, sFm] = useState(emFm);
   var [cf, sCf] = useState({ desc: "", valor: "", type: "Bônus" });
-  var [ff, sFf] = useState({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget" });
+  var [ff, sFf] = useState({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "" });
   var [df, sDf] = useState({ desc: "", amount: "", person: "" });
   var [gf, sGf] = useState({ name: "", target: "", deadline: "", saved: "0" });
   var [simAporte, sSimA] = useState("1000");
@@ -2955,6 +3462,25 @@ export default function App() {
         }
         return cat;
       });
+      // MIGRAÇÃO: payments do PAYS antigo (array de strings) pra cfg.payments (array de objetos)
+      if (!c.payments || !Array.isArray(c.payments) || c.payments.length === 0) {
+        // Lê PAYS antigos do cfg ou usa defaults
+        var oldPays = (c.PAYS && Array.isArray(c.PAYS)) ? c.PAYS : PAYS;
+        var migratedPays = oldPays.map(function(name) {
+          var slug = String(name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+          var p = { id: slug || ("pay_" + Math.random().toString(36).slice(2, 7)), name: name, type: inferPaymentType(name) };
+          if (p.type === "credito" && p.name.toLowerCase().indexOf("nubank") >= 0) p.closing = 2;
+          return p;
+        });
+        // Garante que defaults essenciais (PIX, Boleto, Dinheiro, Débito) estão presentes
+        DEFAULT_PAYMENTS.forEach(function(defP) {
+          if (!migratedPays.some(function(p) { return p.id === defP.id || p.name.toLowerCase() === defP.name.toLowerCase(); })) {
+            migratedPays.push(defP);
+          }
+        });
+        c = { ...c, payments: migratedPays };
+        needsMigration = true;
+      }
       if (needsMigration) {
         c = { ...c, categories: existingCats };
         sv("fc2-cfg", c); // persiste a migração no Firebase
@@ -3274,9 +3800,10 @@ export default function App() {
     }
     sErr("");
     var sp = ff.hs ? ff.sp.filter(function(s) { return s.person && s.pct > 0; }) : [];
-    var newFx = { id: uid(), name: ff.name, amount: a, cat: ff.cat, payment: ff.pay, splits: sp, hasSplit: sp.length > 0, mode: ff.mode };
+    var newFx = { id: uid(), name: ff.name, amount: a, cat: ff.cat, payment: ff.pay, splits: sp, hasSplit: sp.length > 0, mode: ff.mode, startDate: ff.startDate || tk(yr, mo) };
+    if (ff.endDate) newFx.endDate = ff.endDate;
     saveCfg({ ...cfg, fixed: fxd.concat([newFx]) });
-    sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget" });
+    sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "" });
     sSFx(false);
   };
 
@@ -3464,8 +3991,9 @@ export default function App() {
     { id: "vida", l: "Vida (PL)", ico: "○", grp: "Patrimônio" },
     { id: "metas", l: "Metas", ico: "◯", grp: "Patrimônio" },
     { id: "monthly", l: "Mensal", ico: "▦", grp: "Patrimônio" },
+    { id: "cfg", l: "Configurações", ico: "⚙", grp: "Sistema" },
   ];
-  var tabGroups = ["Visão", "Operação", "Patrimônio"];
+  var tabGroups = ["Visão", "Operação", "Patrimônio", "Sistema"];
   var curTab = tabs.find(function(t) { return t.id === tab; }) || tabs[0];
   var goTab = function(id) { sTab(id); sErr(""); sTxS(""); sCfC(false); sCatF(null); sShowMore(false); };
 
@@ -3640,7 +4168,7 @@ export default function App() {
                 <div className="prumo-grid-2">
                   <CatS prumo value={fm.cat} onChange={function(e) { sFm({ ...fm, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
                   <select className="prumo-input" value={fm.pay} onChange={function(e) { sFm({ ...fm, pay: e.target.value }); }}>
-                    {PAYS.map(function(p) { return <option key={p}>{p}</option>; })}
+                    {(cfg.payments || DEFAULT_PAYMENTS).map(function(p) { return <option key={p.id} value={p.name}>{p.name}</option>; })}
                   </select>
                 </div>
                 <input className="prumo-input" style={{ fontSize: 13 }} placeholder="Nota (opcional)" value={fm.note} onChange={function(e) { sFm({ ...fm, note: e.target.value }); }} />
@@ -3788,6 +4316,11 @@ export default function App() {
             cats={cats} spC={spC} catLimits={catLimits}
             editLimId={editLimId} sELimId={sELimId} editLimV={editLimV} sELimV={sELimV} setCatLimit={setCatLimit}
           />
+        )}
+
+        {/* ═══ CONFIGURAÇÕES ═══ */}
+        {tab === "cfg" && (
+          <ConfigPrumo cfg={cfg} saveCfg={saveCfg} />
         )}
 
         {/* ═══ MENSAL ═══ */}
@@ -3967,7 +4500,7 @@ export default function App() {
           <span className="ico">{"◇"}</span>
           <span className="lbl-t">{"Análise"}</span>
         </button>
-        <button className={"prumo-tab" + (["vida","metas","monthly","proj","fixas","deve"].indexOf(tab) >= 0 ? " active" : "")} onClick={function() { sShowMore(true); }}>
+        <button className={"prumo-tab" + (["vida","metas","monthly","proj","fixas","deve","cfg"].indexOf(tab) >= 0 ? " active" : "")} onClick={function() { sShowMore(true); }}>
           <span className="ico">{"○"}</span>
           <span className="lbl-t">{"Mais"}</span>
         </button>
