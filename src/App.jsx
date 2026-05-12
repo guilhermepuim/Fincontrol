@@ -617,14 +617,36 @@ function ChartTip(props) {
   var d = props.d;
   var i = props.i;
   var cats2 = props.cats;
-  var items = Object.entries(d.cats || {}).map(function(e2) {
+  // Pega tudo que tem valor no mês
+  var raw = Object.entries(d.cats || {}).map(function(e2) {
     var co = cats2.find(function(c) { return c.id === e2[0]; });
-    return { id: e2[0], name: co ? co.name : e2[0], icon: co ? co.icon : "", group: co ? co.group : "", value: e2[1] };
-  }).filter(function(x) { return x.value > 0; }).sort(function(a, b) { return b.value - a.value; });
+    return { id: e2[0], name: co ? co.name : e2[0], icon: co ? co.icon : "", group: co ? co.group : "", parent: co ? (co.parent || null) : null, value: e2[1] };
+  }).filter(function(x) { return x.value > 0; });
+  // Agrupa: principal recebe own + soma das subs; subs ficam como children
+  var byPrincipal = {};
+  var orphans = [];
+  raw.forEach(function(x) {
+    if (x.parent) {
+      if (!byPrincipal[x.parent]) {
+        var parentCat = cats2.find(function(c) { return c.id === x.parent; });
+        byPrincipal[x.parent] = parentCat
+          ? { id: parentCat.id, name: parentCat.name, icon: parentCat.icon || "", group: parentCat.group, own: 0, subs: [], total: 0 }
+          : { id: x.parent, name: x.parent, icon: "", group: x.group, own: 0, subs: [], total: 0 };
+      }
+      byPrincipal[x.parent].subs.push(x);
+      byPrincipal[x.parent].total += x.value;
+    } else {
+      // Categoria principal (sem parent)
+      if (!byPrincipal[x.id]) byPrincipal[x.id] = { id: x.id, name: x.name, icon: x.icon, group: x.group, own: 0, subs: [], total: 0 };
+      byPrincipal[x.id].own = x.value;
+      byPrincipal[x.id].total += x.value;
+    }
+  });
+  var items = Object.values(byPrincipal).filter(function(x) { return x.total > 0; }).sort(function(a, b) { return b.total - a.total; });
   var left = i < 6 ? 0 : "auto";
   var right = i >= 6 ? 0 : "auto";
   return (
-    <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "#fff", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", zIndex: 20, minWidth: 180, whiteSpace: "nowrap" }}
+    <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "#fff", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", zIndex: 20, minWidth: 220, whiteSpace: "nowrap" }}
       onClick={function(e) { e.stopPropagation(); }}>
       <div style={{ ...S.h2, fontSize: 12, marginBottom: 6, borderBottom: "1px solid #F0F0F0", paddingBottom: 4 }}>{MS[i] + (d.real ? "" : " (projeção)")}</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, ...S.cap }}>
@@ -636,15 +658,25 @@ function ChartTip(props) {
       {GR.map(function(g) {
         var gi = items.filter(function(x) { return x.group === g.id; });
         if (gi.length === 0) return null;
-        var gt = gi.reduce(function(a, x) { return a + x.value; }, 0);
+        var gt = gi.reduce(function(a, x) { return a + x.total; }, 0);
         return (
           <div key={g.id} style={{ marginBottom: 4 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: g.color, textTransform: "uppercase", marginBottom: 2 }}>{g.label + " " + fmt(gt)}</div>
             {gi.slice(0, 5).map(function(it) {
               return (
-                <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T3, padding: "1px 0 1px 8px" }}>
-                  <span>{it.icon + " " + it.name}</span>
-                  <span style={{ fontWeight: 600, color: TX }}>{fmt(it.value)}</span>
+                <div key={it.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T3, padding: "1px 0 1px 8px" }}>
+                    <span>{(it.icon ? it.icon + " " : "") + it.name}</span>
+                    <span style={{ fontWeight: 600, color: TX }}>{fmt(it.total)}</span>
+                  </div>
+                  {it.subs.length > 0 && it.subs.slice(0, 4).map(function(sub) {
+                    return (
+                      <div key={sub.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: TM, padding: "1px 0 1px 22px", fontWeight: 400 }}>
+                        <span>{"└ " + (sub.icon ? sub.icon + " " : "") + sub.name}</span>
+                        <span>{fmt(sub.value)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -4002,8 +4034,14 @@ export default function App() {
       var cat2 = cats.find(function(c) { return c.id === tx.cat; });
       if (!cat2) return false;
       var isGrp = GR.some(function(g) { return g.id === catF; });
-      if (isGrp) { if (cat2.group !== catF) return false; }
-      else { if (tx.cat !== catF) return false; }
+      if (isGrp) {
+        if (cat2.group !== catF) return false;
+      } else {
+        // Inclui txs da própria categoria OU de subcategorias filhas dela
+        var matchesSelf = tx.cat === catF;
+        var matchesAsChild = cat2.parent === catF;
+        if (!matchesSelf && !matchesAsChild) return false;
+      }
     }
     if (txSearch) {
       var q = txSearch.toLowerCase();
@@ -4332,45 +4370,57 @@ export default function App() {
                 {catF && <span onClick={function() { sCatF(null); }} style={{ marginLeft: 8, fontSize: 10, color: BL, cursor: "pointer", fontWeight: 700, textTransform: "none" }}>{"✕ Limpar filtro"}</span>}
               </div>
               {GR.map(function(g) {
-                var ci = cats.filter(function(c) { return c.group === g.id && (spC[c.id] || 0) > 0; })
-                  .sort(function(a, b) { return (spC[b.id] || 0) - (spC[a.id] || 0); });
-                if (ci.length === 0) return null;
+                // Categorias principais do grupo
+                var principais = cats.filter(function(c) { return c.group === g.id && !c.parent; });
+                // Calcula valor agregado = valor próprio + valor de todas as subs
+                var aggregated = principais.map(function(p) {
+                  var ownValue = spC[p.id] || 0;
+                  var subs = cats.filter(function(c) { return c.parent === p.id; });
+                  var subValues = subs.map(function(s) { return { sub: s, value: spC[s.id] || 0 }; }).filter(function(x) { return x.value > 0; });
+                  var subsTotal = subValues.reduce(function(a, x) { return a + x.value; }, 0);
+                  return { cat: p, ownValue: ownValue, subs: subValues, total: ownValue + subsTotal };
+                }).filter(function(x) { return x.total > 0; })
+                  .sort(function(a, b) { return b.total - a.total; });
+                if (aggregated.length === 0) return null;
                 return (
                   <div key={g.id} style={{ marginTop: 10 }}>
                     <div onClick={function() { sCatF(catF === g.id ? null : g.id); }}
                       style={{ fontSize: 11, fontWeight: 700, color: g.color, marginBottom: 4, textTransform: "uppercase", cursor: "pointer", background: catF === g.id ? BG : "transparent", padding: "4px 6px", borderRadius: 4, marginLeft: -6 }}>
                       {g.label + " — " + fmt(spent[g.id]) + " / " + fmt(bud[g.id]) + (catF === g.id ? " ✓" : "")}
                     </div>
-                    {ci.map(function(cat2) {
+                    {aggregated.map(function(item) {
+                      var cat2 = item.cat;
                       var isAc = catF === cat2.id;
                       var lim = catLimits[cat2.id];
                       var isEditLim = editLimId === cat2.id;
+                      var hasSubs = item.subs.length > 0;
                       return (
                         <div key={cat2.id}>
                           <div onClick={function() { if (!isEditLim) sCatF(isAc ? null : cat2.id); }}
-                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px", marginLeft: -6, borderBottom: "1px solid #F0F0F0", cursor: "pointer", borderRadius: 4, background: isAc ? BG : "transparent" }}>
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px", marginLeft: -6, borderBottom: hasSubs ? "none" : "1px solid #F0F0F0", cursor: "pointer", borderRadius: 4, background: isAc ? BG : "transparent" }}>
                             <span>{cat2.icon}</span>
                             <div style={{ flex: 1 }}>
-                              <span style={{ fontSize: 12, color: isAc ? BD : T3, fontWeight: isAc ? 700 : 400 }}>{cat2.name}</span>
+                              <span style={{ fontSize: 12, color: isAc ? BD : T3, fontWeight: isAc ? 700 : 600 }}>{cat2.name}</span>
+                              {hasSubs && <span style={{ fontSize: 10, color: TM, marginLeft: 6 }}>{"(" + String(item.subs.length) + " sub)"}</span>}
                               {lim && (
                                 <div style={{ marginTop: 3 }}>
-                                  <PB value={spC[cat2.id] || 0} max={lim} color={g.color} noWarn={g.id === "investimentos"} />
+                                  <PB value={item.total} max={lim} color={g.color} noWarn={g.id === "investimentos"} />
                                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                                    <span style={{ ...S.cap }}>{fmt(spC[cat2.id] || 0) + " / " + fmt(lim)}</span>
-                                    {(spC[cat2.id] || 0) > lim ? (
+                                    <span style={{ ...S.cap }}>{fmt(item.total) + " / " + fmt(lim)}</span>
+                                    {item.total > lim ? (
                                       <span style={{ fontSize: 10, fontWeight: 700, color: g.id === "investimentos" ? OK : ER }}>
-                                        {"⚠️ +" + fmt((spC[cat2.id] || 0) - lim) + " (" + pct((spC[cat2.id] || 0) / lim) + ")"}
+                                        {"⚠️ +" + fmt(item.total - lim) + " (" + pct(item.total / lim) + ")"}
                                       </span>
                                     ) : (
                                       <span style={{ fontSize: 10, fontWeight: 600, color: TM }}>
-                                        {"sobram " + fmt(lim - (spC[cat2.id] || 0)) + " (" + pct((spC[cat2.id] || 0) / lim) + " usado)"}
+                                        {"sobram " + fmt(lim - item.total) + " (" + pct(item.total / lim) + " usado)"}
                                       </span>
                                     )}
                                   </div>
                                 </div>
                               )}
                             </div>
-                            <span style={{ fontWeight: 700, fontSize: 12, color: TX }}>{fmt(spC[cat2.id])}</span>
+                            <span style={{ fontWeight: 700, fontSize: 12, color: TX }}>{fmt(item.total)}</span>
                             <span onClick={function(e) { e.stopPropagation(); sELimId(isEditLim ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
                               style={{ cursor: "pointer", fontSize: 11, color: TM, padding: "0 4px" }} title="Definir limite">{"🎯"}</span>
                           </div>
@@ -4379,6 +4429,22 @@ export default function App() {
                               <input style={{ ...S.inp, flex: 1, fontSize: 12 }} placeholder="Limite mensal (R$)" value={editLimV} inputMode="decimal" onChange={function(e) { sELimV(e.target.value); }} />
                               <button style={S.btn(BL)} onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
                               {lim && <button style={{ ...S.btnO, padding: "8px 10px", fontSize: 12 }} onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
+                            </div>
+                          )}
+                          {hasSubs && (
+                            <div style={{ paddingLeft: 22, borderBottom: "1px solid #F0F0F0" }}>
+                              {item.subs.map(function(sv) {
+                                var subAc = catF === sv.sub.id;
+                                return (
+                                  <div key={sv.sub.id} onClick={function() { sCatF(subAc ? null : sv.sub.id); }}
+                                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", marginLeft: -6, cursor: "pointer", borderRadius: 4, background: subAc ? BG : "transparent" }}>
+                                    <span style={{ color: "#BBB", fontSize: 10 }}>{"└"}</span>
+                                    {sv.sub.icon && <span style={{ fontSize: 13 }}>{sv.sub.icon}</span>}
+                                    <span style={{ flex: 1, fontSize: 11, color: subAc ? BD : TM, fontWeight: 400 }}>{sv.sub.name}</span>
+                                    <span style={{ fontWeight: 500, fontSize: 11, color: TM }}>{fmt(sv.value)}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
