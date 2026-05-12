@@ -29,24 +29,30 @@ var GR = [
   { id: "desejos", label: "Não Essenciais", color: "#9A7420" },
 ];
 var DC = [
+  // ESSENCIAIS
   { id: "moradia", name: "Moradia", icon: "🏠", group: "essenciais" },
   { id: "alimentacao", name: "Alimentação", icon: "🛒", group: "essenciais" },
+  { id: "bernardo", name: "Filho", icon: "👶", group: "essenciais" },
   { id: "transporte", name: "Transporte", icon: "🚗", group: "essenciais" },
   { id: "saude", name: "Saúde", icon: "🏥", group: "essenciais" },
   { id: "educacao", name: "Educação", icon: "📚", group: "essenciais" },
-  { id: "dividas", name: "Dívidas e Impostos", icon: "💳", group: "essenciais" },
-  { id: "ferramentas", name: "Ferramentas", icon: "🛠️", group: "essenciais" },
-  { id: "vestuario", name: "Vestuário", icon: "👔", group: "essenciais" },
+  { id: "financiamento", name: "Financiamento / Dívida", icon: "💳", group: "essenciais" },
+  { id: "impostos", name: "Impostos / Contador", icon: "📋", group: "essenciais" },
+  { id: "pets", name: "Pets", icon: "🐾", group: "essenciais" },
   { id: "comerfora_suno", name: "Comer fora Suno", icon: "🍽️", group: "essenciais" },
-  { id: "bernardo", name: "Bernardo", icon: "👶", group: "essenciais" },
+  // INVESTIMENTOS
   { id: "investimentos_cat", name: "Investimentos", icon: "📈", group: "investimentos" },
   { id: "reservas", name: "Reservas e Metas", icon: "🎯", group: "investimentos" },
+  // NÃO ESSENCIAIS
   { id: "compras", name: "Compras", icon: "🛍️", group: "desejos" },
+  { id: "viagem", name: "Viagem", icon: "✈️", group: "desejos" },
+  { id: "comerfora", name: "Comer fora / iFood", icon: "🍔", group: "desejos" },
   { id: "lazer", name: "Lazer", icon: "🎉", group: "desejos" },
   { id: "lazer_suno", name: "Lazer Suno", icon: "🏢", group: "desejos" },
-  { id: "comerfora", name: "Comer fora / iFood", icon: "🍔", group: "desejos" },
-  { id: "viagem", name: "Viagem", icon: "✈️", group: "desejos" },
   { id: "assinaturas", name: "Assinaturas", icon: "📺", group: "desejos" },
+  { id: "beleza", name: "Beleza / Cuidado pessoal", icon: "💅", group: "desejos" },
+  { id: "presentes", name: "Presentes", icon: "🎁", group: "desejos" },
+  { id: "doacoes", name: "Doações / Caridade", icon: "❤️", group: "desejos" },
 ];
 var PAYS = ["Cartão Nubank", "PIX", "Boleto", "Dinheiro", "Cartão Porto", "Cartão Itaú", "Cartão Inter"];
 var MS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -54,6 +60,30 @@ var MA = MS.map(function(m) { return m.slice(0, 3); });
 var PC = ["#1B5FAA","#1A3A5C","#9A7420","#003F5D","#4E97D1","#C9A84C","#7BB4E3","#2D7A3E","#0F2540","#6A90B8"];
 
 /* ══ HELPERS ══ */
+
+// Resolve o valor de uma conta fixa para um mês específico (YYYY-MM), levando em conta endDate + amountHistory + overrides
+function resolveFixedValueForMonth(fx, yyyymm) {
+  // endDate: se mês > endDate, fixa não existe (retorna null)
+  if (fx.endDate && String(yyyymm) > String(fx.endDate)) return null;
+  // override pontual: mês específico tem valor diferente
+  if (fx.overrides && fx.overrides[yyyymm] !== undefined) return fx.overrides[yyyymm];
+  // amountHistory: pega a mudança mais recente que começa em ou antes desse mês
+  if (fx.amountHistory && fx.amountHistory.length > 0) {
+    var sorted = fx.amountHistory.slice().sort(function(a, b) { return String(a.from).localeCompare(String(b.from)); });
+    var applicable = null;
+    sorted.forEach(function(h) { if (String(h.from) <= String(yyyymm)) applicable = h; });
+    if (applicable) return applicable.amount;
+  }
+  return fx.amount;
+}
+
+function resolveFixedListForMonth(fxdList, yyyymm) {
+  return (fxdList || []).map(function(fx) {
+    var v = resolveFixedValueForMonth(fx, yyyymm);
+    if (v === null) return null;
+    return { ...fx, amount: v };
+  }).filter(function(x) { return x !== null; });
+}
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function pct(v) { return String(((v || 0) * 100).toFixed(1)) + "%"; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -477,7 +507,7 @@ function SE(props) {
             </div>
           );
         })}
-        <button onClick={function() { onChange(splits.concat([{ person: "", pct: 30 }])); }}
+        <button onClick={function() { onChange(splits.concat([{ person: "", pct: 0 }])); }}
           style={{ background: "transparent", border: "1px dashed var(--line-2)", borderRadius: 8, color: "var(--ink-3)", padding: "7px", cursor: "pointer", fontSize: 12, fontFamily: "var(--f-ui)", fontWeight: 600 }}>
           {"+ Pessoa"}
         </button>
@@ -504,7 +534,7 @@ function SE(props) {
           </div>
         );
       })}
-      <button onClick={function() { onChange(splits.concat([{ person: "", pct: 30 }])); }}
+      <button onClick={function() { onChange(splits.concat([{ person: "", pct: 0 }])); }}
         style={{ background: "transparent", border: "1px dashed " + BR, borderRadius: 6, color: TM, padding: "5px", cursor: "pointer", fontSize: 11 }}>
         {"+ Pessoa"}
       </button>
@@ -2174,12 +2204,14 @@ function VidaPrumo(props) {
 
 /* ══ FIXAS PRUMO ══ */
 function FixasPrumo(props) {
+  var [editFx, sEditFx] = useState(null); // {id, amount, endDate, scope}
   var cfg = props.cfg;
   var cats = props.cats;
   var fxd = props.fxd;
   var fs = props.fs;
   var md = props.md;
   var saveMd = props.saveMd;
+  var saveCfg = props.saveCfg;
   var ff = props.ff;
   var sFf = props.sFf;
   var showFx = props.showFx;
@@ -2200,6 +2232,49 @@ function FixasPrumo(props) {
   var fxPd = props.fxPd;
   var fxMy = props.fxMy;
   var mo = props.mo;
+  var yr = props.yr;
+
+  var currentYM = tk(yr, mo);
+
+  var applyFxEdit = function() {
+    if (!editFx) return;
+    var fxdRaw = cfg.fixed || [];
+    var fxIdx = fxdRaw.findIndex(function(f) { return f.id === editFx.id; });
+    if (fxIdx < 0) { sEditFx(null); return; }
+    var orig = fxdRaw[fxIdx];
+    var clean = function(s) { return parseFloat(String(s).replace(/\./g, "").replace(",", ".")); };
+    var newAmount = editFx.amount ? clean(editFx.amount) : NaN;
+    var newEndDate = editFx.endDate || null;
+    var updatedFx = { ...orig };
+
+    if (!isNaN(newAmount) && newAmount > 0 && newAmount !== orig.amount) {
+      if (editFx.scope === "month") {
+        // override pontual neste mês
+        var ov = { ...(orig.overrides || {}) };
+        ov[currentYM] = newAmount;
+        updatedFx.overrides = ov;
+      } else if (editFx.scope === "future") {
+        // mudança permanente a partir deste mês
+        var hist = (orig.amountHistory || []).slice();
+        hist = hist.filter(function(h) { return h.from !== currentYM; });
+        hist.push({ from: currentYM, amount: newAmount });
+        updatedFx.amountHistory = hist;
+      } else {
+        // permanent — muda o valor base
+        updatedFx.amount = newAmount;
+      }
+    }
+    // endDate sempre aplica (ou remove)
+    if (editFx.endDate === "") {
+      delete updatedFx.endDate;
+    } else if (newEndDate) {
+      updatedFx.endDate = newEndDate;
+    }
+    var newFxd = fxdRaw.slice();
+    newFxd[fxIdx] = updatedFx;
+    saveCfg({ ...cfg, fixed: newFxd });
+    sEditFx(null);
+  };
 
   return (
     <div className="prumo-form-grid">
@@ -2283,6 +2358,16 @@ function FixasPrumo(props) {
             var isO = pO === f.id;
             var partPct = f.amount > 0 ? Math.min(pSum / f.amount, 1) : 0;
             var remainAmt = Math.max(0, f.amount - pSum);
+            // Resolve original do cfg para mostrar overrides/endDate
+            var fxdRaw = cfg.fixed || [];
+            var origFx = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
+            var hasOverrideThisMonth = origFx.overrides && origFx.overrides[currentYM] !== undefined;
+            var hasFutureHistory = (origFx.amountHistory || []).some(function(h) { return String(h.from) <= String(currentYM); });
+            var endDateLabel = null;
+            if (origFx.endDate) {
+              var parts2 = origFx.endDate.split("-");
+              if (parts2.length === 2) endDateLabel = MS[parseInt(parts2[1], 10) - 1].slice(0, 3) + "/" + parts2[0];
+            }
             return (
               <div key={f.id} style={{ padding: "12px 18px", borderTop: "1px solid var(--line)", opacity: ip ? 0.55 : 1, background: ip ? "var(--surface-2)" : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -2294,6 +2379,8 @@ function FixasPrumo(props) {
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 14, fontWeight: 600, textDecoration: ip ? "line-through" : "none", color: "var(--ink)" }}>{f.name}</span>
                       <span className={"prumo-chip " + (mode === "budget" ? "pos" : "brand")} style={{ fontSize: 10 }}>{mode === "budget" ? "Orçamento" : "Cartão"}</span>
+                      {hasOverrideThisMonth && <span className="prumo-chip warn" style={{ fontSize: 10 }}>{"ajuste do mês"}</span>}
+                      {endDateLabel && <span className="prumo-chip" style={{ fontSize: 10 }}>{"até " + endDateLabel}</span>}
                       {sp2.map(function(s, j) {
                         return <span key={j} className="prumo-chip warn" style={{ fontSize: 10 }}>{"÷ " + s.person + " " + String(s.pct) + "%"}</span>;
                       })}
@@ -2324,6 +2411,13 @@ function FixasPrumo(props) {
                         style={{ background: isO ? "var(--brand)" : "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: isO ? "var(--surface)" : "var(--brand)", width: 26, height: 26, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "var(--f-ui)" }}
                         title="Registrar pagamento parcial">{isO ? "×" : "+"}</button>
                     )}
+                    <button onClick={function() {
+                      var fxdRaw = cfg.fixed || [];
+                      var orig = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
+                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), endDate: orig.endDate || "", scope: "future", origName: f.name });
+                    }}
+                      style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: "var(--ink-3)", width: 26, height: 26, cursor: "pointer", fontSize: 12, fontFamily: "var(--f-ui)" }}
+                      title="Editar valor / prazo">{"✎"}</button>
                     <button onClick={function() { rmFx(f.id); }} className="prumo-icon-x" title="Remover">{"×"}</button>
                   </div>
                 </div>
@@ -2356,6 +2450,64 @@ function FixasPrumo(props) {
             );
           })}
         </div>
+      )}
+      {/* MODAL EDIT */}
+      {editFx && (
+        <>
+          <div className="prumo-sheet-overlay" onClick={function() { sEditFx(null); }}></div>
+          <div className="prumo-sheet" style={{ maxWidth: 480, margin: "0 auto", left: 16, right: 16 }}>
+            <div className="prumo-sheet-handle"></div>
+            <div className="prumo-sheet-h">{"Editar fixa"}</div>
+            <div className="prumo-sheet-sub">{editFx.origName}</div>
+            <div className="prumo-form" style={{ marginTop: 4 }}>
+              <div>
+                <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Valor"}</div>
+                <div className="prumo-input-affix">
+                  <span className="prefix">{"R$"}</span>
+                  <input className="prumo-input mono right with-prefix"
+                    placeholder="0,00"
+                    inputMode="decimal"
+                    value={editFx.amount}
+                    onChange={function(e) { sEditFx({ ...editFx, amount: e.target.value }); }} />
+                </div>
+              </div>
+              <div>
+                <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Escopo da mudança de valor"}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {[
+                    { v: "month", l: "Só este mês", d: "Aplica só em " + MS[mo] + "/" + String(yr) },
+                    { v: "future", l: "A partir deste mês", d: "Vale daqui pra frente, meses anteriores ficam como estão" },
+                    { v: "permanent", l: "Para sempre (retroativo)", d: "Substitui o valor base. Útil pra correção de erro de cadastro." },
+                  ].map(function(opt) {
+                    var active = editFx.scope === opt.v;
+                    return (
+                      <div key={opt.v} onClick={function() { sEditFx({ ...editFx, scope: opt.v }); }}
+                        style={{ padding: 10, borderRadius: 10, cursor: "pointer", border: active ? "2px solid var(--brand)" : "1px solid var(--line)", background: active ? "var(--brand-tint)" : "var(--surface)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid " + (active ? "var(--brand)" : "var(--line-2)"), background: active ? "var(--brand)" : "transparent", flexShrink: 0 }} />
+                          <div style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--brand)" : "var(--ink)" }}>{opt.l}</div>
+                        </div>
+                        <div className="prumo-cap" style={{ fontSize: 11, marginTop: 4, marginLeft: 22 }}>{opt.d}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Prazo final (opcional)"}</div>
+                <div className="prumo-cap" style={{ marginBottom: 6 }}>{"A fixa some da projeção depois desse mês. Útil pra financiamentos."}</div>
+                <input className="prumo-input" type="month" value={editFx.endDate} onChange={function(e) { sEditFx({ ...editFx, endDate: e.target.value }); }} />
+                {editFx.endDate && (
+                  <button className="prumo-btn ghost" style={{ marginTop: 6, fontSize: 11 }} onClick={function() { sEditFx({ ...editFx, endDate: "" }); }}>{"Sem prazo"}</button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button className="prumo-btn brand" style={{ flex: 1, padding: "12px 18px" }} onClick={applyFxEdit}>{"Salvar"}</button>
+                <button className="prumo-btn ghost" onClick={function() { sEditFx(null); }}>{"Cancelar"}</button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -2730,7 +2882,7 @@ export default function App() {
   var [pO, sPO] = useState(null);
   var [pV, sPV] = useState("");
   var [eId, sEId] = useState(null);
-  var [eD, sED] = useState([{ person: "Duda", pct: 30 }]);
+  var [eD, sED] = useState([{ person: "", pct: 0 }]);
   var [txSearch, sTxS] = useState("");
   var [cfCl, sCfC] = useState(false);
   var [catF, sCatF] = useState(null);
@@ -2744,11 +2896,11 @@ export default function App() {
   var [editLimId, sELimId] = useState(null);
   var [editLimV, sELimV] = useState("");
   var fr = useRef(null);
-  var emFm = { desc: "", valor: "", cat: "", pay: "Cartão Nubank", hs: false, sp: [{ person: "Duda", pct: 30 }], date: "", reimb: false, ic: "", it: "", note: "" };
+  var emFm = { desc: "", valor: "", cat: "", pay: "Cartão Nubank", hs: false, sp: [{ person: "", pct: 0 }], date: "", reimb: false, ic: "", it: "", note: "" };
   var [fm, sFm] = useState(emFm);
   var [cf, sCf] = useState({ desc: "", valor: "", type: "Bônus" });
-  var [ff, sFf] = useState({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "Duda", pct: 30 }], mode: "budget" });
-  var [df, sDf] = useState({ desc: "", amount: "", person: "Duda" });
+  var [ff, sFf] = useState({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget" });
+  var [df, sDf] = useState({ desc: "", amount: "", person: "" });
   var [gf, sGf] = useState({ name: "", target: "", deadline: "", saved: "0" });
   var [simAporte, sSimA] = useState("1000");
   var [simTaxa, sSimT] = useState("1");
@@ -2775,26 +2927,61 @@ export default function App() {
     return unsub;
   }, []);
 
+  // CFG é GLOBAL — carrega 1x quando user.uid muda, NUNCA recarrega por mudança de mês
+  var [cfgLoaded, sCfgLoaded] = useState(false);
   useEffect(function() {
-    if (!user || !user.uid) return;
+    if (!user || !user.uid) { sCfgLoaded(false); return; }
+    var active = true;
+    (async function() {
+      var c = await ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } });
+      var rv = await ld("fc2-rollover", {});
+      var mp = await ld("fc2-maps", {});
+      if (!active) return;
+      // MIGRAÇÃO: se o cfg existente não tem alguma categoria default nova, adiciona
+      var existingCats = c.categories || [];
+      var existingIds = existingCats.map(function(x) { return x.id; });
+      var needsMigration = false;
+      DC.forEach(function(defCat) {
+        if (existingIds.indexOf(defCat.id) < 0) {
+          existingCats.push(defCat);
+          needsMigration = true;
+        }
+      });
+      // Renomeia "Bernardo" → "Filho" automaticamente (preservando o id)
+      existingCats = existingCats.map(function(cat) {
+        if (cat.id === "bernardo" && cat.name === "Bernardo") {
+          needsMigration = true;
+          return { ...cat, name: "Filho" };
+        }
+        return cat;
+      });
+      if (needsMigration) {
+        c = { ...c, categories: existingCats };
+        sv("fc2-cfg", c); // persiste a migração no Firebase
+      }
+      sCfg(c); sMp(mp); sSI(String(c.salary)); setRollover(rv); sCfgLoaded(true);
+    })();
+    return function() { active = false; };
+  }, [user && user.uid]);
+
+  // Dados MENSAIS — recarrega quando muda mês/ano (mas só depois do cfg ter carregado)
+  useEffect(function() {
+    if (!user || !user.uid || !cfgLoaded) return;
     var active = true;
     (async function() {
       sLd(true);
-      var c = await ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } });
       var m = await ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] });
-      var rv = await ld("fc2-rollover", {});
-      var mp = await ld("fc2-maps", {});
       var pMo = mo === 0 ? 11 : mo - 1;
       var pYr = mo === 0 ? yr - 1 : yr;
       var pm = await ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} });
       if (!active) return;
-      sCfg(c); sMd(m); sMp(mp); sPv(pm); sSI(String(c.salary)); setRollover(rv); sLd(false);
+      sMd(m); sPv(pm); sLd(false);
     })();
     return function() { active = false; };
-  }, [yr, mo, user && user.uid]);
+  }, [yr, mo, user && user.uid, cfgLoaded]);
 
   useEffect(function() {
-    if (!user || !user.uid) return;
+    if (!user || !user.uid || !cfgLoaded) return;
     var active = true;
     (async function() {
       var r = [];
@@ -2804,10 +2991,17 @@ export default function App() {
       if (active) sYrD(r);
     })();
     return function() { active = false; };
-  }, [yr, mo, user && user.uid]);
+  }, [yr, mo, user && user.uid, cfgLoaded]);
 
   var saveMd = useCallback(function(d) { sMd(d); sv("fc2-m-" + mK, d); }, [mK]);
-  var saveCfg = useCallback(function(c) { sCfg(c); sv("fc2-cfg", c); }, []);
+  // GUARDRAIL: saveCfg só salva se cfg já foi carregado do Firebase — impede sobrescrita com defaults durante load
+  var saveCfg = useCallback(function(c) {
+    if (!cfgLoaded) {
+      console.warn("[saveCfg bloqueado] cfg ainda não carregou; ignorando para evitar perda de dados");
+      return;
+    }
+    sCfg(c); sv("fc2-cfg", c);
+  }, [cfgLoaded]);
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
 
   var ifTarget = (cfg && cfg.ifTarget) ? cfg.ifTarget : "";
@@ -2827,7 +3021,8 @@ export default function App() {
   var txs = md.tx || [];
   var crs = md.cr || [];
   var fs = md.fs || {};
-  var fxd = cfg.fixed || [];
+  var fxdRaw = cfg.fixed || [];
+  var fxd = resolveFixedListForMonth(fxdRaw, tk(yr, mo));
   var goals = cfg.goals || [];
   var catLimits = cfg.catLimits || {};
   var nw = cfg.netWorth || { balance: 0, history: [] };
@@ -2939,12 +3134,13 @@ export default function App() {
   var chMs = 1;
   if (yrD && cfg) {
     var cR = cfg.categories || DC;
-    var fR = cfg.fixed || [];
+    var fRRaw = cfg.fixed || [];
     for (var ci = 0; ci < 12; ci++) {
       var mDt = yrD[ci] || { tx: [], cr: [], fs: {} };
       var mTx = mDt.tx || [];
       var mCr = mDt.cr || [];
       var mFs = mDt.fs || {};
+      var fR = resolveFixedListForMonth(fRRaw, tk(yr, ci));
       var es = 0; var iv = 0; var de = 0;
       var mC = sal + mCr.reduce(function(a2, c2) { return a2 + c2.amount; }, 0);
       var catBk = {};
@@ -3018,6 +3214,10 @@ export default function App() {
     if (!fm.desc) { sErr("Descrição"); return; }
     if (isNaN(v)) { sErr("Valor"); return; }
     if (!fm.cat) { sErr("Categoria"); return; }
+    if (fm.hs) {
+      var spInvalid = fm.sp.filter(function(s) { return !s.person || !String(s.person).trim() || !s.pct || s.pct <= 0; });
+      if (spInvalid.length > 0 || fm.sp.length === 0) { sErr("Preencha nome e % de todas as pessoas no split"); return; }
+    }
     sErr("");
     var sp = fm.hs ? fm.sp.filter(function(s) { return s.person && s.pct > 0; }) : [];
     var newTx = { id: uid(), desc: fm.desc, amount: v, cat: fm.cat, payment: fm.pay, splits: sp, hasSplit: sp.length > 0, date: fm.date || new Date().toISOString(), received: false, reimbursed: fm.reimb, note: fm.note || "", src: "manual" };
@@ -3068,11 +3268,15 @@ export default function App() {
     if (!ff.name) { sErr("Nome"); return; }
     if (isNaN(a)) { sErr("Valor"); return; }
     if (!ff.cat) { sErr("Categoria"); return; }
+    if (ff.hs) {
+      var spInvalidFx = ff.sp.filter(function(s) { return !s.person || !String(s.person).trim() || !s.pct || s.pct <= 0; });
+      if (spInvalidFx.length > 0 || ff.sp.length === 0) { sErr("Preencha nome e % de todas as pessoas no split"); return; }
+    }
     sErr("");
     var sp = ff.hs ? ff.sp.filter(function(s) { return s.person && s.pct > 0; }) : [];
     var newFx = { id: uid(), name: ff.name, amount: a, cat: ff.cat, payment: ff.pay, splits: sp, hasSplit: sp.length > 0, mode: ff.mode };
     saveCfg({ ...cfg, fixed: fxd.concat([newFx]) });
-    sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "Duda", pct: 30 }], mode: "budget" });
+    sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget" });
     sSFx(false);
   };
 
@@ -3089,7 +3293,7 @@ export default function App() {
     if (!df.desc || isNaN(v) || !df.person) return;
     var debts = (md.debts || []).concat([{ id: uid(), desc: df.desc, amount: v, person: df.person, received: false }]);
     saveMd({ ...md, debts: debts });
-    sDf({ desc: "", amount: "", person: "Duda" }); sSDbt(false);
+    sDf({ desc: "", amount: "", person: "" }); sSDbt(false);
   };
 
   var addGoal = function() {
@@ -3158,7 +3362,7 @@ export default function App() {
   var openSE = function(tx) {
     if (eId === tx.id) { sEId(null); return; }
     var e = gsp(tx);
-    sED(e.length > 0 ? e.slice() : [{ person: "Duda", pct: 30 }]);
+    sED(e.length > 0 ? e.slice() : [{ person: "", pct: 0 }]);
     sEId(tx.id);
   };
   var savSE = function(id) {
@@ -3189,7 +3393,7 @@ export default function App() {
       var ic = {}; var is2 = {};
       rows.forEach(function(r) {
         var d2 = (r.title || r["Título"] || r["Descrição"] || r.description || "").toLowerCase().trim();
-        ic[r._idx] = maps[d2] || ""; is2[r._idx] = { on: false, sp: [{ person: "Duda", pct: 30 }] };
+        ic[r._idx] = maps[d2] || ""; is2[r._idx] = { on: false, sp: [{ person: "", pct: 0 }] };
       });
       sCC(ic); sCSp(is2);
     };
@@ -3523,7 +3727,7 @@ export default function App() {
                       var amt = row.amount || row.Valor || row.valor || "?";
                       var dt = row.date || row.Data || "";
                       var inst = pi(desc);
-                      var c2 = csvSp[row._idx] || { on: false, sp: [{ person: "Duda", pct: 30 }] };
+                      var c2 = csvSp[row._idx] || { on: false, sp: [{ person: "", pct: 0 }] };
                       return (
                         <div key={idx} className="prumo-csv-row">
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
@@ -3560,11 +3764,11 @@ export default function App() {
         {/* ═══ FIXAS ═══ */}
         {tab === "fixas" && (
           <FixasPrumo
-            cfg={cfg} cats={cats} fxd={fxd} fs={fs} md={md} saveMd={saveMd}
+            cfg={cfg} cats={cats} fxd={fxd} fs={fs} md={md} saveMd={saveMd} saveCfg={saveCfg}
             ff={ff} sFf={sFf} showFx={showFx} sSFx={sSFx} err={err} sErr={sErr} tab={tab}
             addFx={addFx} rmFx={rmFx} togFP={togFP} spt={spt} gsp={gsp} addPart={addPart}
             pO={pO} sPO={sPO} pV={pV} sPV={sPV}
-            fxPd={fxPd} fxMy={fxMy} mo={mo}
+            fxPd={fxPd} fxMy={fxMy} mo={mo} yr={yr}
           />
         )}
 
