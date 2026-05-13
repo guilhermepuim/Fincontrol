@@ -254,14 +254,15 @@ var PRUMO_TOKENS = `
 .prumo-dev-av { width: 32px; height: 32px; border-radius: 50%; background: var(--brand-tint); color: var(--brand); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
 
 /* ANNUAL CHART ────────────────────────────────── */
-.prumo-yr { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-top: 22px; }
-.prumo-yr-col { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative; }
-.prumo-yr-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; transition: outline 120ms; min-height: 6px; }
+.prumo-yr { display: flex; align-items: stretch; gap: 4px; height: 200px; padding: 22px 0 0; }
+.prumo-yr-col { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative; height: 100%; min-width: 0; }
+.prumo-yr-col .prumo-yr-spacer { flex: 1; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
+.prumo-yr-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; transition: outline 120ms; min-height: 4px; }
 .prumo-yr-stack > i { display: block; min-height: 1px; }
 .prumo-yr-col:hover .prumo-yr-stack, .prumo-yr-col.active .prumo-yr-stack { outline: 2px solid var(--ink); outline-offset: 1px; }
 .prumo-yr-mes { font-size: 9px; color: var(--ink-3); margin-top: 4px; font-weight: 600; }
 .prumo-yr-mes.cur { color: var(--ink); font-weight: 800; }
-.prumo-yr-val { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); margin-bottom: 4px; font-weight: 500; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
+.prumo-yr-val { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); margin-bottom: 4px; font-weight: 500; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; min-height: 12px; }
 
 /* DASH GRID — mobile first (DECLARADO ANTES de qualquer media query) */
 .prumo-dash-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -313,9 +314,9 @@ var PRUMO_TOKENS = `
   .prumo-ring-card { padding: 14px 10px; }
   .prumo-ring-lbl { font-size: 11px; }
   .prumo-ring-val { font-size: 22px; font-weight: 600; }
-  .prumo-yr { height: 240px; padding-top: 30px; gap: 8px; }
+  .prumo-yr { height: 280px; padding-top: 30px; gap: 8px; }
   .prumo-yr-mes { font-size: 11px; }
-  .prumo-yr-val { font-size: 10px; }
+  .prumo-yr-val { font-size: 11px; min-height: 14px; }
 }
 
 /* TOOLTIP ──────────────────────────────────────── */
@@ -716,6 +717,7 @@ function Donut(props) {
 function DashboardPrumo(props) {
   var [editPctId, sEditPctId] = useState(null);
   var [pctDraft, sPctDraft] = useState("");
+  var [hoverRingId, sHoverRingId] = useState(null);
   var cfg = props.cfg;
   var sal = props.sal;
   var totalInc = props.totalInc;
@@ -942,6 +944,15 @@ function DashboardPrumo(props) {
         <div className="prumo-ring-row">
           {rings.map(function(r) {
             var isEditing = editPctId === r.id;
+            var isHover = hoverRingId === r.id;
+            // Agrega: principais com soma das subs
+            var groupCats = cats.filter(function(c) { return c.group === r.id && !c.parent; });
+            var agg = groupCats.map(function(p) {
+              var ownVal = spC[p.id] || 0;
+              var subs = cats.filter(function(c) { return c.parent === p.id; });
+              var subVal = subs.reduce(function(a, s) { return a + (spC[s.id] || 0); }, 0);
+              return { cat: p, total: ownVal + subVal };
+            }).filter(function(x) { return x.total > 0; }).sort(function(a, b) { return b.total - a.total; });
             var savePct = function() {
               var v = parseInt(pctDraft, 10);
               if (!isNaN(v) && v >= 0 && v <= 100) {
@@ -951,10 +962,13 @@ function DashboardPrumo(props) {
               sEditPctId(null);
             };
             return (
-              <div key={r.id} className="prumo-ring-card" style={{ position: "relative" }}>
+              <div key={r.id} className="prumo-ring-card" style={{ position: "relative", cursor: agg.length > 0 ? "pointer" : "default" }}
+                onMouseEnter={function() { if (agg.length > 0) sHoverRingId(r.id); }}
+                onMouseLeave={function() { sHoverRingId(null); }}
+                onClick={function() { if (agg.length > 0) sHoverRingId(isHover ? null : r.id); }}>
                 <Donut pct={r.used} color={r.color} />
                 {isEditing ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center", margin: "6px 0 2px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center", margin: "6px 0 2px" }} onClick={function(e) { e.stopPropagation(); }}>
                     <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 600 }}>{r.label + " ·"}</span>
                     <input
                       autoFocus
@@ -973,7 +987,7 @@ function DashboardPrumo(props) {
                   <div className="prumo-ring-lbl" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                     <span>{r.label + " · " + String(r.pct) + "%"}</span>
                     <button
-                      onClick={function() { sEditPctId(r.id); sPctDraft(String(r.pct)); }}
+                      onClick={function(e) { e.stopPropagation(); sEditPctId(r.id); sPctDraft(String(r.pct)); }}
                       style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "var(--ink-4)", fontSize: 10, lineHeight: 1 }}
                       title="Editar meta"
                     >{"✎"}</button>
@@ -981,6 +995,37 @@ function DashboardPrumo(props) {
                 )}
                 <div className="prumo-ring-val">{String(r.used) + "%"}</div>
                 <div className="prumo-cap" style={{ fontSize: 10, marginTop: 2 }}>{fmt(r.s) + " / " + fmt(r.b)}</div>
+                {isHover && agg.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", marginTop: 8, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 12px", boxShadow: "var(--shadow-2)", zIndex: 30, minWidth: 220, textAlign: "left" }} onClick={function(e) { e.stopPropagation(); }}>
+                    <div className="prumo-lbl" style={{ marginBottom: 6 }}>{r.label + " · " + fmt(r.s)}</div>
+                    {agg.slice(0, 6).map(function(item) {
+                      var subs = cats.filter(function(c) { return c.parent === item.cat.id && (spC[c.id] || 0) > 0; }).sort(function(a, b) { return (spC[b.id] || 0) - (spC[a.id] || 0); });
+                      return (
+                        <div key={item.cat.id}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", fontSize: 12, color: "var(--ink-2)" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span>{item.cat.icon}</span>
+                              <span style={{ fontWeight: 600 }}>{item.cat.name}</span>
+                            </span>
+                            <span className="prumo-num" style={{ fontSize: 11 }}>{fmt(item.total)}</span>
+                          </div>
+                          {subs.slice(0, 3).map(function(s) {
+                            return (
+                              <div key={s.id} style={{ display: "flex", justifyContent: "space-between", padding: "1px 0 1px 22px", fontSize: 10, color: "var(--ink-3)" }}>
+                                <span>{"└ " + (s.icon ? s.icon + " " : "") + s.name}</span>
+                                <span className="prumo-num">{fmt(spC[s.id] || 0)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                    <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 6, display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                      <span className="prumo-cap">{"Orçado"}</span>
+                      <span className="prumo-num">{fmt(r.b)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1160,11 +1205,13 @@ function DashboardPrumo(props) {
               var accCol = real ? "var(--accent)" : "oklch(0.88 0.06 75)";
               return (
                 <div key={i} className={"prumo-yr-col" + (hovM === i ? " active" : "")} onMouseEnter={function() { sHM(i); }} onMouseLeave={function() { sHM(null); }} onClick={function() { sHM(hovM === i ? null : i); }}>
-                  {total > 0 && <div className="prumo-yr-val">{fK(total)}</div>}
-                  <div className="prumo-yr-stack" style={{ height: String(h) + "%" }}>
-                    <i style={{ flex: String(d.e) + " 0 0", background: brandCol }} />
-                    <i style={{ flex: String(d.i) + " 0 0", background: inkCol }} />
-                    <i style={{ flex: String(d.d) + " 0 0", background: accCol }} />
+                  <div className="prumo-yr-val">{total > 0 ? fK(total) : ""}</div>
+                  <div className="prumo-yr-spacer">
+                    <div className="prumo-yr-stack" style={{ height: String(h) + "%" }}>
+                      <i style={{ flex: String(d.e) + " 0 0", background: brandCol }} />
+                      <i style={{ flex: String(d.i) + " 0 0", background: inkCol }} />
+                      <i style={{ flex: String(d.d) + " 0 0", background: accCol }} />
+                    </div>
                   </div>
                   <div className={"prumo-yr-mes" + (cur ? " cur" : "")}>{d.mes}</div>
                   {hovM === i && <ChartTip d={d} i={i} cats={cats} />}
@@ -2312,12 +2359,15 @@ function FixasPrumo(props) {
     if (fxIdx < 0) { sEditFx(null); return; }
     var orig = fxdRaw[fxIdx];
     var clean = function(s) { return parseFloat(String(s).replace(/\./g, "").replace(",", ".")); };
-    var newAmount = editFx.amount ? clean(editFx.amount) : NaN;
+    var rawAmount = editFx.amount;
+    var hasAmountInput = rawAmount !== undefined && rawAmount !== "";
+    var newAmount = hasAmountInput ? clean(rawAmount) : NaN;
+    var amountChanged = !isNaN(newAmount) && newAmount >= 0 && newAmount !== orig.amount;
     var newEndDate = editFx.endDate;
     var newStartDate = editFx.startDate;
     var updatedFx = { ...orig };
 
-    if (!isNaN(newAmount) && newAmount > 0 && newAmount !== orig.amount) {
+    if (amountChanged) {
       if (editFx.scope === "month") {
         var ov = { ...(orig.overrides || {}) };
         ov[currentYM] = newAmount;
@@ -2331,10 +2381,8 @@ function FixasPrumo(props) {
         updatedFx.amount = newAmount;
       }
     }
-    // startDate
     if (newStartDate === "") delete updatedFx.startDate;
     else if (newStartDate) updatedFx.startDate = newStartDate;
-    // endDate
     if (newEndDate === "") delete updatedFx.endDate;
     else if (newEndDate) updatedFx.endDate = newEndDate;
     var newFxd = fxdRaw.slice();
@@ -2496,7 +2544,7 @@ function FixasPrumo(props) {
                     <button onClick={function() {
                       var fxdRaw = cfg.fixed || [];
                       var orig = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
-                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "future", origName: f.name });
+                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "month", origName: f.name });
                     }}
                       style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: "var(--ink-3)", width: 26, height: 26, cursor: "pointer", fontSize: 12, fontFamily: "var(--f-ui)" }}
                       title="Editar valor / prazo">{"✎"}</button>
@@ -3592,8 +3640,8 @@ export default function App() {
   var spent = cur.spent;
   var spC = cur.spentByCat;
   var totCr = totalInc;
-  var totDbTx = txs.filter(function(t) { return !t.reimbursed; }).reduce(function(a, t) { return a + t.amount; }, 0);
-  var totDbFx = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] === "paid"; }).reduce(function(a, f) { return a + f.amount; }, 0);
+  var totDbTx = txs.filter(function(t) { return !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
+  var totDbFx = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] === "paid"; }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
   var totDbP = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] !== "paid"; })
     .reduce(function(a, f) { return a + (fs[f.id + "_p"] || []).reduce(function(a2, p) { return a2 + p.amount; }, 0); }, 0);
   var totDb = totDbTx + totDbFx + totDbP;
