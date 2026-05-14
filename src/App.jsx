@@ -3599,66 +3599,6 @@ export default function App() {
     return function() { active = false; };
   }, [yr, mo, user && user.uid, cfgLoaded]);
 
-  // AUTO-CURA: remove proj órfãs (pai apagado) silenciosamente quando yrD carrega.
-  // Cross-year-safe: só remove órfão dentro da janela onde o pai DEVERIA estar no ano atual.
-  useEffect(function() {
-    if (!yrD || yrD.length === 0) return;
-    if (!user || !user.uid || !cfgLoaded) return;
-
-    // Indexa pais (não-proj) por id E por chave desc+amount
-    var parentById = {};
-    var parentByDescAmt = {};
-    yrD.forEach(function(mDt) {
-      (mDt.tx || []).forEach(function(t) {
-        if (t.src === "proj") return;
-        parentById[t.id] = true;
-        var key = nd(t.desc) + "|" + String(Math.round(t.amount));
-        parentByDescAmt[key] = true;
-      });
-    });
-
-    // Detecta órfãos
-    var orphansByMo = {};
-    var orphanCount = 0;
-    yrD.forEach(function(mDt, idx) {
-      (mDt.tx || []).forEach(function(t) {
-        if (t.src !== "proj") return;
-        var isOrphan = false;
-        if (t.parentId) {
-          // Novo schema: parentId verificável. Se pai sumiu, é órfão.
-          isOrphan = !parentById[t.parentId];
-        } else {
-          // Legado sem parentId: heurística cross-year-safe.
-          // Só sinaliza órfão se o pai DEVERIA estar neste ano (baseado no nº da parcela).
-          var inst = pi(t.desc);
-          if (!inst) return; // sem formato X/Y não dá pra inferir, deixa quieto
-          var expectedParentMo = idx - (inst.c - 1);
-          if (expectedParentMo < 0) return; // pai está em ano anterior, não posso verificar daqui
-          var key = nd(t.desc) + "|" + String(Math.round(t.amount));
-          isOrphan = !parentByDescAmt[key];
-        }
-        if (isOrphan) {
-          if (!orphansByMo[idx]) orphansByMo[idx] = {};
-          orphansByMo[idx][t.id] = true;
-          orphanCount++;
-        }
-      });
-    });
-
-    if (orphanCount === 0) return;
-    console.log("[auto-heal] removendo " + String(orphanCount) + " projeção(ões) órfã(s)");
-
-    var newYrD = yrD.map(function(mDt, idx) {
-      if (!orphansByMo[idx]) return mDt;
-      var filtered = (mDt.tx || []).filter(function(t) { return !orphansByMo[idx][t.id]; });
-      var nm = { ...mDt, tx: filtered };
-      sv("fc2-m-" + tk(yr, idx), nm);
-      return nm;
-    });
-    sYrD(newYrD);
-    if (orphansByMo[mo]) sMd(newYrD[mo]);
-  }, [yrD, yr, mo, user && user.uid, cfgLoaded]);
-
   var saveMd = useCallback(function(d) { sMd(d); sv("fc2-m-" + mK, d); }, [mK]);
   // GUARDRAIL: saveCfg só salva se cfg já foi carregado do Firebase — impede sobrescrita com defaults durante load
   var saveCfg = useCallback(function(c) {
@@ -3765,11 +3705,12 @@ export default function App() {
   var savR = totalInc > 0 ? invSp / totalInc : 0;
   var prevSp = pvMd ? calcSpent(pvMd, cats, fxd).spent : null;
 
-  /* Active installments */
+  /* Active installments — só conta projeções a partir do mês visualizado (mo) em diante */
   var activeInst = [];
   if (yrD) {
     var seen = {};
-    yrD.forEach(function(mDt) {
+    yrD.forEach(function(mDt, idx) {
+      if (idx < mo) return; // ignora meses passados
       (mDt.tx || []).forEach(function(tx) {
         if (tx.src !== "proj") return;
         var inst = pi(tx.desc);
@@ -3891,19 +3832,15 @@ export default function App() {
     var ic = parseInt(fm.ic);
     var it = parseInt(fm.it);
     if (ic && it && ic < it) {
-      // Helper: binds fKey + projTx via function args (evita bug de closure-in-loop com var)
-      var saveProjToMonth = function(fKey, projTx) {
-        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
-          sv("fc2-m-" + fKey, { ...fd, tx: (fd.tx || []).concat([projTx]) });
-        });
-      };
       for (var ii = ic + 1; ii <= it; ii++) {
         var fmo = (mo + (ii - ic)) % 12;
         var fy = yr + Math.floor((mo + (ii - ic)) / 12);
         var fKey = tk(fy, fmo);
         var projDesc = fm.desc + " " + String(ii) + "/" + String(it);
-        var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj", parentId: newTx.id, parentKey: mK };
-        saveProjToMonth(fKey, projTx);
+        var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
+        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
+          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
+        });
       }
     }
     sFm(emFm);
@@ -4011,36 +3948,7 @@ export default function App() {
     sNwI(""); sShowNw(false);
   };
 
-  var rmTx = function(id) {
-    var target = txs.find(function(t) { return t.id === id; });
-    // Simple case: no target, or removing a proj record directly, ou yrD não carregou ainda
-    if (!target || target.src === "proj" || !yrD) {
-      saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) });
-      return;
-    }
-    // Cascade case: removing a parent (manual/csv) — varrer yrD e remover filhos proj
-    var targetNd = nd(target.desc);
-    var targetAmt = target.amount;
-    var shouldRemove = function(t) {
-      if (t.id === id) return true; // o próprio pai
-      if (t.src !== "proj") return false;
-      // Match novo (parentId) — preciso e cross-year-safe
-      if (t.parentId && t.parentId === id) return true;
-      // Fallback legado (desc+amount) pra registros antigos sem parentId
-      if (!t.parentId && nd(t.desc) === targetNd && Math.abs(t.amount - targetAmt) < 1) return true;
-      return false;
-    };
-    var newYrD = yrD.map(function(mDt, idx) {
-      var origTx = mDt.tx || [];
-      var filtered = origTx.filter(function(t) { return !shouldRemove(t); });
-      if (filtered.length === origTx.length) return mDt;
-      var nm = { ...mDt, tx: filtered };
-      sv("fc2-m-" + tk(yr, idx), nm);
-      return nm;
-    });
-    sYrD(newYrD);
-    sMd(newYrD[mo]);
-  };
+  var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
   var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
   var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxd.filter(function(f) { return f.id !== id; }) }); };
   var togRcv = function(id) {
@@ -4133,7 +4041,7 @@ export default function App() {
           var fKey2 = tk(fy2, fmo2);
           if (!fut[fKey2]) fut[fKey2] = [];
           var futDesc = desc.replace(/\d+\s*\/\s*\d+/, String(ii2) + "/" + String(inst.t));
-          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj", parentId: newTx2.id, parentKey: mK });
+          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj" });
         }
       }
     });
@@ -4505,18 +4413,10 @@ export default function App() {
         {/* ═══ MENSAL ═══ */}
         {tab === "monthly" && (
           <div>
-            {/* POR CATEGORIA */}
-            <div className="prumo-card l-brand">
-              <div className="prumo-card-hd" style={{ marginBottom: 4 }}>
-                <div>
-                  <div className="prumo-lbl">{"Por categoria"}</div>
-                  <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Gastos do mês"}</h2>
-                </div>
-                {catF && (
-                  <button onClick={function() { sCatF(null); }} className="prumo-chip brand" style={{ cursor: "pointer", border: "1px solid oklch(0.38 0.07 235 / .2)" }}>
-                    {"✕ Limpar filtro"}
-                  </button>
-                )}
+            <div style={S.card}>
+              <div style={S.lbl}>
+                {"POR CATEGORIA"}
+                {catF && <span onClick={function() { sCatF(null); }} style={{ marginLeft: 8, fontSize: 10, color: BL, cursor: "pointer", fontWeight: 700, textTransform: "none" }}>{"✕ Limpar filtro"}</span>}
               </div>
               {GR.map(function(g) {
                 // Categorias principais do grupo
@@ -4531,54 +4431,37 @@ export default function App() {
                 }).filter(function(x) { return x.total > 0; })
                   .sort(function(a, b) { return b.total - a.total; });
                 if (aggregated.length === 0) return null;
-                var isGrpActive = catF === g.id;
                 return (
-                  <div key={g.id} style={{ marginTop: 14 }}>
-                    <button onClick={function() { sCatF(isGrpActive ? null : g.id); }}
-                      style={{ background: isGrpActive ? "var(--surface-2)" : "transparent", border: "none", padding: "6px 8px", borderRadius: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, color: g.color, letterSpacing: ".12em", textTransform: "uppercase" }}>
-                        {g.label + (isGrpActive ? " ✓" : "")}
-                      </span>
-                      <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                        {fmt(spent[g.id]) + " / " + fmt(bud[g.id])}
-                      </span>
-                    </button>
+                  <div key={g.id} style={{ marginTop: 10 }}>
+                    <div onClick={function() { sCatF(catF === g.id ? null : g.id); }}
+                      style={{ fontSize: 11, fontWeight: 700, color: g.color, marginBottom: 4, textTransform: "uppercase", cursor: "pointer", background: catF === g.id ? BG : "transparent", padding: "4px 6px", borderRadius: 4, marginLeft: -6 }}>
+                      {g.label + " — " + fmt(spent[g.id]) + " / " + fmt(bud[g.id]) + (catF === g.id ? " ✓" : "")}
+                    </div>
                     {aggregated.map(function(item) {
                       var cat2 = item.cat;
                       var isAc = catF === cat2.id;
                       var lim = catLimits[cat2.id];
                       var isEditLim = editLimId === cat2.id;
                       var hasSubs = item.subs.length > 0;
-                      var overLimit = lim && item.total > lim;
-                      var meterPct = lim ? Math.min(100, (item.total / lim) * 100) : 0;
-                      var meterColor = !lim ? "var(--brand)"
-                        : g.id === "investimentos" ? "var(--pos)"
-                        : overLimit ? "var(--neg)"
-                        : meterPct > 85 ? "var(--accent-2)"
-                        : "var(--brand)";
                       return (
                         <div key={cat2.id}>
                           <div onClick={function() { if (!isEditLim) sCatF(isAc ? null : cat2.id); }}
-                            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", cursor: isEditLim ? "default" : "pointer", borderRadius: 8, background: isAc ? "var(--surface-2)" : "transparent", borderBottom: hasSubs ? "none" : "1px solid var(--line)" }}>
-                            <span style={{ fontSize: 18, flexShrink: 0 }}>{cat2.icon}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                                <span style={{ fontSize: 13, color: isAc ? "var(--ink)" : "var(--ink-2)", fontWeight: isAc ? 700 : 600 }}>{cat2.name}</span>
-                                {hasSubs && <span className="prumo-cap" style={{ fontSize: 10 }}>{"(" + String(item.subs.length) + " sub)"}</span>}
-                              </div>
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px", marginLeft: -6, borderBottom: hasSubs ? "none" : "1px solid #F0F0F0", cursor: "pointer", borderRadius: 4, background: isAc ? BG : "transparent" }}>
+                            <span>{cat2.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <span style={{ fontSize: 12, color: isAc ? BD : T3, fontWeight: isAc ? 700 : 600 }}>{cat2.name}</span>
+                              {hasSubs && <span style={{ fontSize: 10, color: TM, marginLeft: 6 }}>{"(" + String(item.subs.length) + " sub)"}</span>}
                               {lim && (
-                                <div style={{ marginTop: 6 }}>
-                                  <div className="prumo-meter">
-                                    <i style={{ width: String(meterPct) + "%", background: meterColor }} />
-                                  </div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, gap: 8 }}>
-                                    <span className="prumo-cap" style={{ fontSize: 10 }}>{fmt(item.total) + " / " + fmt(lim)}</span>
-                                    {overLimit ? (
-                                      <span className="prumo-num" style={{ fontSize: 10, color: g.id === "investimentos" ? "var(--pos)" : "var(--neg)", fontWeight: 700 }}>
-                                        {"⚠ +" + fmt(item.total - lim) + " (" + pct(item.total / lim) + ")"}
+                                <div style={{ marginTop: 3 }}>
+                                  <PB value={item.total} max={lim} color={g.color} noWarn={g.id === "investimentos"} />
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+                                    <span style={{ ...S.cap }}>{fmt(item.total) + " / " + fmt(lim)}</span>
+                                    {item.total > lim ? (
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: g.id === "investimentos" ? OK : ER }}>
+                                        {"⚠️ +" + fmt(item.total - lim) + " (" + pct(item.total / lim) + ")"}
                                       </span>
                                     ) : (
-                                      <span className="prumo-cap" style={{ fontSize: 10 }}>
+                                      <span style={{ fontSize: 10, fontWeight: 600, color: TM }}>
                                         {"sobram " + fmt(lim - item.total) + " (" + pct(item.total / lim) + " usado)"}
                                       </span>
                                     )}
@@ -4586,31 +4469,28 @@ export default function App() {
                                 </div>
                               )}
                             </div>
-                            <span className="prumo-num" style={{ fontSize: 13, color: "var(--ink)" }}>{fmt(item.total)}</span>
-                            <button onClick={function(e) { e.stopPropagation(); sELimId(isEditLim ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
-                              title="Definir limite"
-                              style={{ background: "transparent", border: "none", padding: 4, cursor: "pointer", fontSize: 13, color: lim ? "var(--accent-2)" : "var(--ink-4)", flexShrink: 0 }}>
-                              {"🎯"}
-                            </button>
+                            <span style={{ fontWeight: 700, fontSize: 12, color: TX }}>{fmt(item.total)}</span>
+                            <span onClick={function(e) { e.stopPropagation(); sELimId(isEditLim ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
+                              style={{ cursor: "pointer", fontSize: 11, color: TM, padding: "0 4px" }} title="Definir limite">{"🎯"}</span>
                           </div>
                           {isEditLim && (
-                            <div style={{ display: "flex", gap: 6, padding: "8px 8px 8px 36px", background: "var(--surface-2)", borderBottom: "1px solid var(--line)" }}>
-                              <input className="prumo-input mono right" style={{ flex: 1, fontSize: 13 }} placeholder="Limite mensal (R$)" value={editLimV} inputMode="decimal" onChange={function(e) { sELimV(e.target.value); }} />
-                              <button className="prumo-btn brand" onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
-                              {lim && <button className="prumo-btn ghost" onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
+                            <div style={{ display: "flex", gap: 5, padding: "6px 0 6px 28px" }}>
+                              <input style={{ ...S.inp, flex: 1, fontSize: 12 }} placeholder="Limite mensal (R$)" value={editLimV} inputMode="decimal" onChange={function(e) { sELimV(e.target.value); }} />
+                              <button style={S.btn(BL)} onClick={function() { setCatLimit(cat2.id, editLimV); }}>{"OK"}</button>
+                              {lim && <button style={{ ...S.btnO, padding: "8px 10px", fontSize: 12 }} onClick={function() { setCatLimit(cat2.id, "0"); }}>{"Remover"}</button>}
                             </div>
                           )}
                           {hasSubs && (
-                            <div style={{ paddingLeft: 32, borderBottom: "1px solid var(--line)" }}>
+                            <div style={{ paddingLeft: 22, borderBottom: "1px solid #F0F0F0" }}>
                               {item.subs.map(function(sv) {
                                 var subAc = catF === sv.sub.id;
                                 return (
                                   <div key={sv.sub.id} onClick={function() { sCatF(subAc ? null : sv.sub.id); }}
-                                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", cursor: "pointer", borderRadius: 6, background: subAc ? "var(--surface-2)" : "transparent" }}>
-                                    <span style={{ color: "var(--ink-4)", fontSize: 11 }}>{"└"}</span>
-                                    {sv.sub.icon && <span style={{ fontSize: 14 }}>{sv.sub.icon}</span>}
-                                    <span style={{ flex: 1, fontSize: 12, color: subAc ? "var(--ink)" : "var(--ink-3)", fontWeight: subAc ? 600 : 400 }}>{sv.sub.name}</span>
-                                    <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)" }}>{fmt(sv.value)}</span>
+                                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", marginLeft: -6, cursor: "pointer", borderRadius: 4, background: subAc ? BG : "transparent" }}>
+                                    <span style={{ color: "#BBB", fontSize: 10 }}>{"└"}</span>
+                                    {sv.sub.icon && <span style={{ fontSize: 13 }}>{sv.sub.icon}</span>}
+                                    <span style={{ flex: 1, fontSize: 11, color: subAc ? BD : TM, fontWeight: 400 }}>{sv.sub.name}</span>
+                                    <span style={{ fontWeight: 500, fontSize: 11, color: TM }}>{fmt(sv.value)}</span>
                                   </div>
                                 );
                               })}
@@ -4624,38 +4504,26 @@ export default function App() {
               })}
             </div>
 
-            {/* TRANSAÇÕES */}
-            <div className="prumo-card l-accent">
-              <div className="prumo-card-hd" style={{ marginBottom: 4 }}>
-                <div>
-                  <div className="prumo-lbl">{"Transações"}</div>
-                  <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>
-                    {"Lista do mês"}
-                    <span className="prumo-num" style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)", marginLeft: 8 }}>{"(" + String(txs.length) + ")"}</span>
-                  </h2>
-                  {catF && <span className="prumo-chip brand" style={{ marginTop: 6, fontSize: 10 }}>{"filtrado"}</span>}
+            <div style={S.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={S.lbl}>
+                  {"TRANSAÇÕES (" + String(txs.length) + ")"}
+                  {catF && <span style={{ marginLeft: 6, fontSize: 10, color: BL, textTransform: "none" }}>{"— filtrado"}</span>}
                 </div>
                 {txs.length > 0 && !cfCl && (
-                  <button onClick={function() { sCfC(true); }} className="prumo-btn ghost" style={{ color: "var(--neg)", borderColor: "oklch(0.58 0.16 25 / .25)", fontSize: 11, padding: "7px 12px" }}>
-                    {"🗑 Limpar mês"}
-                  </button>
+                  <button onClick={function() { sCfC(true); }} style={{ background: "#fff", border: "1px solid #FECACA", borderRadius: 6, padding: "4px 10px", color: ER, fontSize: 10, fontWeight: 600, cursor: "pointer" }}>{"🗑️ Limpar"}</button>
                 )}
                 {cfCl && (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span className="prumo-cap" style={{ color: "var(--neg)", fontSize: 11, fontWeight: 600 }}>{"Certeza?"}</span>
-                    <button onClick={clrMo} className="prumo-btn" style={{ background: "var(--neg)", color: "var(--surface)", fontSize: 11, padding: "7px 14px" }}>{"Sim"}</button>
-                    <button onClick={function() { sCfC(false); }} className="prumo-btn ghost" style={{ fontSize: 11, padding: "7px 14px" }}>{"Não"}</button>
+                  <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: ER }}>{"Certeza?"}</span>
+                    <button onClick={clrMo} style={S.btn(ER)}>{"Sim"}</button>
+                    <button onClick={function() { sCfC(false); }} style={S.btnO}>{"Não"}</button>
                   </div>
                 )}
               </div>
-              <input className="prumo-input" style={{ marginTop: 10, marginBottom: 6 }} placeholder="🔍 Pesquisar descrição ou categoria..." value={txSearch} onChange={function(e) { sTxS(e.target.value); }} />
-              <div style={{ maxHeight: 500, overflowY: "auto", marginTop: 4 }}>
-                {txs.length === 0 && (
-                  <div className="prumo-cap" style={{ padding: "20px 0 8px", textAlign: "center" }}>{"Nenhuma transação registrada neste mês."}</div>
-                )}
-                {txs.length > 0 && filteredTxs.length === 0 && (
-                  <div className="prumo-cap" style={{ padding: "20px 0 8px", textAlign: "center" }}>{"Nenhuma transação corresponde aos filtros aplicados."}</div>
-                )}
+              <input style={{ ...S.inp, marginBottom: 6, fontSize: 12 }} placeholder="🔍 Pesquisar..." value={txSearch} onChange={function(e) { sTxS(e.target.value); }} />
+              <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                {txs.length === 0 && <p style={S.cap}>{"Nenhuma transação."}</p>}
                 {filteredTxs.map(function(tx) {
                   var cat2 = cats.find(function(c) { return c.id === tx.cat; });
                   var grp = GR.find(function(g) { return g.id === (cat2 ? cat2.group : ""); });
@@ -4663,58 +4531,58 @@ export default function App() {
                   var isE = eId === tx.id;
                   var isEd = editTxId === tx.id;
                   return (
-                    <div key={tx.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--line)", opacity: tx.reimbursed ? 0.55 : 1 }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                        <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.2 }}>{cat2 ? cat2.icon : "?"}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{tx.desc}</span>
-                            {tx.date && <span className="prumo-cap" style={{ fontSize: 10 }}>{sd(tx.date)}</span>}
+                    <div key={tx.id} style={{ padding: "6px 0", borderBottom: "1px solid #F0F0F0", opacity: tx.reimbursed ? 0.5 : 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>{cat2 ? cat2.icon : "?"}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: TX }}>{tx.desc}</span>
+                            {tx.date && <span style={S.cap}>{sd(tx.date)}</span>}
                           </div>
-                          {tx.note && <div className="prumo-cap" style={{ fontStyle: "italic", marginTop: 2, fontSize: 11 }}>{"📝 " + tx.note}</div>}
-                          <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
-                            <span className="prumo-chip" style={{ fontSize: 9, padding: "2px 8px", color: grp ? grp.color : "var(--ink-3)", borderColor: grp ? grp.color + "33" : "var(--line)", background: "var(--surface-2)" }}>{cat2 ? cat2.name : "?"}</span>
-                            {sp2.map(function(s, idx) { return <span key={idx} className="prumo-chip warn" style={{ fontSize: 9, padding: "2px 8px" }}>{"÷ " + s.person}</span>; })}
-                            {tx.reimbursed && <span className="prumo-chip" style={{ fontSize: 9, padding: "2px 8px" }}>{"Reemb."}</span>}
-                            {tx.src === "proj" && <span className="prumo-chip brand" style={{ fontSize: 9, padding: "2px 8px" }}>{"Proj."}</span>}
+                          {tx.note && <div style={{ ...S.cap, color: T2, fontStyle: "italic", marginTop: 1 }}>{"📝 " + tx.note}</div>}
+                          <div style={{ display: "flex", gap: 2, marginTop: 1, flexWrap: "wrap" }}>
+                            <span style={S.tag(grp ? grp.color : TM)}>{cat2 ? cat2.name : "?"}</span>
+                            {sp2.map(function(s, idx) { return <span key={idx} style={S.tag("#D97706")}>{"÷" + s.person}</span>; })}
+                            {tx.reimbursed && <span style={S.tag("#7C3AED")}>{"Reemb."}</span>}
+                            {tx.src === "proj" && <span style={S.tag("#2563EB")}>{"Proj."}</span>}
                           </div>
                         </div>
-                        <div style={{ textAlign: "right", minWidth: 75, flexShrink: 0 }}>
-                          <div className="prumo-num" style={{ fontSize: 14, color: "var(--ink)", fontWeight: 700 }}>{fmt(tx.amount)}</div>
-                          {sp2.length > 0 && <div className="prumo-num" style={{ fontSize: 10, color: "var(--pos)", marginTop: 3 }}>{"Você " + fmt(myP(tx))}</div>}
+                        <div style={{ textAlign: "right", minWidth: 55 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: TX }}>{fmt(tx.amount)}</div>
+                          {sp2.length > 0 && <div style={{ ...S.cap, color: "#0D9488" }}>{"Vc: " + fmt(myP(tx))}</div>}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
-                          <button onClick={function() { openTxEdit(tx); }} title="Editar" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, fontSize: 12, color: isEd ? "var(--brand)" : "var(--ink-4)" }}>{"✏️"}</button>
-                          <button onClick={function() { openSE(tx); }} title="Dividir" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, fontSize: 14, fontWeight: 700, lineHeight: 1, color: sp2.length > 0 ? "var(--accent-2)" : "var(--ink-4)" }}>{"÷"}</button>
-                          <button onClick={function() { togRe(tx.id); }} title={tx.reimbursed ? "Desfazer reembolso" : "Marcar como reembolsado"} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, fontSize: 12 }}>{tx.reimbursed ? "💜" : "🔄"}</button>
-                          <button onClick={function() { rmTx(tx.id); }} className="prumo-icon-x" title="Remover" style={{ width: 22, height: 22, fontSize: 13 }}>{"×"}</button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span onClick={function() { openTxEdit(tx); }} style={{ cursor: "pointer", fontSize: 11, color: isEd ? BL : "#BBBBBB" }} title="Editar">{"✏️"}</span>
+                          <span onClick={function() { openSE(tx); }} style={{ cursor: "pointer", fontSize: 11, color: sp2.length > 0 ? "#D97706" : "#BBBBBB" }}>{"÷"}</span>
+                          <span onClick={function() { togRe(tx.id); }} style={{ cursor: "pointer", fontSize: 11 }}>{tx.reimbursed ? "💜" : "🔄"}</span>
+                          <span onClick={function() { rmTx(tx.id); }} style={{ cursor: "pointer", color: ER, fontSize: 14 }}>{"×"}</span>
                         </div>
                       </div>
                       {isEd && (
-                        <div style={{ marginTop: 10, marginLeft: 28, padding: 12, background: "var(--surface-2)", borderRadius: 10, border: "1px solid var(--line)" }}>
-                          <div className="prumo-lbl" style={{ marginBottom: 8, color: "var(--brand)" }}>{"Editar transação"}</div>
-                          <div className="prumo-form" style={{ marginTop: 0, gap: 8 }}>
-                            <input className="prumo-input" placeholder="Descrição" value={editTxF.desc} onChange={function(e) { sETxF({ ...editTxF, desc: e.target.value }); }} />
-                            <div className="prumo-grid-2">
-                              <input className="prumo-input mono right" placeholder="Valor (R$)" value={editTxF.valor} inputMode="decimal" onChange={function(e) { sETxF({ ...editTxF, valor: e.target.value }); }} />
-                              <CatS prumo value={editTxF.cat} onChange={function(e) { sETxF({ ...editTxF, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
+                        <div style={{ marginTop: 6, marginLeft: 24, padding: 10, background: BG, borderRadius: 6, border: "1px solid " + BR }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: BD, marginBottom: 6 }}>{"Editar transação"}</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input style={S.inp} placeholder="Descrição" value={editTxF.desc} onChange={function(e) { sETxF({ ...editTxF, desc: e.target.value }); }} />
+                            <div style={S.g2}>
+                              <input style={S.inp} placeholder="Valor (R$)" value={editTxF.valor} inputMode="decimal" onChange={function(e) { sETxF({ ...editTxF, valor: e.target.value }); }} />
+                              <CatS value={editTxF.cat} onChange={function(e) { sETxF({ ...editTxF, cat: e.target.value }); }} cats={cats} pcts={cfg.pcts} />
                             </div>
-                            <input className="prumo-input" placeholder="Nota (opcional)" value={editTxF.note} onChange={function(e) { sETxF({ ...editTxF, note: e.target.value }); }} />
-                            <div style={{ display: "flex", gap: 6 }}>
-                              <button className="prumo-btn brand" onClick={function() { saveTxEdit(tx.id); }}>{"Salvar"}</button>
-                              <button className="prumo-btn ghost" onClick={function() { sETxId(null); }}>{"Cancelar"}</button>
+                            <input style={S.inp} placeholder="Nota" value={editTxF.note} onChange={function(e) { sETxF({ ...editTxF, note: e.target.value }); }} />
+                            <div style={{ display: "flex", gap: 5 }}>
+                              <button style={S.btn(BL)} onClick={function() { saveTxEdit(tx.id); }}>{"Salvar"}</button>
+                              <button style={S.btnO} onClick={function() { sETxId(null); }}>{"×"}</button>
                             </div>
                           </div>
                         </div>
                       )}
                       {isE && (
-                        <div style={{ marginTop: 10, marginLeft: 28, padding: 12, background: "var(--surface-2)", borderRadius: 10, border: "1px solid var(--line)" }}>
-                          <div className="prumo-lbl" style={{ marginBottom: 8, color: "var(--accent-2)" }}>{"Dividir gasto"}</div>
-                          <SE prumo compact splits={eD} onChange={function(s) { sED(s); }} />
-                          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                            <button className="prumo-btn accent" onClick={function() { savSE(tx.id); }}>{"Salvar"}</button>
-                            {sp2.length > 0 && <button className="prumo-btn ghost" onClick={function() { rmSE(tx.id); }} style={{ color: "var(--neg)" }}>{"Remover"}</button>}
-                            <button className="prumo-btn ghost" onClick={function() { sEId(null); }}>{"Cancelar"}</button>
+                        <div style={{ marginTop: 6, marginLeft: 24, padding: 8, background: BG, borderRadius: 6, border: "1px solid " + BR }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#D97706", marginBottom: 5 }}>{"Dividir:"}</div>
+                          <SE compact splits={eD} onChange={function(s) { sED(s); }} />
+                          <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
+                            <button style={S.btn("#D97706")} onClick={function() { savSE(tx.id); }}>{"Salvar"}</button>
+                            {sp2.length > 0 && <button onClick={function() { rmSE(tx.id); }} style={{ background: "#fff", border: "1px solid #FECACA", borderRadius: 6, padding: "5px 10px", color: ER, fontSize: 10, cursor: "pointer" }}>{"Remover"}</button>}
+                            <button onClick={function() { sEId(null); }} style={S.btnO}>{"×"}</button>
                           </div>
                         </div>
                       )}
