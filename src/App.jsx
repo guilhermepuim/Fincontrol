@@ -1559,6 +1559,7 @@ function ProjecaoPrumo(props) {
   var sShowIfEdit = props.sShowIfEdit;
   var activeInst = props.activeInst;
   var totalInstMonthly = props.totalInstMonthly;
+  var rmInst = props.rmInst;
   var prevSp = props.prevSp;
   var spent = props.spent;
   var mo = props.mo;
@@ -1937,6 +1938,9 @@ function ProjecaoPrumo(props) {
                   <div className="prumo-tx-amt" style={{ color: "var(--accent-2)" }}>{fmt(it.amount) + "/m"}</div>
                   <div className="prumo-cap" style={{ fontSize: 10 }}>{"Total: " + fmt(it.amount * it.remaining)}</div>
                 </div>
+                {rmInst && (
+                  <button onClick={function() { rmInst(it); }} className="prumo-icon-x" title="Remover esta parcela de todas as projeções" style={{ width: 22, height: 22, fontSize: 13, marginLeft: 8, flexShrink: 0 }}>{"×"}</button>
+                )}
               </div>
             );
           })}
@@ -3725,6 +3729,27 @@ export default function App() {
   }
   var totalInstMonthly = activeInst.reduce(function(a, it) { return a + it.amount; }, 0);
 
+  // Remove uma parcela ativa de TODOS os meses do ano (varre yrD por desc normalizada + amount)
+  var rmInst = function(it) {
+    if (!yrD) return;
+    if (!window.confirm("Remover '" + it.desc + "' de todas as projeções deste ano?\n\nIsso apaga " + String(it.remaining) + " parcela(s) restante(s).")) return;
+    var targetNd = nd(it.desc);
+    var targetAmt = it.amount;
+    var newYrD = yrD.map(function(mDt, idx) {
+      var origTx = mDt.tx || [];
+      var filtered = origTx.filter(function(t) {
+        if (t.src !== "proj") return true;
+        return !(nd(t.desc) === targetNd && Math.abs(t.amount - targetAmt) < 1);
+      });
+      if (filtered.length === origTx.length) return mDt;
+      var nm = { ...mDt, tx: filtered };
+      sv("fc2-m-" + tk(yr, idx), nm);
+      return nm;
+    });
+    sYrD(newYrD);
+    if (newYrD[mo]) sMd(newYrD[mo]);
+  };
+
   /* Net worth projection */
   var nwBalance = nw.balance || 0;
   var nwHistory = nw.history || [];
@@ -4219,7 +4244,7 @@ export default function App() {
             nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
             totDb={totDb} ifTarget={ifTarget} sIfTarget={sIfTarget}
             showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
-            activeInst={activeInst} totalInstMonthly={totalInstMonthly}
+            activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst}
             prevSp={prevSp} spent={spent} mo={mo} yr={yr}
             chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
             showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
