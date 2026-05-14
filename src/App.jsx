@@ -3599,6 +3599,66 @@ export default function App() {
     return function() { active = false; };
   }, [yr, mo, user && user.uid, cfgLoaded]);
 
+  // AUTO-CURA: remove proj órfãs (pai apagado) silenciosamente quando yrD carrega.
+  // Cross-year-safe: só remove órfão dentro da janela onde o pai DEVERIA estar no ano atual.
+  useEffect(function() {
+    if (!yrD || yrD.length === 0) return;
+    if (!user || !user.uid || !cfgLoaded) return;
+
+    // Indexa pais (não-proj) por id E por chave desc+amount
+    var parentById = {};
+    var parentByDescAmt = {};
+    yrD.forEach(function(mDt) {
+      (mDt.tx || []).forEach(function(t) {
+        if (t.src === "proj") return;
+        parentById[t.id] = true;
+        var key = nd(t.desc) + "|" + String(Math.round(t.amount));
+        parentByDescAmt[key] = true;
+      });
+    });
+
+    // Detecta órfãos
+    var orphansByMo = {};
+    var orphanCount = 0;
+    yrD.forEach(function(mDt, idx) {
+      (mDt.tx || []).forEach(function(t) {
+        if (t.src !== "proj") return;
+        var isOrphan = false;
+        if (t.parentId) {
+          // Novo schema: parentId verificável. Se pai sumiu, é órfão.
+          isOrphan = !parentById[t.parentId];
+        } else {
+          // Legado sem parentId: heurística cross-year-safe.
+          // Só sinaliza órfão se o pai DEVERIA estar neste ano (baseado no nº da parcela).
+          var inst = pi(t.desc);
+          if (!inst) return; // sem formato X/Y não dá pra inferir, deixa quieto
+          var expectedParentMo = idx - (inst.c - 1);
+          if (expectedParentMo < 0) return; // pai está em ano anterior, não posso verificar daqui
+          var key = nd(t.desc) + "|" + String(Math.round(t.amount));
+          isOrphan = !parentByDescAmt[key];
+        }
+        if (isOrphan) {
+          if (!orphansByMo[idx]) orphansByMo[idx] = {};
+          orphansByMo[idx][t.id] = true;
+          orphanCount++;
+        }
+      });
+    });
+
+    if (orphanCount === 0) return;
+    console.log("[auto-heal] removendo " + String(orphanCount) + " projeção(ões) órfã(s)");
+
+    var newYrD = yrD.map(function(mDt, idx) {
+      if (!orphansByMo[idx]) return mDt;
+      var filtered = (mDt.tx || []).filter(function(t) { return !orphansByMo[idx][t.id]; });
+      var nm = { ...mDt, tx: filtered };
+      sv("fc2-m-" + tk(yr, idx), nm);
+      return nm;
+    });
+    sYrD(newYrD);
+    if (orphansByMo[mo]) sMd(newYrD[mo]);
+  }, [yrD, yr, mo, user && user.uid, cfgLoaded]);
+
   var saveMd = useCallback(function(d) { sMd(d); sv("fc2-m-" + mK, d); }, [mK]);
   // GUARDRAIL: saveCfg só salva se cfg já foi carregado do Firebase — impede sobrescrita com defaults durante load
   var saveCfg = useCallback(function(c) {
@@ -3831,15 +3891,19 @@ export default function App() {
     var ic = parseInt(fm.ic);
     var it = parseInt(fm.it);
     if (ic && it && ic < it) {
+      // Helper: binds fKey + projTx via function args (evita bug de closure-in-loop com var)
+      var saveProjToMonth = function(fKey, projTx) {
+        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
+          sv("fc2-m-" + fKey, { ...fd, tx: (fd.tx || []).concat([projTx]) });
+        });
+      };
       for (var ii = ic + 1; ii <= it; ii++) {
         var fmo = (mo + (ii - ic)) % 12;
         var fy = yr + Math.floor((mo + (ii - ic)) / 12);
         var fKey = tk(fy, fmo);
         var projDesc = fm.desc + " " + String(ii) + "/" + String(it);
-        var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
-        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
-          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
-        });
+        var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj", parentId: newTx.id, parentKey: mK };
+        saveProjToMonth(fKey, projTx);
       }
     }
     sFm(emFm);
@@ -3947,7 +4011,36 @@ export default function App() {
     sNwI(""); sShowNw(false);
   };
 
-  var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
+  var rmTx = function(id) {
+    var target = txs.find(function(t) { return t.id === id; });
+    // Simple case: no target, or removing a proj record directly, ou yrD não carregou ainda
+    if (!target || target.src === "proj" || !yrD) {
+      saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) });
+      return;
+    }
+    // Cascade case: removing a parent (manual/csv) — varrer yrD e remover filhos proj
+    var targetNd = nd(target.desc);
+    var targetAmt = target.amount;
+    var shouldRemove = function(t) {
+      if (t.id === id) return true; // o próprio pai
+      if (t.src !== "proj") return false;
+      // Match novo (parentId) — preciso e cross-year-safe
+      if (t.parentId && t.parentId === id) return true;
+      // Fallback legado (desc+amount) pra registros antigos sem parentId
+      if (!t.parentId && nd(t.desc) === targetNd && Math.abs(t.amount - targetAmt) < 1) return true;
+      return false;
+    };
+    var newYrD = yrD.map(function(mDt, idx) {
+      var origTx = mDt.tx || [];
+      var filtered = origTx.filter(function(t) { return !shouldRemove(t); });
+      if (filtered.length === origTx.length) return mDt;
+      var nm = { ...mDt, tx: filtered };
+      sv("fc2-m-" + tk(yr, idx), nm);
+      return nm;
+    });
+    sYrD(newYrD);
+    sMd(newYrD[mo]);
+  };
   var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
   var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxd.filter(function(f) { return f.id !== id; }) }); };
   var togRcv = function(id) {
@@ -4040,7 +4133,7 @@ export default function App() {
           var fKey2 = tk(fy2, fmo2);
           if (!fut[fKey2]) fut[fKey2] = [];
           var futDesc = desc.replace(/\d+\s*\/\s*\d+/, String(ii2) + "/" + String(inst.t));
-          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj" });
+          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj", parentId: newTx2.id, parentKey: mK });
         }
       }
     });
