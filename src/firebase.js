@@ -1,7 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } from "firebase/auth";
- 
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+
 const firebaseConfig = {
   apiKey: "AIzaSyBZTu_ynlaQw70wR4KWVH4D8BTbt0gSNrk",
   authDomain: "fincontrol-one-theta.vercel.app",
@@ -10,8 +11,20 @@ const firebaseConfig = {
   messagingSenderId: "995369986592",
   appId: "1:995369986592:web:57c9cd59cf2793bad42a45"
 };
- 
+
 const app = initializeApp(firebaseConfig);
+
+// App Check com reCAPTCHA Enterprise
+// IMPORTANTE: deve ser inicializado ANTES de getFirestore/getAuth
+try {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider("6LefpOssAAAAAGBtCJM45ukiRUsj8z7QmpuSeE_R"),
+    isTokenAutoRefreshEnabled: true,
+  });
+} catch (e) {
+  console.warn("App Check init failed:", e);
+}
+
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
