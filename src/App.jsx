@@ -3591,6 +3591,8 @@ export default function App() {
   var [csvC, sCC] = useState({});
   var [csvSp, sCSp] = useState({});
   var [ofxBank, sOfxBank] = useState(null); // { name, fid, detected: bool, paymentId, fileName, creditsSkipped, paymentsSkipped }
+  var [skipRows, sSkipRows] = useState({}); // { [_idx]: true } — rows marcadas como já lançadas manualmente
+  var [dupMap, sDupMap] = useState({}); // { [_idx]: { manualDesc, manualDate, manualAmount } }
   var [showFx, sSFx] = useState(false);
   var [err, sErr] = useState("");
   var [pO, sPO] = useState(null);
@@ -3774,15 +3776,13 @@ export default function App() {
   var totDb = totDbTx + totDbFx + totDbP;
 
   /* ── Rollover calculation ── */
+  // OPÇÃO 2: rollover só vem de fechamento explícito (rollover[prevKey] gravado).
+  // Sem cálculo on-the-fly. Sobra do mês anterior some por default — recomeça do zero todo mês.
   var saveRollover = function(rv) { setRollover(rv); sv("fc2-rollover", rv); };
   var prevKey = tk(mo === 0 ? yr - 1 : yr, mo === 0 ? 11 : mo - 1);
   var rvCredit = {};
   GR.forEach(function(g) {
-    var prevBud = totalInc * ((cfg.pcts[g.id] || 0) / 100);
-    var prevSpentG = prevSp ? prevSp[g.id] : 0;
-    var leftover = prevBud - prevSpentG;
-    var existing = (rollover[prevKey] || {})[g.id] || 0;
-    rvCredit[g.id] = existing || (leftover > 0 && g.id !== "investimentos" ? Math.round(leftover) : 0);
+    rvCredit[g.id] = (rollover[prevKey] || {})[g.id] || 0;
   });
   var budWithRollover = {};
   GR.forEach(function(g) { budWithRollover[g.id] = bud[g.id] + (rvCredit[g.id] || 0); });
@@ -4160,6 +4160,22 @@ export default function App() {
         paymentsSkipped: parsed.paymentsSkipped || 0,
       });
       sCR(rows);
+      // Detecta possíveis duplicatas contra lançamentos manuais (mesmo valor + mesma data)
+      var dupCandidates = {};
+      var initialSkip = {};
+      rows.forEach(function(r) {
+        var rowDateD = (r.date || "").slice(0, 10);
+        if (!rowDateD) return;
+        var match = txs.find(function(ex) {
+          return ex.src === "manual" && Math.abs(ex.amount - r.amount) < 0.01 && (ex.date || "").slice(0, 10) === rowDateD;
+        });
+        if (match) {
+          dupCandidates[r._idx] = { manualDesc: match.desc, manualDate: rowDateD, manualAmount: match.amount };
+          initialSkip[r._idx] = true; // default: pular se há candidato
+        }
+      });
+      sDupMap(dupCandidates);
+      sSkipRows(initialSkip);
       var ic = {}; var is2 = {};
       rows.forEach(function(r) {
         var d2 = String(r.desc || "").toLowerCase().trim();
@@ -4181,8 +4197,10 @@ export default function App() {
     var paymentName = payment.name;
     var bankName = ofxBank ? ofxBank.name : "";
     var nt = []; var nm = Object.assign({}, maps); var fut = {};
-    var sk = 0; var rp = 0; var ad = 0;
+    var sk = 0; var rp = 0; var ad = 0; var skipManual = 0;
     csvR.forEach(function(row) {
+      // Skip explícito por marcação de duplicata-manual do usuário
+      if (skipRows[row._idx]) { skipManual++; return; }
       var cid = csvC[row._idx]; if (!cid) return;
       var desc = row.desc || "Importado";
       var amt = row.amount;
@@ -4241,8 +4259,11 @@ export default function App() {
     sCR(null);
     var creditsMsg = ofxBank && ofxBank.creditsSkipped ? ", " + String(ofxBank.creditsSkipped) + " créditos/estornos ignorados" : "";
     var paymentsMsg = ofxBank && ofxBank.paymentsSkipped ? ", " + String(ofxBank.paymentsSkipped) + " pagamento(s) de fatura ignorado(s)" : "";
+    var manualMsg = skipManual ? ", " + String(skipManual) + " já lançadas manualmente (puladas)" : "";
     sOfxBank(null);
-    alert("✅ " + String(ad) + " adicionadas" + (rp ? ", " + String(rp) + " projeções substituídas" : "") + (sk ? ", " + String(sk) + " duplicadas ignoradas" : "") + creditsMsg + paymentsMsg);
+    sDupMap({});
+    sSkipRows({});
+    alert("✅ " + String(ad) + " adicionadas" + (rp ? ", " + String(rp) + " projeções substituídas" : "") + (sk ? ", " + String(sk) + " duplicadas ignoradas" : "") + manualMsg + creditsMsg + paymentsMsg);
   };
 
   var tabs = [
@@ -4558,8 +4579,26 @@ export default function App() {
                       var dt = row.date ? sd(row.date) : "";
                       var inst = pi(desc);
                       var c2 = csvSp[row._idx] || { on: false, sp: [{ person: "", pct: 0 }] };
+                      var dup = dupMap[row._idx];
+                      var isSkipped = !!skipRows[row._idx];
                       return (
-                        <div key={idx} className="prumo-csv-row">
+                        <div key={idx} className="prumo-csv-row" style={isSkipped ? { opacity: 0.55, background: "var(--surface-2, rgba(0,0,0,0.03))" } : {}}>
+                          {dup && (
+                            <div style={{ background: "var(--surface-warn, #FFF8E7)", border: "1px solid var(--warn, #C9A84C)", borderRadius: 6, padding: "8px 10px", marginBottom: 8, fontSize: 12 }}>
+                              <div style={{ fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>{"⚠ Possível duplicata com lançamento manual"}</div>
+                              <div className="prumo-cap" style={{ margin: 0 }}>
+                                {"Existe um manual de " + fmt(dup.manualAmount) + " em " + sd(dup.manualDate) + ": "}
+                                <span style={{ fontStyle: "italic" }}>{dup.manualDesc}</span>
+                              </div>
+                              <label className="prumo-check" style={{ marginTop: 6, fontWeight: 600 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSkipped}
+                                  onChange={function(e) { sSkipRows({ ...skipRows, [row._idx]: e.target.checked }); }}
+                                />{"Já lançado, pular esta linha"}
+                              </label>
+                            </div>
+                          )}
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{desc}</div>
@@ -4581,7 +4620,7 @@ export default function App() {
                   </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                     <button className="prumo-btn brand" style={{ flex: 1, padding: "12px 18px" }} onClick={impAll}>{"✓ Importar tudo"}</button>
-                    <button className="prumo-btn ghost" onClick={function() { sCR(null); sOfxBank(null); }}>{"Cancelar"}</button>
+                    <button className="prumo-btn ghost" onClick={function() { sCR(null); sOfxBank(null); sDupMap({}); sSkipRows({}); }}>{"Cancelar"}</button>
                   </div>
                 </div>
               )}
