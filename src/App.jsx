@@ -115,6 +115,128 @@ function tk(y, m) { return String(y) + "-" + String(m + 1).padStart(2, "0"); }
 function sd(d) { try { return new Date(d).toLocaleDateString("pt-BR"); } catch (e) { return String(d || ""); } }
 function fK(v) { var a = Math.abs(v || 0); if (a >= 1000) return (v < 0 ? "-" : "") + (a / 1000).toFixed(1) + "k"; return String(Math.round(v || 0)); }
 
+/* ══ OFX PARSER ══ */
+// Mapeamento FID (código COMPE do Banco Central) → nome amigável + hints para match contra cfg.payments
+var BANK_FID_MAP = {
+  "260": { name: "Nubank", hints: ["nubank", "nu pagamentos", "nu "] },
+  "341": { name: "Itaú", hints: ["itau", "itaú"] },
+  "237": { name: "Bradesco", hints: ["bradesco"] },
+  "033": { name: "Santander", hints: ["santander"] },
+  "077": { name: "Inter", hints: ["inter"] },
+  "336": { name: "C6", hints: ["c6"] },
+  "208": { name: "BTG", hints: ["btg"] },
+  "102": { name: "XP", hints: ["xp"] },
+};
+
+// Decodifica ArrayBuffer respeitando o CHARSET declarado no header OFX (1252, UTF-8, USASCII)
+function decodeOfxBuffer(buf) {
+  // Lê primeiros 512 bytes como ASCII pra inspecionar header
+  var head = new TextDecoder("ascii").decode(buf.slice(0, 512));
+  var charset = "utf-8";
+  var mC = head.match(/CHARSET:\s*([^\s\r\n]+)/i);
+  if (mC) {
+    var c = String(mC[1]).toLowerCase().trim();
+    if (c === "1252" || c === "windows-1252") charset = "windows-1252";
+    else if (c === "8859-1" || c === "iso-8859-1" || c === "latin1") charset = "iso-8859-1";
+    else if (c === "utf-8" || c === "utf8") charset = "utf-8";
+    else if (c === "usascii" || c === "ascii") charset = "ascii";
+  }
+  try { return new TextDecoder(charset).decode(buf); }
+  catch (e) { return new TextDecoder("utf-8").decode(buf); }
+}
+
+// Extrai conteúdo de uma tag OFX (suporta SGML 1.x sem closing tag e XML 2.x)
+function ofxTag(text, tag) {
+  var re1 = new RegExp("<" + tag + ">([\\s\\S]*?)</" + tag + ">", "i");
+  var m = text.match(re1);
+  if (m) return String(m[1]).trim();
+  // SGML sem closing: pega até próxima tag ou nova linha
+  var re2 = new RegExp("<" + tag + ">([^<\\r\\n]*)", "i");
+  m = text.match(re2);
+  return m ? String(m[1]).trim() : null;
+}
+
+// Converte data OFX (YYYYMMDDHHMMSS[+/-TZ]) pra ISO simples
+function parseOfxDate(s) {
+  if (!s) return null;
+  var clean = String(s).replace(/[^0-9]/g, "").slice(0, 14);
+  if (clean.length < 8) return null;
+  var y = clean.slice(0, 4); var mo = clean.slice(4, 6); var d = clean.slice(6, 8);
+  return y + "-" + mo + "-" + d + "T12:00:00.000Z";
+}
+
+// Parser principal: recebe texto OFX, retorna { bank, fid, org, accountId, transactions, creditsSkipped, paymentsSkipped }
+function parseOFX(text) {
+  if (!text || typeof text !== "string") return null;
+  var fid = ofxTag(text, "FID");
+  var org = ofxTag(text, "ORG");
+  var accountId = ofxTag(text, "ACCTID");
+  var bank = null;
+  if (fid && BANK_FID_MAP[fid]) bank = { fid: fid, name: BANK_FID_MAP[fid].name, hints: BANK_FID_MAP[fid].hints };
+  if (!bank && org) {
+    var orgL = String(org).toLowerCase();
+    var keys = Object.keys(BANK_FID_MAP);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var entry = BANK_FID_MAP[keys[ki]];
+      for (var hi = 0; hi < entry.hints.length; hi++) {
+        if (orgL.indexOf(entry.hints[hi]) >= 0) { bank = { fid: keys[ki], name: entry.name, hints: entry.hints }; break; }
+      }
+      if (bank) break;
+    }
+  }
+  // Extrai todos os blocos STMTTRN
+  var blocks = text.split(/<STMTTRN>/i).slice(1);
+  var txns = []; var creditsSkipped = 0; var paymentsSkipped = 0;
+  blocks.forEach(function(b, idx) {
+    var trnType = ofxTag(b, "TRNTYPE");
+    var dtPosted = ofxTag(b, "DTPOSTED");
+    var trnAmt = ofxTag(b, "TRNAMT");
+    var fitid = ofxTag(b, "FITID");
+    var memo = ofxTag(b, "MEMO");
+    if (!trnAmt) return;
+    var amt = parseFloat(String(trnAmt).replace(",", "."));
+    if (isNaN(amt)) return;
+    var memoL = String(memo || "").toLowerCase();
+    // Filtro 1: pagamento da fatura (CREDIT grande) — ignora silenciosamente
+    if (memoL.indexOf("pagamento recebido") >= 0 || memoL.indexOf("pagamento de fatura") >= 0) { paymentsSkipped++; return; }
+    // Filtro 2: créditos genéricos (estornos de IOF, devoluções) — ignora na v1 (opção A acordada)
+    if (String(trnType).toUpperCase() === "CREDIT" || amt > 0) { creditsSkipped++; return; }
+    txns.push({
+      _idx: idx,
+      fitid: fitid || "",
+      trnType: String(trnType || "DEBIT").toUpperCase(),
+      desc: String(memo || "Importado").trim(),
+      amount: Math.abs(amt),
+      date: parseOfxDate(dtPosted) || "",
+    });
+  });
+  return { bank: bank, fid: fid, org: org, accountId: accountId, transactions: txns, creditsSkipped: creditsSkipped, paymentsSkipped: paymentsSkipped };
+}
+
+// Sugere paymentId de cfg.payments que melhor combina com o banco detectado
+function matchPaymentForBank(bank, payments) {
+  if (!bank || !payments || !payments.length) return "";
+  var hints = bank.hints || [];
+  // 1. tenta match em payments do tipo credito por nome
+  for (var i = 0; i < payments.length; i++) {
+    var p = payments[i];
+    if (p.type !== "credito") continue;
+    var nameL = String(p.name || "").toLowerCase();
+    for (var j = 0; j < hints.length; j++) {
+      if (nameL.indexOf(hints[j]) >= 0) return p.id;
+    }
+  }
+  // 2. nenhum credito bate: tenta qualquer payment
+  for (var k = 0; k < payments.length; k++) {
+    var p2 = payments[k];
+    var n2 = String(p2.name || "").toLowerCase();
+    for (var m = 0; m < hints.length; m++) {
+      if (n2.indexOf(hints[m]) >= 0) return p2.id;
+    }
+  }
+  return "";
+}
+
 function gsp(tx) {
   if (tx.splits && tx.splits.length > 0) return tx.splits;
   if (tx.split && tx.splitPerson) return [{ person: tx.splitPerson, pct: tx.splitPct || 30 }];
@@ -3468,6 +3590,7 @@ export default function App() {
   var [csvR, sCR] = useState(null);
   var [csvC, sCC] = useState({});
   var [csvSp, sCSp] = useState({});
+  var [ofxBank, sOfxBank] = useState(null); // { name, fid, detected: bool, paymentId, fileName, creditsSkipped, paymentsSkipped }
   var [showFx, sSFx] = useState(false);
   var [err, sErr] = useState("");
   var [pO, sPO] = useState(null);
@@ -4008,45 +4131,77 @@ export default function App() {
     saveMd({ ...md, tx: updated }); sEId(null);
   };
 
-  var handleCSV = function(e) {
+  var handleOFX = function(e) {
     var f = e.target.files && e.target.files[0];
     if (!f) return;
     var rd = new FileReader();
     rd.onload = function(ev) {
-      var ls = ev.target.result.split("\n").filter(function(l) { return l.trim(); });
-      if (ls.length < 2) return;
-      var hdr = ls[0].split(",").map(function(h) { return h.trim().replace(/"/g, ""); });
-      var rows = ls.slice(1).map(function(l, idx) {
-        var c2 = l.split(",").map(function(c3) { return c3.trim().replace(/"/g, ""); });
-        var o = { _idx: idx };
-        hdr.forEach(function(h, j) { o[h] = c2[j] || ""; });
-        return o;
-      }).filter(function(r) { return !((r.title || r["Título"] || r["Descrição"] || "").toLowerCase().includes("pagamento")); });
+      var buf = ev.target.result;
+      var text;
+      try { text = decodeOfxBuffer(buf); }
+      catch (decErr) { alert("Não foi possível decodificar o arquivo OFX. Verifique se o arquivo está íntegro."); return; }
+      var parsed;
+      try { parsed = parseOFX(text); }
+      catch (parseErr) { alert("Erro ao processar o arquivo OFX: " + String(parseErr && parseErr.message || parseErr)); return; }
+      if (!parsed || !parsed.transactions || !parsed.transactions.length) {
+        alert("Nenhuma transação encontrada no arquivo OFX." + (parsed && parsed.creditsSkipped ? " (" + String(parsed.creditsSkipped) + " créditos foram ignorados nesta versão.)" : ""));
+        return;
+      }
+      var rows = parsed.transactions;
+      var suggestedPay = matchPaymentForBank(parsed.bank, cfg.payments || DEFAULT_PAYMENTS);
+      sOfxBank({
+        name: parsed.bank ? parsed.bank.name : "Desconhecido",
+        fid: parsed.fid || "",
+        hints: parsed.bank ? parsed.bank.hints : [],
+        detected: !!parsed.bank,
+        paymentId: suggestedPay,
+        fileName: f.name || "",
+        creditsSkipped: parsed.creditsSkipped || 0,
+        paymentsSkipped: parsed.paymentsSkipped || 0,
+      });
       sCR(rows);
       var ic = {}; var is2 = {};
       rows.forEach(function(r) {
-        var d2 = (r.title || r["Título"] || r["Descrição"] || r.description || "").toLowerCase().trim();
+        var d2 = String(r.desc || "").toLowerCase().trim();
         ic[r._idx] = maps[d2] || ""; is2[r._idx] = { on: false, sp: [{ person: "", pct: 0 }] };
       });
       sCC(ic); sCSp(is2);
     };
-    rd.readAsText(f, "utf-8"); e.target.value = "";
+    rd.onerror = function() { alert("Erro ao ler o arquivo."); };
+    rd.readAsArrayBuffer(f);
+    e.target.value = "";
   };
 
   var impAll = function() {
     if (!csvR) return;
+    var payId = ofxBank && ofxBank.paymentId ? ofxBank.paymentId : "";
+    var payment = null;
+    if (payId) payment = (cfg.payments || DEFAULT_PAYMENTS).find(function(p) { return p.id === payId; });
+    if (!payment) { alert("Selecione a forma de pagamento (cartão) antes de importar."); return; }
+    var paymentName = payment.name;
+    var bankName = ofxBank ? ofxBank.name : "";
     var nt = []; var nm = Object.assign({}, maps); var fut = {};
     var sk = 0; var rp = 0; var ad = 0;
     csvR.forEach(function(row) {
       var cid = csvC[row._idx]; if (!cid) return;
-      var desc = row.title || row["Título"] || row["Descrição"] || row.description || "Importado";
-      var amt = Math.abs(parseFloat((row.amount || row.Valor || row.valor || "").replace(",", ".")));
+      var desc = row.desc || "Importado";
+      var amt = row.amount;
       if (isNaN(amt) || !amt) return;
-      var dt = row.date || row.Data || row.data || "";
+      var dt = row.date || "";
+      var rowFitid = row.fitid || "";
+      var rowType = row.trnType || "DEBIT";
       var c2 = csvSp[row._idx] || { on: false, sp: [] };
       var sp = c2.on ? c2.sp.filter(function(s) { return s.person && s.pct > 0; }) : [];
       var inst = pi(desc); var dL = desc.toLowerCase().trim();
-      var exC = txs.find(function(ex) { return ex.src === "csv" && ex.desc.toLowerCase().trim() === dL && Math.abs(ex.amount - amt) < 0.01 && (ex.date || "").slice(0, 10) === (dt || "").slice(0, 10); });
+      var exC = txs.find(function(ex) {
+        if (ex.src !== "csv" && ex.src !== "ofx") return false;
+        // Dedup robusto via FITID quando ambos têm (Nubank reusa FITID em IOF/compra, então valor+tipo entram na chave)
+        if (rowFitid && ex.fitid) {
+          return ex.fitid === rowFitid && Math.abs(ex.amount - amt) < 0.01 && String(ex.trnType || "DEBIT") === rowType;
+        }
+        // Fallback: descrição+valor+data (compatível com imports CSV antigos)
+        return ex.desc.toLowerCase().trim() === dL && Math.abs(ex.amount - amt) < 0.01 && (ex.date || "").slice(0, 10) === (dt || "").slice(0, 10);
+      });
       if (exC) { sk++; return; }
       if (inst) {
         var nrm = nd(desc);
@@ -4057,7 +4212,7 @@ export default function App() {
         });
         if (pIdx >= 0) { txs.splice(pIdx, 1); rp++; }
       }
-      var newTx2 = { id: uid(), desc: desc, amount: amt, cat: cid, payment: "Cartão Nubank", splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "csv" };
+      var newTx2 = { id: uid(), desc: desc, amount: amt, cat: cid, payment: paymentName, splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "ofx", fitid: rowFitid, trnType: rowType, bank: bankName };
       nt.push(newTx2); ad++; if (dL) nm[dL] = cid;
       if (inst && inst.c < inst.t) {
         for (var ii2 = inst.c + 1; ii2 <= inst.t; ii2++) {
@@ -4066,7 +4221,7 @@ export default function App() {
           var fKey2 = tk(fy2, fmo2);
           if (!fut[fKey2]) fut[fKey2] = [];
           var futDesc = desc.replace(/\d+\s*\/\s*\d+/, String(ii2) + "/" + String(inst.t));
-          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj" });
+          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj", fitid: "" });
         }
       }
     });
@@ -4084,7 +4239,10 @@ export default function App() {
       });
     });
     sCR(null);
-    alert("✅ " + String(ad) + " adicionadas" + (rp ? ", " + String(rp) + " projeções substituídas" : "") + (sk ? ", " + String(sk) + " duplicadas ignoradas" : ""));
+    var creditsMsg = ofxBank && ofxBank.creditsSkipped ? ", " + String(ofxBank.creditsSkipped) + " créditos/estornos ignorados" : "";
+    var paymentsMsg = ofxBank && ofxBank.paymentsSkipped ? ", " + String(ofxBank.paymentsSkipped) + " pagamento(s) de fatura ignorado(s)" : "";
+    sOfxBank(null);
+    alert("✅ " + String(ad) + " adicionadas" + (rp ? ", " + String(rp) + " projeções substituídas" : "") + (sk ? ", " + String(sk) + " duplicadas ignoradas" : "") + creditsMsg + paymentsMsg);
   };
 
   var tabs = [
@@ -4342,30 +4500,62 @@ export default function App() {
               </div>
             </div>
 
-            {/* IMPORTAR CSV NUBANK */}
+            {/* IMPORTAR EXTRATO OFX */}
             <div className="prumo-card l-accent full">
               <div className="prumo-card-hd" style={{ marginBottom: 4 }}>
                 <div>
-                  <div className="prumo-lbl">{"Importar extrato Nubank"}</div>
+                  <div className="prumo-lbl">{"Importar extrato (OFX)"}</div>
                   <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>
-                    {!csvR ? "Upload de CSV" : String(csvR.length) + " transações detectadas"}
+                    {!csvR ? "Upload de arquivo OFX" : String(csvR.length) + " transações detectadas"}
                   </h2>
                 </div>
               </div>
               {!csvR ? (
                 <div className="prumo-form">
-                  <div className="prumo-cap">{"Dedup automático. Duplicatas são ignoradas, projeções de parcelas são substituídas pelos lançamentos reais."}</div>
-                  <input ref={fr} type="file" accept=".csv" onChange={handleCSV} style={{ display: "none" }} />
-                  <button className="prumo-btn accent" style={{ alignSelf: "flex-start", padding: "11px 18px" }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar CSV"}</button>
+                  <div className="prumo-cap">{"Compatível com Nubank, Itaú, Bradesco, Santander, Inter, C6, BTG e XP. Dedup automático via FITID. Pagamento de fatura e estornos de crédito são ignorados nesta versão."}</div>
+                  <input ref={fr} type="file" accept=".ofx,.OFX" onChange={handleOFX} style={{ display: "none" }} />
+                  <button className="prumo-btn accent" style={{ alignSelf: "flex-start", padding: "11px 18px" }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar arquivo OFX"}</button>
                 </div>
               ) : (
                 <div className="prumo-form">
+                  {/* BANNER DE DETECÇÃO DO BANCO */}
+                  {ofxBank && (
+                    <div style={{ background: ofxBank.detected ? "var(--surface-2)" : "var(--surface-warn, #FFF8E7)", border: "1px solid var(--line)", borderRadius: 8, padding: 12, marginBottom: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                        <span className="prumo-lbl" style={{ margin: 0 }}>{ofxBank.detected ? "Detectei" : "Banco não identificado"}</span>
+                        <span style={{ fontFamily: "var(--f-display)", fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{ofxBank.name}</span>
+                        {ofxBank.fid && <span className="prumo-tag-mono">{"FID " + String(ofxBank.fid)}</span>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span className="prumo-lbl" style={{ margin: 0 }}>{"Forma de pagamento:"}</span>
+                        <select
+                          value={ofxBank.paymentId || ""}
+                          onChange={function(ev) { sOfxBank({ ...ofxBank, paymentId: ev.target.value }); }}
+                          style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", fontSize: 13, fontFamily: "var(--f-ui)" }}
+                        >
+                          <option value="">{"— selecione —"}</option>
+                          {(cfg.payments || DEFAULT_PAYMENTS).map(function(p) {
+                            return <option key={p.id} value={p.id}>{p.name}</option>;
+                          })}
+                        </select>
+                      </div>
+                      {!ofxBank.paymentId && (
+                        <div className="prumo-cap" style={{ marginTop: 8, color: "var(--neg)" }}>{"Cadastre o cartão em Configurações → Formas de pagamento se ainda não existe."}</div>
+                      )}
+                      {(ofxBank.creditsSkipped > 0 || ofxBank.paymentsSkipped > 0) && (
+                        <div className="prumo-cap" style={{ marginTop: 8 }}>
+                          {ofxBank.creditsSkipped > 0 ? String(ofxBank.creditsSkipped) + " crédito(s)/estorno(s) ignorados. " : ""}
+                          {ofxBank.paymentsSkipped > 0 ? String(ofxBank.paymentsSkipped) + " pagamento(s) de fatura ignorados." : ""}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="prumo-cap">{"Categorize cada transação antes de importar. Marque ‘Dividir’ se for despesa compartilhada."}</div>
                   <div style={{ maxHeight: 480, overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
                     {csvR.map(function(row, idx) {
-                      var desc = row.title || row["Título"] || row["Descrição"] || row.description || "?";
-                      var amt = row.amount || row.Valor || row.valor || "?";
-                      var dt = row.date || row.Data || "";
+                      var desc = row.desc || "?";
+                      var amt = fmt(row.amount || 0);
+                      var dt = row.date ? sd(row.date) : "";
                       var inst = pi(desc);
                       var c2 = csvSp[row._idx] || { on: false, sp: [{ person: "", pct: 0 }] };
                       return (
@@ -4391,7 +4581,7 @@ export default function App() {
                   </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                     <button className="prumo-btn brand" style={{ flex: 1, padding: "12px 18px" }} onClick={impAll}>{"✓ Importar tudo"}</button>
-                    <button className="prumo-btn ghost" onClick={function() { sCR(null); }}>{"Cancelar"}</button>
+                    <button className="prumo-btn ghost" onClick={function() { sCR(null); sOfxBank(null); }}>{"Cancelar"}</button>
                   </div>
                 </div>
               )}
