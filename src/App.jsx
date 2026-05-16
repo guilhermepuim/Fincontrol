@@ -108,6 +108,62 @@ function resolveFixedListForMonth(fxdList, yyyymm) {
     return { ...fx, amount: v };
   }).filter(function(x) { return x !== null; });
 }
+
+// Calcula o total da fatura paga no mês (mo+1) considerando closing de cada cartão.
+// A fatura paga em mo+1 contém compras de: md[mo] com day > closing + md[mo+1] com day <= closing + projs de md[mo].
+// Projs (src=proj) não têm date; usa heurística dia=15.
+// Caso edge: mo === 11 (dezembro) — ignora md[mo+1] porque está em outro yr fora do yrD.
+// Retorna { total, byCard }.
+function nextInvoiceTotal(mo, yrD, payments) {
+  var creditPayments = (payments || []).filter(function(p) { return p.type === "credito" && p.closing; });
+  if (creditPayments.length === 0) return { total: 0, byCard: {} };
+  var closingByName = {};
+  creditPayments.forEach(function(p) { closingByName[p.name] = p.closing; });
+  var total = 0;
+  var byCard = {};
+  function addToCard(name, amt) { byCard[name] = (byCard[name] || 0) + amt; total += amt; }
+  function dayOf(dateStr) {
+    if (!dateStr) return null;
+    var m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? parseInt(m[3], 10) : null;
+  }
+  // Da md[mo]: compras pós-closing + projs (entram na fatura paga em mo+1)
+  var mdCur = (yrD && yrD[mo]) ? yrD[mo] : null;
+  if (mdCur && mdCur.tx) {
+    mdCur.tx.forEach(function(tx) {
+      if (tx.reimbursed) return;
+      var closing = closingByName[tx.payment];
+      if (!closing) return;
+      if (tx.src === "proj") {
+        if (15 > closing) addToCard(tx.payment, tx.amount);
+      } else {
+        var d = dayOf(tx.date);
+        if (d === null) {
+          if (15 > closing) addToCard(tx.payment, tx.amount);
+        } else if (d > closing) {
+          addToCard(tx.payment, tx.amount);
+        }
+      }
+    });
+  }
+  // Da md[mo+1]: compras pré-closing (entram na fatura paga em mo+1). Pula projs.
+  if (mo < 11) {
+    var mdNext = (yrD && yrD[mo + 1]) ? yrD[mo + 1] : null;
+    if (mdNext && mdNext.tx) {
+      mdNext.tx.forEach(function(tx) {
+        if (tx.reimbursed) return;
+        if (tx.src === "proj") return;
+        var closing = closingByName[tx.payment];
+        if (!closing) return;
+        var d = dayOf(tx.date);
+        if (d === null) return;
+        if (d <= closing) addToCard(tx.payment, tx.amount);
+      });
+    }
+  }
+  return { total: total, byCard: byCard };
+}
+
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function pct(v) { return String(((v || 0) * 100).toFixed(1)) + "%"; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -876,6 +932,10 @@ function DashboardPrumo(props) {
   var DS = props.DS;
   var nw = props.nw;
   var monthlyInvest = props.monthlyInvest;
+  var nextMo = props.nextMo;
+  var nextYr = props.nextYr;
+  var nextInvoice = props.nextInvoice || { total: 0, byCard: {} };
+  var nextFixedTotal = props.nextFixedTotal || 0;
 
   /* ─── Hero numbers ─── */
   var saldoLivre = totalInc - totDb + dRcv;
@@ -1032,6 +1092,22 @@ function DashboardPrumo(props) {
     return null;
   };
 
+  /* ─── Comprometimento do próximo mês (cálculo pro card visão caixa) ─── */
+  var cmpMonthLabel = String(MS[nextMo] || "").toLowerCase();
+  var cmpFaturaAmt = nextInvoice.total || 0;
+  var cmpFixasAmt = nextFixedTotal || 0;
+  var cmpTotal = cmpFaturaAmt + cmpFixasAmt;
+  var cmpRenda = totalInc || 0;
+  var cmpSaldo = cmpRenda - cmpTotal;
+  var cmpSaldoNeg = cmpSaldo < 0;
+  var cmpFaturaPct = cmpRenda > 0 ? (cmpFaturaAmt / cmpRenda) : 0;
+  var cmpFixasPct = cmpRenda > 0 ? (cmpFixasAmt / cmpRenda) : 0;
+  var cmpTotalPct = cmpRenda > 0 ? (cmpTotal / cmpRenda) : 0;
+  var cmpBarFatura = Math.min(100, cmpFaturaPct * 100);
+  var cmpBarFixas = Math.min(Math.max(0, 100 - cmpBarFatura), cmpFixasPct * 100);
+  var cmpBarLivre = Math.max(0, 100 - cmpBarFatura - cmpBarFixas);
+  var cmpHasCards = nextInvoice.byCard && Object.keys(nextInvoice.byCard).length > 0;
+
   return (
     <div className="prumo-dash-grid">
       {/* HERO ─ Saldo + Score + Anéis ─ span2 */}
@@ -1151,6 +1227,78 @@ function DashboardPrumo(props) {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* COMPROMETIMENTO PRÓXIMO MÊS ─ span2 ─ visão caixa do que já está reservado do salário */}
+      <div className="prumo-card l-accent span2">
+        <div className="prumo-card-hd" style={{ alignItems: "flex-start" }}>
+          <div>
+            <div className="prumo-lbl">{"Comprometimento · " + cmpMonthLabel}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Já reservado do próximo salário"}</h2>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div className="prumo-lbl">{"Créditos previstos"}</div>
+            <div className="prumo-num" style={{ fontSize: 18 }}>{fmt(cmpRenda)}</div>
+          </div>
+        </div>
+
+        {/* Barra horizontal segmentada */}
+        <div style={{ marginTop: 16, display: "flex", height: 16, borderRadius: 8, overflow: "hidden", background: "var(--surface-2)", border: "1px solid var(--line)" }}>
+          {cmpBarFatura > 0 && (
+            <div title={"Cartão · " + fmt(cmpFaturaAmt)} style={{ width: String(cmpBarFatura) + "%", background: "var(--accent)", transition: "width .2s" }} />
+          )}
+          {cmpBarFixas > 0 && (
+            <div title={"Fixas · " + fmt(cmpFixasAmt)} style={{ width: String(cmpBarFixas) + "%", background: "var(--brand)", transition: "width .2s" }} />
+          )}
+          {cmpBarLivre > 0 && !cmpSaldoNeg && (
+            <div title={"Livre · " + fmt(cmpSaldo)} style={{ width: String(cmpBarLivre) + "%", background: "var(--pos)", transition: "width .2s" }} />
+          )}
+        </div>
+
+        {/* Linhas de breakdown */}
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--accent)", flexShrink: 0 }} />
+              <span style={{ fontWeight: 600 }}>{"Cartões · próxima fatura"}</span>
+            </span>
+            <span style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
+              <span className="prumo-num" style={{ fontSize: 14 }}>{fmt(cmpFaturaAmt)}</span>
+              <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)", minWidth: 44, textAlign: "right" }}>{pct(cmpFaturaPct)}</span>
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--brand)", flexShrink: 0 }} />
+              <span style={{ fontWeight: 600 }}>{"Contas fixas"}</span>
+            </span>
+            <span style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
+              <span className="prumo-num" style={{ fontSize: 14 }}>{fmt(cmpFixasAmt)}</span>
+              <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)", minWidth: 44, textAlign: "right" }}>{pct(cmpFixasPct)}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Total + Saldo livre */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
+          <div>
+            <div className="prumo-lbl">{"Comprometido"}</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+              <span className="prumo-num" style={{ fontSize: 22, color: "var(--accent)", fontWeight: 700 }}>{fmt(cmpTotal)}</span>
+              <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)", color: "var(--accent)", fontWeight: 700 }}>{pct(cmpTotalPct)}</span>
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div className="prumo-lbl">{cmpSaldoNeg ? "Salário estourado em" : "Saldo livre estimado"}</div>
+            <div className="prumo-num" style={{ fontSize: 22, color: cmpSaldoNeg ? "var(--neg)" : "var(--pos)", fontWeight: 700, marginTop: 4 }}>{(cmpSaldoNeg ? "−" : "") + fmt(Math.abs(cmpSaldo))}</div>
+          </div>
+        </div>
+
+        <div className="prumo-cap" style={{ marginTop: 12, fontSize: 10, lineHeight: 1.5 }}>
+          {cmpHasCards
+            ? "Considera o fechamento de cada cartão · créditos previstos repetem o mês atual"
+            : "Configure um cartão de crédito com fechamento em Configurações pra ativar"}
         </div>
       </div>
 
@@ -3883,6 +4031,13 @@ export default function App() {
   }
   var nwMax = Math.max.apply(null, nwProjection.concat([nwBalance, 1]));
 
+  /* ── Comprometimento do PRÓXIMO mês (visão caixa cirúrgica) ── */
+  var nextMo = (mo + 1) % 12;
+  var nextYr = mo === 11 ? yr + 1 : yr;
+  var nextInvoice = nextInvoiceTotal(mo, yrD, cfg.payments || DEFAULT_PAYMENTS);
+  var nextFixedList = resolveFixedListForMonth(cfg.fixed || [], tk(nextYr, nextMo));
+  var nextFixedTotal = nextFixedList.reduce(function(a, f) { return a + (f.amount || 0); }, 0);
+
   /* Annual chart */
   var chD = [];
   var chMx = 1;
@@ -4407,6 +4562,7 @@ export default function App() {
             md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
             sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg} DS={DS}
             nw={nw} monthlyInvest={monthlyInvest} yrD={yrD} myP={myP}
+            nextMo={nextMo} nextYr={nextYr} nextInvoice={nextInvoice} nextFixedTotal={nextFixedTotal}
           />
         )}
 
