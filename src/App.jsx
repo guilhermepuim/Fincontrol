@@ -109,12 +109,15 @@ function resolveFixedListForMonth(fxdList, yyyymm) {
   }).filter(function(x) { return x !== null; });
 }
 
-// Calcula o total da fatura paga no mês (mo+1) considerando closing de cada cartão.
-// A fatura paga em mo+1 contém compras de: md[mo] com day > closing + md[mo+1] com day <= closing + projs de md[mo].
-// Projs (src=proj) não têm date; usa heurística dia=15.
-// Caso edge: mo === 11 (dezembro) — ignora md[mo+1] porque está em outro yr fora do yrD.
-// Retorna { total, byCard }.
-function nextInvoiceTotal(mo, yrD, payments) {
+// Calcula o total da fatura paga em um mês específico (payMo, índice 0-11 dentro de yrD),
+// considerando closing de cada cartão.
+// A fatura paga em payMo contém:
+//   - md[payMo-1] com day > closing (compras pós-closing do mês anterior)
+//   - md[payMo-1] projs (heurística dia=15)
+//   - md[payMo] com day <= closing (compras pré-closing deste mês)
+// Caso edge payMo === 0 (janeiro): se prevMd é fornecido (md de dezembro do ano anterior),
+// usa-o como md[payMo-1] pra fechar a fatura corretamente.
+function invoiceForPayMonth(payMo, yrD, payments, prevMd) {
   var creditPayments = (payments || []).filter(function(p) { return p.type === "credito" && p.closing; });
   if (creditPayments.length === 0) return { total: 0, byCard: {} };
   var closingByName = {};
@@ -127,10 +130,15 @@ function nextInvoiceTotal(mo, yrD, payments) {
     var m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? parseInt(m[3], 10) : null;
   }
-  // Da md[mo]: compras pós-closing + projs (entram na fatura paga em mo+1)
-  var mdCur = (yrD && yrD[mo]) ? yrD[mo] : null;
-  if (mdCur && mdCur.tx) {
-    mdCur.tx.forEach(function(tx) {
+  // mdPrev = md do mês ANTERIOR ao payMo
+  var mdPrev = null;
+  if (payMo > 0 && payMo <= 12) {
+    mdPrev = (yrD && yrD[payMo - 1]) ? yrD[payMo - 1] : null;
+  } else if (payMo === 0 && prevMd) {
+    mdPrev = prevMd; // dezembro do ano anterior
+  }
+  if (mdPrev && mdPrev.tx) {
+    mdPrev.tx.forEach(function(tx) {
       if (tx.reimbursed) return;
       var closing = closingByName[tx.payment];
       if (!closing) return;
@@ -146,22 +154,25 @@ function nextInvoiceTotal(mo, yrD, payments) {
       }
     });
   }
-  // Da md[mo+1]: compras pré-closing (entram na fatura paga em mo+1). Pula projs.
-  if (mo < 11) {
-    var mdNext = (yrD && yrD[mo + 1]) ? yrD[mo + 1] : null;
-    if (mdNext && mdNext.tx) {
-      mdNext.tx.forEach(function(tx) {
-        if (tx.reimbursed) return;
-        if (tx.src === "proj") return;
-        var closing = closingByName[tx.payment];
-        if (!closing) return;
-        var d = dayOf(tx.date);
-        if (d === null) return;
-        if (d <= closing) addToCard(tx.payment, tx.amount);
-      });
-    }
+  // mdCur = md do mês de pagamento (skip projs — projs caem na fatura do mês seguinte)
+  var mdCur = (yrD && yrD[payMo]) ? yrD[payMo] : null;
+  if (mdCur && mdCur.tx) {
+    mdCur.tx.forEach(function(tx) {
+      if (tx.reimbursed) return;
+      if (tx.src === "proj") return;
+      var closing = closingByName[tx.payment];
+      if (!closing) return;
+      var d = dayOf(tx.date);
+      if (d === null) return;
+      if (d <= closing) addToCard(tx.payment, tx.amount);
+    });
   }
   return { total: total, byCard: byCard };
+}
+
+// Wrapper retrocompatível: dado o mês corrente (mo), retorna a fatura paga em mo+1.
+function nextInvoiceTotal(mo, yrD, payments, prevMd) {
+  return invoiceForPayMonth(mo + 1, yrD, payments, prevMd);
 }
 
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
@@ -1093,11 +1104,12 @@ function DashboardPrumo(props) {
   };
 
   /* ─── Comprometimento do próximo mês (cálculo pro card visão caixa) ─── */
+  // Créditos previstos = SÓ salário fixo (não inclui bônus, variável, freela etc.)
   var cmpMonthLabel = String(MS[nextMo] || "").toLowerCase();
   var cmpFaturaAmt = nextInvoice.total || 0;
   var cmpFixasAmt = nextFixedTotal || 0;
   var cmpTotal = cmpFaturaAmt + cmpFixasAmt;
-  var cmpRenda = totalInc || 0;
+  var cmpRenda = sal || 0;
   var cmpSaldo = cmpRenda - cmpTotal;
   var cmpSaldoNeg = cmpSaldo < 0;
   var cmpFaturaPct = cmpRenda > 0 ? (cmpFaturaAmt / cmpRenda) : 0;
@@ -1238,7 +1250,7 @@ function DashboardPrumo(props) {
             <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Já reservado do próximo salário"}</h2>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div className="prumo-lbl">{"Créditos previstos"}</div>
+            <div className="prumo-lbl">{"Salário previsto"}</div>
             <div className="prumo-num" style={{ fontSize: 18 }}>{fmt(cmpRenda)}</div>
           </div>
         </div>
@@ -1297,7 +1309,7 @@ function DashboardPrumo(props) {
 
         <div className="prumo-cap" style={{ marginTop: 12, fontSize: 10, lineHeight: 1.5 }}>
           {cmpHasCards
-            ? "Considera o fechamento de cada cartão · créditos previstos repetem o mês atual"
+            ? "Considera fechamento de cada cartão · base = salário fixo (variável/bônus não entram)"
             : "Configure um cartão de crédito com fechamento em Configurações pra ativar"}
         </div>
       </div>
@@ -1817,6 +1829,7 @@ function ProjecaoPrumo(props) {
   var savR = props.savR;
   var totalInc = props.totalInc;
   var invSp = props.invSp;
+  var sal = props.sal || 0;
   var nwBalance = props.nwBalance;
   var nwHistory = props.nwHistory;
   var fxd = props.fxd;
@@ -1834,6 +1847,7 @@ function ProjecaoPrumo(props) {
   var spent = props.spent;
   var mo = props.mo;
   var yr = props.yr;
+  var yrD = props.yrD;
   var chD = props.chD;
   var chMx = props.chMx;
   var chMs = props.chMs;
@@ -1851,6 +1865,82 @@ function ProjecaoPrumo(props) {
   var simTempo = props.simTempo;
   var sSimTp = props.sSimTp;
   var saveCfg = props.saveCfg;
+
+  /* ── Card "Comprometimento próximos 12 meses": ano local + carregamento sob demanda ── */
+  var [projYr, sProjYr] = useState(yr);
+  var [projYrDLocal, sProjYrDLocal] = useState(null); // yrD do projYr (só se diferente de yr global)
+  var [projPrevDec, sProjPrevDec] = useState(null);   // md de dezembro do (projYr - 1) — pra fechar fatura de janeiro
+  var [projLoading, sProjLoading] = useState(false);
+
+  // yrD efetivo: se projYr === yr global, usa props.yrD; senão usa projYrDLocal
+  var projYrD = (projYr === yr) ? yrD : projYrDLocal;
+
+  useEffect(function() {
+    var active = true;
+    (async function() {
+      sProjLoading(true);
+      try {
+        // Sempre carrega dez do ano anterior pra fechar a fatura de janeiro
+        var prevDec = await ld("fc2-m-" + tk(projYr - 1, 11), { tx: [], cr: [], fs: {} });
+        if (!active) return;
+        sProjPrevDec(prevDec);
+        // Carrega 12 meses do projYr só se for diferente do yr global (senão reusa yrD das props)
+        if (projYr !== yr) {
+          var r = [];
+          for (var i = 0; i < 12; i++) {
+            r.push(await ld("fc2-m-" + tk(projYr, i), { tx: [], cr: [], fs: {} }));
+          }
+          if (!active) return;
+          sProjYrDLocal(r);
+        } else {
+          sProjYrDLocal(null);
+        }
+      } finally {
+        if (active) sProjLoading(false);
+      }
+    })();
+    return function() { active = false; };
+  }, [projYr, yr]);
+
+  // Calcula compromissos de cada mês do ano selecionado
+  var monthlyCommitments = [];
+  var nowDate = new Date();
+  var nowMo = nowDate.getMonth();
+  var nowYr = nowDate.getFullYear();
+  var paymentsList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var fixedRaw = (cfg && cfg.fixed) ? cfg.fixed : [];
+  var cmpMaxCompromisso = sal > 0 ? sal : 1;
+  for (var ci = 0; ci < 12; ci++) {
+    // Fatura paga no mês ci (closing-aware)
+    var prevForJan = (ci === 0) ? projPrevDec : null;
+    var inv = invoiceForPayMonth(ci, projYrD, paymentsList, prevForJan);
+    var fixedListMo = resolveFixedListForMonth(fixedRaw, tk(projYr, ci));
+    var fixedTotalMo = fixedListMo.reduce(function(a, f) { return a + (f.amount || 0); }, 0);
+    var totMo = inv.total + fixedTotalMo;
+    var saldoMo = sal - totMo;
+    var isPast = (projYr < nowYr) || (projYr === nowYr && ci < nowMo);
+    var isCurrent = (projYr === nowYr && ci === nowMo);
+    monthlyCommitments.push({
+      mo: ci,
+      mes: MA[ci],
+      faturaAmt: inv.total,
+      fixasAmt: fixedTotalMo,
+      total: totMo,
+      saldo: saldoMo,
+      saldoNeg: saldoMo < 0,
+      isPast: isPast,
+      isCurrent: isCurrent,
+      faturaPct: sal > 0 ? inv.total / sal : 0,
+      fixasPct: sal > 0 ? fixedTotalMo / sal : 0,
+      totalPct: sal > 0 ? totMo / sal : 0,
+    });
+    if (totMo > cmpMaxCompromisso) cmpMaxCompromisso = totMo;
+  }
+  // Cmp anuais
+  var cmpAnualFatura = monthlyCommitments.reduce(function(a, m) { return a + m.faturaAmt; }, 0);
+  var cmpAnualFixas = monthlyCommitments.reduce(function(a, m) { return a + m.fixasAmt; }, 0);
+  var cmpAnualTotal = cmpAnualFatura + cmpAnualFixas;
+  var cmpAnualLivre = (sal * 12) - cmpAnualTotal;
 
   var sim = calcSimAportes(nwBalance, simAporte, simTaxa, simTempo);
   var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
@@ -2220,6 +2310,100 @@ function ProjecaoPrumo(props) {
           </div>
         </div>
       )}
+
+      {/* COMPROMETIMENTO MENSAL · 12 MESES (visão caixa por mês de pagamento) */}
+      <div className="prumo-card l-accent full">
+        <div className="prumo-card-hd" style={{ alignItems: "flex-start" }}>
+          <div>
+            <div className="prumo-lbl">{"Comprometimento mensal"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Visão caixa do salário · 12 meses"}</h2>
+          </div>
+          <div className="prumo-month-pill" style={{ flexShrink: 0 }}>
+            <button onClick={function() { sProjYr(projYr - 1); }} disabled={projLoading}>{"‹"}</button>
+            <span>{String(projYr)}</span>
+            <button onClick={function() { sProjYr(projYr + 1); }} disabled={projLoading}>{"›"}</button>
+          </div>
+        </div>
+
+        {/* Legenda */}
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--accent)" }} />
+            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Cartão"}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--brand)" }} />
+            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Fixas"}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--pos)" }} />
+            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Livre"}</span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <span className="prumo-cap" style={{ fontSize: 11, fontFamily: "var(--f-mono)" }}>{"Base: salário " + fmt(sal)}</span>
+        </div>
+
+        {projLoading && (
+          <div className="prumo-cap" style={{ textAlign: "center", padding: 18 }}>{"Carregando dados de " + String(projYr) + "..."}</div>
+        )}
+
+        {!projLoading && monthlyCommitments.map(function(m) {
+          // Calcula larguras das barras (% do compromisso vs salário, clamp 0-100)
+          var barFatura = Math.min(100, m.faturaPct * 100);
+          var barFixas = Math.min(Math.max(0, 100 - barFatura), m.fixasPct * 100);
+          var barLivre = Math.max(0, 100 - barFatura - barFixas);
+          // Estilo do mês conforme passado/atual/futuro
+          var opacity = m.isPast ? 0.45 : 1;
+          var border = m.isCurrent ? "2px solid var(--brand)" : "1px solid var(--line)";
+          var bgRow = m.isCurrent ? "var(--brand-tint)" : "transparent";
+          return (
+            <div key={m.mo} style={{ padding: "10px 12px", borderRadius: 8, border: border, background: bgRow, marginBottom: 6, opacity: opacity, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              {/* Label mês */}
+              <div style={{ width: 40, flexShrink: 0 }}>
+                <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: m.isCurrent ? 800 : 600, color: m.isCurrent ? "var(--brand)" : "var(--ink-2)", letterSpacing: ".06em", textTransform: "uppercase" }}>{m.mes}</div>
+              </div>
+              {/* Barra empilhada */}
+              <div style={{ flex: 1, minWidth: 140, display: "flex", height: 14, borderRadius: 7, overflow: "hidden", background: "var(--surface-2)", border: "1px solid var(--line)" }}>
+                {barFatura > 0 && (
+                  <div title={"Cartão · " + fmt(m.faturaAmt)} style={{ width: String(barFatura) + "%", background: "var(--accent)" }} />
+                )}
+                {barFixas > 0 && (
+                  <div title={"Fixas · " + fmt(m.fixasAmt)} style={{ width: String(barFixas) + "%", background: "var(--brand)" }} />
+                )}
+                {barLivre > 0 && !m.saldoNeg && (
+                  <div title={"Livre · " + fmt(m.saldo)} style={{ width: String(barLivre) + "%", background: "var(--pos)" }} />
+                )}
+              </div>
+              {/* % Comprometido */}
+              <div style={{ width: 56, flexShrink: 0, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 700, color: m.saldoNeg ? "var(--neg)" : (m.totalPct >= 0.7 ? "var(--accent-2)" : "var(--ink-2)") }}>{pct(m.totalPct)}</div>
+              {/* Valores fat + fix */}
+              <div style={{ width: 150, flexShrink: 0, textAlign: "right", fontSize: 11, fontFamily: "var(--f-mono)", color: "var(--ink-3)" }}>
+                <span style={{ color: "var(--accent-2)" }}>{"F " + fK(m.faturaAmt)}</span>
+                <span style={{ margin: "0 6px", color: "var(--ink-4)" }}>{"·"}</span>
+                <span style={{ color: "var(--brand)" }}>{"Fx " + fK(m.fixasAmt)}</span>
+              </div>
+              {/* Saldo livre */}
+              <div style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 700, color: m.saldoNeg ? "var(--neg)" : "var(--pos)" }}>{(m.saldoNeg ? "−" : "") + fmt(Math.abs(m.saldo))}</div>
+            </div>
+          );
+        })}
+
+        {/* Resumo anual */}
+        {!projLoading && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line-2)" }}>
+            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Total " + String(projYr)}</div>
+            <div className="prumo-mini-stat-row">
+              <div className="prumo-mini-stat"><div className="lbl">{"Faturas"}</div><div className="val warn">{fmt(cmpAnualFatura)}</div></div>
+              <div className="prumo-mini-stat"><div className="lbl">{"Fixas"}</div><div className="val brand">{fmt(cmpAnualFixas)}</div></div>
+              <div className="prumo-mini-stat"><div className="lbl">{"Sobra anual"}</div><div className={"val " + (cmpAnualLivre >= 0 ? "pos" : "neg")}>{fmt(cmpAnualLivre)}</div></div>
+            </div>
+          </div>
+        )}
+
+        <div className="prumo-cap" style={{ marginTop: 12, fontSize: 10, lineHeight: 1.5 }}>
+          {"Considera fechamento de cada cartão · base = salário fixo (sem variável/bônus) · meses passados aparecem desbotados · janeiro inclui dezembro do ano anterior"}
+        </div>
+      </div>
 
       {/* COMPARATIVO MÊS A MÊS */}
       {prevSp && (
@@ -4031,7 +4215,7 @@ export default function App() {
   }
   var nwMax = Math.max.apply(null, nwProjection.concat([nwBalance, 1]));
 
-  /* ── Comprometimento do PRÓXIMO mês (visão caixa cirúrgica) ── */
+  /* ── Comprometimento do PRÓXIMO mês (pra card do Dashboard) ── */
   var nextMo = (mo + 1) % 12;
   var nextYr = mo === 11 ? yr + 1 : yr;
   var nextInvoice = nextInvoiceTotal(mo, yrD, cfg.payments || DEFAULT_PAYMENTS);
@@ -4575,12 +4759,12 @@ export default function App() {
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
           <ProjecaoPrumo
-            cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp}
+            cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp} sal={sal}
             nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
             totDb={totDb} ifTarget={ifTarget} sIfTarget={sIfTarget}
             showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
             activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst}
-            prevSp={prevSp} spent={spent} mo={mo} yr={yr}
+            prevSp={prevSp} spent={spent} mo={mo} yr={yr} yrD={yrD}
             chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
             showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
             simAporte={simAporte} sSimA={sSimA} simTaxa={simTaxa} sSimT={sSimT} simTempo={simTempo} sSimTp={sSimTp}
