@@ -108,79 +108,45 @@ function resolveFixedListForMonth(fxdList, yyyymm) {
     return { ...fx, amount: v };
   }).filter(function(x) { return x !== null; });
 }
-
-// Calcula o total da fatura paga em um mês específico (payMo, índice 0-11 dentro de yrD),
-// considerando closing de cada cartão.
-// A fatura paga em payMo contém:
-//   - md[payMo-1] com day > closing (compras pós-closing do mês anterior)
-//   - md[payMo-1] projs (heurística dia=15)
-//   - md[payMo] com day <= closing (compras pré-closing deste mês)
-// Caso edge payMo === 0 (janeiro): se prevMd é fornecido (md de dezembro do ano anterior),
-// usa-o como md[payMo-1] pra fechar a fatura corretamente.
-function invoiceForPayMonth(payMo, yrD, payments, prevMd) {
-  var creditPayments = (payments || []).filter(function(p) { return p.type === "credito" && p.closing; });
-  if (creditPayments.length === 0) return { total: 0, byCard: {} };
-  var closingByName = {};
-  creditPayments.forEach(function(p) { closingByName[p.name] = p.closing; });
-  var total = 0;
-  var byCard = {};
-  function addToCard(name, amt) { byCard[name] = (byCard[name] || 0) + amt; total += amt; }
-  function dayOf(dateStr) {
-    if (!dateStr) return null;
-    var m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m ? parseInt(m[3], 10) : null;
-  }
-  // mdPrev = md do mês ANTERIOR ao payMo
-  var mdPrev = null;
-  if (payMo > 0 && payMo <= 12) {
-    mdPrev = (yrD && yrD[payMo - 1]) ? yrD[payMo - 1] : null;
-  } else if (payMo === 0 && prevMd) {
-    mdPrev = prevMd; // dezembro do ano anterior
-  }
-  if (mdPrev && mdPrev.tx) {
-    mdPrev.tx.forEach(function(tx) {
-      if (tx.reimbursed) return;
-      var closing = closingByName[tx.payment];
-      if (!closing) return;
-      if (tx.src === "proj") {
-        if (15 > closing) addToCard(tx.payment, tx.amount);
-      } else {
-        var d = dayOf(tx.date);
-        if (d === null) {
-          if (15 > closing) addToCard(tx.payment, tx.amount);
-        } else if (d > closing) {
-          addToCard(tx.payment, tx.amount);
-        }
-      }
-    });
-  }
-  // mdCur = md do mês de pagamento (skip projs — projs caem na fatura do mês seguinte)
-  var mdCur = (yrD && yrD[payMo]) ? yrD[payMo] : null;
-  if (mdCur && mdCur.tx) {
-    mdCur.tx.forEach(function(tx) {
-      if (tx.reimbursed) return;
-      if (tx.src === "proj") return;
-      var closing = closingByName[tx.payment];
-      if (!closing) return;
-      var d = dayOf(tx.date);
-      if (d === null) return;
-      if (d <= closing) addToCard(tx.payment, tx.amount);
-    });
-  }
-  return { total: total, byCard: byCard };
-}
-
-// Wrapper retrocompatível: dado o mês corrente (mo), retorna a fatura paga em mo+1.
-function nextInvoiceTotal(mo, yrD, payments, prevMd) {
-  return invoiceForPayMonth(mo + 1, yrD, payments, prevMd);
-}
-
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function pct(v) { return String(((v || 0) * 100).toFixed(1)) + "%"; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function tk(y, m) { return String(y) + "-" + String(m + 1).padStart(2, "0"); }
 function sd(d) { try { return new Date(d).toLocaleDateString("pt-BR"); } catch (e) { return String(d || ""); } }
 function fK(v) { var a = Math.abs(v || 0); if (a >= 1000) return (v < 0 ? "-" : "") + (a / 1000).toFixed(1) + "k"; return String(Math.round(v || 0)); }
+
+/* ══ INPUT SANITIZATION ══
+   Defense-in-depth helpers. React already escapes output, mas estes garantem que
+   payloads maliciosos não persistam no Firestore (XSS armazenado, injeção via OFX, etc).
+   - cln: limpa strings (tags HTML, javascript:/data: URIs, caracteres de controle)
+   - cnum: valida números (NaN, Infinity, bounds)
+*/
+function cln(s, maxLen) {
+  if (s == null) return "";
+  if (typeof s !== "string") s = String(s);
+  // Remove tags HTML completas
+  s = s.replace(/<[^>]*>/g, "");
+  // Remove javascript: e data: URIs (case-insensitive)
+  s = s.replace(/javascript\s*:/gi, "").replace(/data\s*:/gi, "");
+  // Remove vbscript:, file:, about: (defesa extra contra protocolos perigosos)
+  s = s.replace(/vbscript\s*:/gi, "").replace(/file\s*:/gi, "").replace(/about\s*:/gi, "");
+  // Remove caracteres de controle (preserva \n e \t)
+  s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  // Trim
+  s = s.trim();
+  // Trunca
+  var mx = typeof maxLen === "number" && maxLen > 0 ? maxLen : 500;
+  if (s.length > mx) s = s.slice(0, mx);
+  return s;
+}
+function cnum(v, max) {
+  var n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+  if (!isFinite(n) || isNaN(n)) return 0;
+  var mx = typeof max === "number" && max > 0 ? max : 999999999;
+  if (n > mx) return mx;
+  if (n < -mx) return -mx;
+  return n;
+}
 
 /* ══ OFX PARSER ══ */
 // Mapeamento FID (código COMPE do Banco Central) → nome amigável + hints para match contra cfg.payments
@@ -270,10 +236,10 @@ function parseOFX(text) {
     if (String(trnType).toUpperCase() === "CREDIT" || amt > 0) { creditsSkipped++; return; }
     txns.push({
       _idx: idx,
-      fitid: fitid || "",
+      fitid: cln(fitid || "", 200),
       trnType: String(trnType || "DEBIT").toUpperCase(),
-      desc: String(memo || "Importado").trim(),
-      amount: Math.abs(amt),
+      desc: cln(memo || "Importado", 500),
+      amount: Math.abs(cnum(amt)),
       date: parseOfxDate(dtPosted) || "",
     });
   });
@@ -943,10 +909,6 @@ function DashboardPrumo(props) {
   var DS = props.DS;
   var nw = props.nw;
   var monthlyInvest = props.monthlyInvest;
-  var nextMo = props.nextMo;
-  var nextYr = props.nextYr;
-  var nextInvoice = props.nextInvoice || { total: 0, byCard: {} };
-  var nextFixedTotal = props.nextFixedTotal || 0;
 
   /* ─── Hero numbers ─── */
   var saldoLivre = totalInc - totDb + dRcv;
@@ -1103,23 +1065,6 @@ function DashboardPrumo(props) {
     return null;
   };
 
-  /* ─── Comprometimento do próximo mês (cálculo pro card visão caixa) ─── */
-  // Créditos previstos = SÓ salário fixo (não inclui bônus, variável, freela etc.)
-  var cmpMonthLabel = String(MS[nextMo] || "").toLowerCase();
-  var cmpFaturaAmt = nextInvoice.total || 0;
-  var cmpFixasAmt = nextFixedTotal || 0;
-  var cmpTotal = cmpFaturaAmt + cmpFixasAmt;
-  var cmpRenda = sal || 0;
-  var cmpSaldo = cmpRenda - cmpTotal;
-  var cmpSaldoNeg = cmpSaldo < 0;
-  var cmpFaturaPct = cmpRenda > 0 ? (cmpFaturaAmt / cmpRenda) : 0;
-  var cmpFixasPct = cmpRenda > 0 ? (cmpFixasAmt / cmpRenda) : 0;
-  var cmpTotalPct = cmpRenda > 0 ? (cmpTotal / cmpRenda) : 0;
-  var cmpBarFatura = Math.min(100, cmpFaturaPct * 100);
-  var cmpBarFixas = Math.min(Math.max(0, 100 - cmpBarFatura), cmpFixasPct * 100);
-  var cmpBarLivre = Math.max(0, 100 - cmpBarFatura - cmpBarFixas);
-  var cmpHasCards = nextInvoice.byCard && Object.keys(nextInvoice.byCard).length > 0;
-
   return (
     <div className="prumo-dash-grid">
       {/* HERO ─ Saldo + Score + Anéis ─ span2 */}
@@ -1239,78 +1184,6 @@ function DashboardPrumo(props) {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* COMPROMETIMENTO PRÓXIMO MÊS ─ span2 ─ visão caixa do que já está reservado do salário */}
-      <div className="prumo-card l-accent span2">
-        <div className="prumo-card-hd" style={{ alignItems: "flex-start" }}>
-          <div>
-            <div className="prumo-lbl">{"Comprometimento · " + cmpMonthLabel}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Já reservado do próximo salário"}</h2>
-          </div>
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div className="prumo-lbl">{"Salário previsto"}</div>
-            <div className="prumo-num" style={{ fontSize: 18 }}>{fmt(cmpRenda)}</div>
-          </div>
-        </div>
-
-        {/* Barra horizontal segmentada */}
-        <div style={{ marginTop: 16, display: "flex", height: 16, borderRadius: 8, overflow: "hidden", background: "var(--surface-2)", border: "1px solid var(--line)" }}>
-          {cmpBarFatura > 0 && (
-            <div title={"Cartão · " + fmt(cmpFaturaAmt)} style={{ width: String(cmpBarFatura) + "%", background: "var(--accent)", transition: "width .2s" }} />
-          )}
-          {cmpBarFixas > 0 && (
-            <div title={"Fixas · " + fmt(cmpFixasAmt)} style={{ width: String(cmpBarFixas) + "%", background: "var(--brand)", transition: "width .2s" }} />
-          )}
-          {cmpBarLivre > 0 && !cmpSaldoNeg && (
-            <div title={"Livre · " + fmt(cmpSaldo)} style={{ width: String(cmpBarLivre) + "%", background: "var(--pos)", transition: "width .2s" }} />
-          )}
-        </div>
-
-        {/* Linhas de breakdown */}
-        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--accent)", flexShrink: 0 }} />
-              <span style={{ fontWeight: 600 }}>{"Cartões · próxima fatura"}</span>
-            </span>
-            <span style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
-              <span className="prumo-num" style={{ fontSize: 14 }}>{fmt(cmpFaturaAmt)}</span>
-              <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)", minWidth: 44, textAlign: "right" }}>{pct(cmpFaturaPct)}</span>
-            </span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--brand)", flexShrink: 0 }} />
-              <span style={{ fontWeight: 600 }}>{"Contas fixas"}</span>
-            </span>
-            <span style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
-              <span className="prumo-num" style={{ fontSize: 14 }}>{fmt(cmpFixasAmt)}</span>
-              <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)", minWidth: 44, textAlign: "right" }}>{pct(cmpFixasPct)}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Total + Saldo livre */}
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
-          <div>
-            <div className="prumo-lbl">{"Comprometido"}</div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-              <span className="prumo-num" style={{ fontSize: 22, color: "var(--accent)", fontWeight: 700 }}>{fmt(cmpTotal)}</span>
-              <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)", color: "var(--accent)", fontWeight: 700 }}>{pct(cmpTotalPct)}</span>
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="prumo-lbl">{cmpSaldoNeg ? "Salário estourado em" : "Saldo livre estimado"}</div>
-            <div className="prumo-num" style={{ fontSize: 22, color: cmpSaldoNeg ? "var(--neg)" : "var(--pos)", fontWeight: 700, marginTop: 4 }}>{(cmpSaldoNeg ? "−" : "") + fmt(Math.abs(cmpSaldo))}</div>
-          </div>
-        </div>
-
-        <div className="prumo-cap" style={{ marginTop: 12, fontSize: 10, lineHeight: 1.5 }}>
-          {cmpHasCards
-            ? "Considera fechamento de cada cartão · base = salário fixo (variável/bônus não entram)"
-            : "Configure um cartão de crédito com fechamento em Configurações pra ativar"}
         </div>
       </div>
 
@@ -1829,7 +1702,6 @@ function ProjecaoPrumo(props) {
   var savR = props.savR;
   var totalInc = props.totalInc;
   var invSp = props.invSp;
-  var sal = props.sal || 0;
   var nwBalance = props.nwBalance;
   var nwHistory = props.nwHistory;
   var fxd = props.fxd;
@@ -1847,7 +1719,6 @@ function ProjecaoPrumo(props) {
   var spent = props.spent;
   var mo = props.mo;
   var yr = props.yr;
-  var yrD = props.yrD;
   var chD = props.chD;
   var chMx = props.chMx;
   var chMs = props.chMs;
@@ -1865,82 +1736,6 @@ function ProjecaoPrumo(props) {
   var simTempo = props.simTempo;
   var sSimTp = props.sSimTp;
   var saveCfg = props.saveCfg;
-
-  /* ── Card "Comprometimento próximos 12 meses": ano local + carregamento sob demanda ── */
-  var [projYr, sProjYr] = useState(yr);
-  var [projYrDLocal, sProjYrDLocal] = useState(null); // yrD do projYr (só se diferente de yr global)
-  var [projPrevDec, sProjPrevDec] = useState(null);   // md de dezembro do (projYr - 1) — pra fechar fatura de janeiro
-  var [projLoading, sProjLoading] = useState(false);
-
-  // yrD efetivo: se projYr === yr global, usa props.yrD; senão usa projYrDLocal
-  var projYrD = (projYr === yr) ? yrD : projYrDLocal;
-
-  useEffect(function() {
-    var active = true;
-    (async function() {
-      sProjLoading(true);
-      try {
-        // Sempre carrega dez do ano anterior pra fechar a fatura de janeiro
-        var prevDec = await ld("fc2-m-" + tk(projYr - 1, 11), { tx: [], cr: [], fs: {} });
-        if (!active) return;
-        sProjPrevDec(prevDec);
-        // Carrega 12 meses do projYr só se for diferente do yr global (senão reusa yrD das props)
-        if (projYr !== yr) {
-          var r = [];
-          for (var i = 0; i < 12; i++) {
-            r.push(await ld("fc2-m-" + tk(projYr, i), { tx: [], cr: [], fs: {} }));
-          }
-          if (!active) return;
-          sProjYrDLocal(r);
-        } else {
-          sProjYrDLocal(null);
-        }
-      } finally {
-        if (active) sProjLoading(false);
-      }
-    })();
-    return function() { active = false; };
-  }, [projYr, yr]);
-
-  // Calcula compromissos de cada mês do ano selecionado
-  var monthlyCommitments = [];
-  var nowDate = new Date();
-  var nowMo = nowDate.getMonth();
-  var nowYr = nowDate.getFullYear();
-  var paymentsList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
-  var fixedRaw = (cfg && cfg.fixed) ? cfg.fixed : [];
-  var cmpMaxCompromisso = sal > 0 ? sal : 1;
-  for (var ci = 0; ci < 12; ci++) {
-    // Fatura paga no mês ci (closing-aware)
-    var prevForJan = (ci === 0) ? projPrevDec : null;
-    var inv = invoiceForPayMonth(ci, projYrD, paymentsList, prevForJan);
-    var fixedListMo = resolveFixedListForMonth(fixedRaw, tk(projYr, ci));
-    var fixedTotalMo = fixedListMo.reduce(function(a, f) { return a + (f.amount || 0); }, 0);
-    var totMo = inv.total + fixedTotalMo;
-    var saldoMo = sal - totMo;
-    var isPast = (projYr < nowYr) || (projYr === nowYr && ci < nowMo);
-    var isCurrent = (projYr === nowYr && ci === nowMo);
-    monthlyCommitments.push({
-      mo: ci,
-      mes: MA[ci],
-      faturaAmt: inv.total,
-      fixasAmt: fixedTotalMo,
-      total: totMo,
-      saldo: saldoMo,
-      saldoNeg: saldoMo < 0,
-      isPast: isPast,
-      isCurrent: isCurrent,
-      faturaPct: sal > 0 ? inv.total / sal : 0,
-      fixasPct: sal > 0 ? fixedTotalMo / sal : 0,
-      totalPct: sal > 0 ? totMo / sal : 0,
-    });
-    if (totMo > cmpMaxCompromisso) cmpMaxCompromisso = totMo;
-  }
-  // Cmp anuais
-  var cmpAnualFatura = monthlyCommitments.reduce(function(a, m) { return a + m.faturaAmt; }, 0);
-  var cmpAnualFixas = monthlyCommitments.reduce(function(a, m) { return a + m.fixasAmt; }, 0);
-  var cmpAnualTotal = cmpAnualFatura + cmpAnualFixas;
-  var cmpAnualLivre = (sal * 12) - cmpAnualTotal;
 
   var sim = calcSimAportes(nwBalance, simAporte, simTaxa, simTempo);
   var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
@@ -2310,100 +2105,6 @@ function ProjecaoPrumo(props) {
           </div>
         </div>
       )}
-
-      {/* COMPROMETIMENTO MENSAL · 12 MESES (visão caixa por mês de pagamento) */}
-      <div className="prumo-card l-accent full">
-        <div className="prumo-card-hd" style={{ alignItems: "flex-start" }}>
-          <div>
-            <div className="prumo-lbl">{"Comprometimento mensal"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Visão caixa do salário · 12 meses"}</h2>
-          </div>
-          <div className="prumo-month-pill" style={{ flexShrink: 0 }}>
-            <button onClick={function() { sProjYr(projYr - 1); }} disabled={projLoading}>{"‹"}</button>
-            <span>{String(projYr)}</span>
-            <button onClick={function() { sProjYr(projYr + 1); }} disabled={projLoading}>{"›"}</button>
-          </div>
-        </div>
-
-        {/* Legenda */}
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--accent)" }} />
-            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Cartão"}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--brand)" }} />
-            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Fixas"}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--pos)" }} />
-            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Livre"}</span>
-          </div>
-          <div style={{ flex: 1 }} />
-          <span className="prumo-cap" style={{ fontSize: 11, fontFamily: "var(--f-mono)" }}>{"Base: salário " + fmt(sal)}</span>
-        </div>
-
-        {projLoading && (
-          <div className="prumo-cap" style={{ textAlign: "center", padding: 18 }}>{"Carregando dados de " + String(projYr) + "..."}</div>
-        )}
-
-        {!projLoading && monthlyCommitments.map(function(m) {
-          // Calcula larguras das barras (% do compromisso vs salário, clamp 0-100)
-          var barFatura = Math.min(100, m.faturaPct * 100);
-          var barFixas = Math.min(Math.max(0, 100 - barFatura), m.fixasPct * 100);
-          var barLivre = Math.max(0, 100 - barFatura - barFixas);
-          // Estilo do mês conforme passado/atual/futuro
-          var opacity = m.isPast ? 0.45 : 1;
-          var border = m.isCurrent ? "2px solid var(--brand)" : "1px solid var(--line)";
-          var bgRow = m.isCurrent ? "var(--brand-tint)" : "transparent";
-          return (
-            <div key={m.mo} style={{ padding: "10px 12px", borderRadius: 8, border: border, background: bgRow, marginBottom: 6, opacity: opacity, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              {/* Label mês */}
-              <div style={{ width: 40, flexShrink: 0 }}>
-                <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: m.isCurrent ? 800 : 600, color: m.isCurrent ? "var(--brand)" : "var(--ink-2)", letterSpacing: ".06em", textTransform: "uppercase" }}>{m.mes}</div>
-              </div>
-              {/* Barra empilhada */}
-              <div style={{ flex: 1, minWidth: 140, display: "flex", height: 14, borderRadius: 7, overflow: "hidden", background: "var(--surface-2)", border: "1px solid var(--line)" }}>
-                {barFatura > 0 && (
-                  <div title={"Cartão · " + fmt(m.faturaAmt)} style={{ width: String(barFatura) + "%", background: "var(--accent)" }} />
-                )}
-                {barFixas > 0 && (
-                  <div title={"Fixas · " + fmt(m.fixasAmt)} style={{ width: String(barFixas) + "%", background: "var(--brand)" }} />
-                )}
-                {barLivre > 0 && !m.saldoNeg && (
-                  <div title={"Livre · " + fmt(m.saldo)} style={{ width: String(barLivre) + "%", background: "var(--pos)" }} />
-                )}
-              </div>
-              {/* % Comprometido */}
-              <div style={{ width: 56, flexShrink: 0, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 700, color: m.saldoNeg ? "var(--neg)" : (m.totalPct >= 0.7 ? "var(--accent-2)" : "var(--ink-2)") }}>{pct(m.totalPct)}</div>
-              {/* Valores fat + fix */}
-              <div style={{ width: 150, flexShrink: 0, textAlign: "right", fontSize: 11, fontFamily: "var(--f-mono)", color: "var(--ink-3)" }}>
-                <span style={{ color: "var(--accent-2)" }}>{"F " + fK(m.faturaAmt)}</span>
-                <span style={{ margin: "0 6px", color: "var(--ink-4)" }}>{"·"}</span>
-                <span style={{ color: "var(--brand)" }}>{"Fx " + fK(m.fixasAmt)}</span>
-              </div>
-              {/* Saldo livre */}
-              <div style={{ width: 90, flexShrink: 0, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 700, color: m.saldoNeg ? "var(--neg)" : "var(--pos)" }}>{(m.saldoNeg ? "−" : "") + fmt(Math.abs(m.saldo))}</div>
-            </div>
-          );
-        })}
-
-        {/* Resumo anual */}
-        {!projLoading && (
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line-2)" }}>
-            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Total " + String(projYr)}</div>
-            <div className="prumo-mini-stat-row">
-              <div className="prumo-mini-stat"><div className="lbl">{"Faturas"}</div><div className="val warn">{fmt(cmpAnualFatura)}</div></div>
-              <div className="prumo-mini-stat"><div className="lbl">{"Fixas"}</div><div className="val brand">{fmt(cmpAnualFixas)}</div></div>
-              <div className="prumo-mini-stat"><div className="lbl">{"Sobra anual"}</div><div className={"val " + (cmpAnualLivre >= 0 ? "pos" : "neg")}>{fmt(cmpAnualLivre)}</div></div>
-            </div>
-          </div>
-        )}
-
-        <div className="prumo-cap" style={{ marginTop: 12, fontSize: 10, lineHeight: 1.5 }}>
-          {"Considera fechamento de cada cartão · base = salário fixo (sem variável/bônus) · meses passados aparecem desbotados · janeiro inclui dezembro do ano anterior"}
-        </div>
-      </div>
 
       {/* COMPARATIVO MÊS A MÊS */}
       {prevSp && (
@@ -3483,7 +3184,7 @@ function ConfigPrumo(props) {
   var addSubcategory = function(parentCat) {
     if (!draftSub.name.trim()) return;
     var id = uniqueId(slugify(parentCat.id + "_" + draftSub.name));
-    var newCat = { id: id, name: draftSub.name.trim(), icon: draftSub.icon || "", group: parentCat.group, parent: parentCat.id };
+    var newCat = { id: id, name: cln(draftSub.name, 100), icon: cln(draftSub.icon || "", 10), group: parentCat.group, parent: parentCat.id };
     saveCfg({ ...cfg, categories: allCats.concat([newCat]) });
     sDraftSub({ name: "", icon: "" });
     sNewSubFor(null);
@@ -3498,7 +3199,7 @@ function ConfigPrumo(props) {
     if (!editCatId || !editForm.name.trim()) { sEditCatId(null); return; }
     var updated = allCats.map(function(c) {
       if (c.id !== editCatId) return c;
-      return { ...c, name: editForm.name.trim(), icon: editForm.icon };
+      return { ...c, name: cln(editForm.name, 100), icon: cln(editForm.icon || "", 10) };
     });
     saveCfg({ ...cfg, categories: updated });
     sEditCatId(null);
@@ -3518,7 +3219,7 @@ function ConfigPrumo(props) {
   var addPayment = function() {
     if (!draftPay.name.trim()) return;
     var id = slugify(draftPay.name);
-    var newP = { id: id, name: draftPay.name.trim(), type: draftPay.type };
+    var newP = { id: id, name: cln(draftPay.name, 100), type: draftPay.type };
     if (draftPay.type === "credito" && draftPay.closing) {
       var c = parseInt(draftPay.closing, 10);
       if (!isNaN(c) && c >= 1 && c <= 31) newP.closing = c;
@@ -3537,7 +3238,7 @@ function ConfigPrumo(props) {
     if (!editPayId || !editPayForm.name.trim()) { sEditPayId(null); return; }
     var updated = payments.map(function(p) {
       if (p.id !== editPayId) return p;
-      var updatedP = { ...p, name: editPayForm.name.trim(), type: editPayForm.type };
+      var updatedP = { ...p, name: cln(editPayForm.name, 100), type: editPayForm.type };
       if (editPayForm.type === "credito" && editPayForm.closing) {
         var c = parseInt(editPayForm.closing, 10);
         if (!isNaN(c) && c >= 1 && c <= 31) updatedP.closing = c;
@@ -4215,13 +3916,6 @@ export default function App() {
   }
   var nwMax = Math.max.apply(null, nwProjection.concat([nwBalance, 1]));
 
-  /* ── Comprometimento do PRÓXIMO mês (pra card do Dashboard) ── */
-  var nextMo = (mo + 1) % 12;
-  var nextYr = mo === 11 ? yr + 1 : yr;
-  var nextInvoice = nextInvoiceTotal(mo, yrD, cfg.payments || DEFAULT_PAYMENTS);
-  var nextFixedList = resolveFixedListForMonth(cfg.fixed || [], tk(nextYr, nextMo));
-  var nextFixedTotal = nextFixedList.reduce(function(a, f) { return a + (f.amount || 0); }, 0);
-
   /* Annual chart */
   var chD = [];
   var chMx = 1;
@@ -4304,17 +3998,17 @@ export default function App() {
 
   /* ── Actions ── */
   var addTx = function() {
-    var v = parseFloat(fm.valor.replace(",", "."));
+    var v = cnum(fm.valor);
     if (!fm.desc) { sErr("Descrição"); return; }
-    if (isNaN(v)) { sErr("Valor"); return; }
+    if (v <= 0) { sErr("Valor"); return; }
     if (!fm.cat) { sErr("Categoria"); return; }
     if (fm.hs) {
       var spInvalid = fm.sp.filter(function(s) { return !s.person || !String(s.person).trim() || !s.pct || s.pct <= 0; });
       if (spInvalid.length > 0 || fm.sp.length === 0) { sErr("Preencha nome e % de todas as pessoas no split"); return; }
     }
     sErr("");
-    var sp = fm.hs ? fm.sp.filter(function(s) { return s.person && s.pct > 0; }) : [];
-    var newTx = { id: uid(), desc: fm.desc, amount: v, cat: fm.cat, payment: fm.pay, splits: sp, hasSplit: sp.length > 0, date: fm.date || new Date().toISOString(), received: false, reimbursed: fm.reimb, note: fm.note || "", src: "manual" };
+    var sp = fm.hs ? fm.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
+    var newTx = { id: uid(), desc: cln(fm.desc, 500), amount: v, cat: fm.cat, payment: cln(fm.pay, 100), splits: sp, hasSplit: sp.length > 0, date: fm.date || new Date().toISOString(), received: false, reimbursed: fm.reimb, note: cln(fm.note || "", 2000), src: "manual" };
     saveMd({ ...md, tx: txs.concat([newTx]) });
     var ic = parseInt(fm.ic);
     var it = parseInt(fm.it);
@@ -4323,7 +4017,7 @@ export default function App() {
         var fmo = (mo + (ii - ic)) % 12;
         var fy = yr + Math.floor((mo + (ii - ic)) / 12);
         var fKey = tk(fy, fmo);
-        var projDesc = fm.desc + " " + String(ii) + "/" + String(it);
+        var projDesc = cln(fm.desc, 480) + " " + String(ii) + "/" + String(it);
         var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
         ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
           sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
@@ -4334,11 +4028,11 @@ export default function App() {
   };
 
   var saveTxEdit = function(id) {
-    var v = parseFloat(editTxF.valor.replace(",", "."));
-    if (!editTxF.desc || isNaN(v) || !editTxF.cat) return;
+    var v = cnum(editTxF.valor);
+    if (!editTxF.desc || v <= 0 || !editTxF.cat) return;
     var updated = txs.map(function(t) {
       if (t.id !== id) return t;
-      return { ...t, desc: editTxF.desc, amount: v, cat: editTxF.cat, note: editTxF.note };
+      return { ...t, desc: cln(editTxF.desc, 500), amount: v, cat: editTxF.cat, note: cln(editTxF.note || "", 2000) };
     });
     saveMd({ ...md, tx: updated });
     sETxId(null);
@@ -4358,17 +4052,17 @@ export default function App() {
   };
 
   var addFx = function() {
-    var a = parseFloat(ff.amount.replace(",", "."));
+    var a = cnum(ff.amount);
     if (!ff.name) { sErr("Nome"); return; }
-    if (isNaN(a)) { sErr("Valor"); return; }
+    if (a <= 0) { sErr("Valor"); return; }
     if (!ff.cat) { sErr("Categoria"); return; }
     if (ff.hs) {
       var spInvalidFx = ff.sp.filter(function(s) { return !s.person || !String(s.person).trim() || !s.pct || s.pct <= 0; });
       if (spInvalidFx.length > 0 || ff.sp.length === 0) { sErr("Preencha nome e % de todas as pessoas no split"); return; }
     }
     sErr("");
-    var sp = ff.hs ? ff.sp.filter(function(s) { return s.person && s.pct > 0; }) : [];
-    var newFx = { id: uid(), name: ff.name, amount: a, cat: ff.cat, payment: ff.pay, splits: sp, hasSplit: sp.length > 0, mode: ff.mode, startDate: ff.startDate || tk(yr, mo) };
+    var sp = ff.hs ? ff.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
+    var newFx = { id: uid(), name: cln(ff.name, 100), amount: a, cat: ff.cat, payment: cln(ff.pay, 100), splits: sp, hasSplit: sp.length > 0, mode: ff.mode, startDate: ff.startDate || tk(yr, mo) };
     if (ff.endDate) newFx.endDate = ff.endDate;
     saveCfg({ ...cfg, fixed: fxd.concat([newFx]) });
     sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "" });
@@ -4376,26 +4070,26 @@ export default function App() {
   };
 
   var addPart = function(fid) {
-    var v = parseFloat(pV.replace(",", "."));
-    if (isNaN(v) || v <= 0) return;
+    var v = cnum(pV);
+    if (v <= 0) return;
     var parts = (fs[fid + "_p"] || []).concat([{ amount: v, date: new Date().toISOString() }]);
     saveMd({ ...md, fs: { ...fs, [fid + "_p"]: parts } });
     sPV(""); sPO(null);
   };
 
   var addDebt = function() {
-    var v = parseFloat(df.amount.replace(",", "."));
-    if (!df.desc || isNaN(v) || !df.person) return;
-    var debts = (md.debts || []).concat([{ id: uid(), desc: df.desc, amount: v, person: df.person, received: false }]);
+    var v = cnum(df.amount);
+    if (!df.desc || v <= 0 || !df.person) return;
+    var debts = (md.debts || []).concat([{ id: uid(), desc: cln(df.desc, 500), amount: v, person: cln(df.person, 100), received: false }]);
     saveMd({ ...md, debts: debts });
     sDf({ desc: "", amount: "", person: "" }); sSDbt(false);
   };
 
   var addGoal = function() {
-    var t = parseFloat(gf.target.replace(",", "."));
-    var s = parseFloat(gf.saved.replace(",", ".")) || 0;
-    if (!gf.name || isNaN(t)) return;
-    var newGoal = { id: uid(), name: gf.name, target: t, saved: s, deadline: gf.deadline };
+    var t = cnum(gf.target);
+    var s = cnum(gf.saved);
+    if (!gf.name || t <= 0) return;
+    var newGoal = { id: uid(), name: cln(gf.name, 100), target: t, saved: s, deadline: gf.deadline };
     saveCfg({ ...cfg, goals: goals.concat([newGoal]) });
     sGf({ name: "", target: "", deadline: "", saved: "0" }); sSGl(false);
   };
@@ -4569,7 +4263,7 @@ export default function App() {
         });
         if (pIdx >= 0) { txs.splice(pIdx, 1); rp++; }
       }
-      var newTx2 = { id: uid(), desc: desc, amount: amt, cat: cid, payment: paymentName, splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "ofx", fitid: rowFitid, trnType: rowType, bank: bankName };
+      var newTx2 = { id: uid(), desc: cln(desc, 500), amount: cnum(amt), cat: cid, payment: cln(paymentName, 100), splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "ofx", fitid: cln(rowFitid, 200), trnType: rowType, bank: cln(bankName, 100) };
       nt.push(newTx2); ad++; if (dL) nm[dL] = cid;
       if (inst && inst.c < inst.t) {
         for (var ii2 = inst.c + 1; ii2 <= inst.t; ii2++) {
@@ -4746,7 +4440,6 @@ export default function App() {
             md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
             sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg} DS={DS}
             nw={nw} monthlyInvest={monthlyInvest} yrD={yrD} myP={myP}
-            nextMo={nextMo} nextYr={nextYr} nextInvoice={nextInvoice} nextFixedTotal={nextFixedTotal}
           />
         )}
 
@@ -4759,12 +4452,12 @@ export default function App() {
         {/* ═══ PROJEÇÃO ═══ */}
         {tab === "proj" && (
           <ProjecaoPrumo
-            cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp} sal={sal}
+            cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp}
             nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
             totDb={totDb} ifTarget={ifTarget} sIfTarget={sIfTarget}
             showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
             activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst}
-            prevSp={prevSp} spent={spent} mo={mo} yr={yr} yrD={yrD}
+            prevSp={prevSp} spent={spent} mo={mo} yr={yr}
             chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
             showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
             simAporte={simAporte} sSimA={sSimA} simTaxa={simTaxa} sSimT={sSimT} simTempo={simTempo} sSimTp={sSimTp}
