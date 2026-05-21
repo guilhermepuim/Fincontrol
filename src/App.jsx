@@ -3615,6 +3615,7 @@ export default function App() {
   var [cfg, sCfg] = useState(null);
   var [md, sMd] = useState({ tx: [], cr: [], fs: {}, debts: [] });
   var [maps, sMp] = useState({});
+  var [splitMaps, sSpMp] = useState({});
   var [yrD, sYrD] = useState(null);
   var [pvMd, sPv] = useState(null);
   var [loading, sLd] = useState(true);
@@ -3685,6 +3686,7 @@ export default function App() {
       var c = await ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } });
       var rv = await ld("fc2-rollover", {});
       var mp = await ld("fc2-maps", {});
+      var smp = await ld("fc2-splitmaps", {});
       if (!active) return;
       // MIGRAÇÃO: se o cfg existente não tem alguma categoria default nova, adiciona
       var existingCats = c.categories || [];
@@ -3727,7 +3729,7 @@ export default function App() {
         c = { ...c, categories: existingCats };
         sv("fc2-cfg", c); // persiste a migração no Firebase
       }
-      sCfg(c); sMp(mp); sSI(String(c.salary)); setRollover(rv); sCfgLoaded(true);
+      sCfg(c); sMp(mp); sSpMp(smp || {}); sSI(String(c.salary)); setRollover(rv); sCfgLoaded(true);
     })();
     return function() { active = false; };
   }, [user && user.uid]);
@@ -3771,6 +3773,7 @@ export default function App() {
     sCfg(c); sv("fc2-cfg", c);
   }, [cfgLoaded]);
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
+  var saveSplitMaps = useCallback(function(m) { sSpMp(m); sv("fc2-splitmaps", m); }, []);
 
   var ifTarget = (cfg && cfg.ifTarget) ? cfg.ifTarget : "";
   var sIfTarget = function(v) { saveCfg({ ...cfg, ifTarget: v }); };
@@ -4212,7 +4215,13 @@ export default function App() {
       var ic = {}; var is2 = {};
       rows.forEach(function(r) {
         var d2 = String(r.desc || "").toLowerCase().trim();
-        ic[r._idx] = maps[d2] || ""; is2[r._idx] = { on: false, sp: [{ person: "", pct: 0 }] };
+        ic[r._idx] = maps[d2] || "";
+        var savedSp = splitMaps[d2];
+        if (savedSp && savedSp.length > 0) {
+          is2[r._idx] = { on: true, sp: savedSp.map(function(s) { return { person: s.person, pct: s.pct }; }) };
+        } else {
+          is2[r._idx] = { on: false, sp: [{ person: "", pct: 0 }] };
+        }
       });
       sCC(ic); sCSp(is2);
     };
@@ -4229,7 +4238,7 @@ export default function App() {
     if (!payment) { alert("Selecione a forma de pagamento (cartão) antes de importar."); return; }
     var paymentName = payment.name;
     var bankName = ofxBank ? ofxBank.name : "";
-    var nt = []; var nm = Object.assign({}, maps); var fut = {};
+    var nt = []; var nm = Object.assign({}, maps); var nsm = Object.assign({}, splitMaps); var fut = {};
     var sk = 0; var rp = 0; var ad = 0; var skipManual = 0;
     csvR.forEach(function(row) {
       // Skip explícito por marcação de duplicata-manual do usuário
@@ -4264,7 +4273,12 @@ export default function App() {
         if (pIdx >= 0) { txs.splice(pIdx, 1); rp++; }
       }
       var newTx2 = { id: uid(), desc: cln(desc, 500), amount: cnum(amt), cat: cid, payment: cln(paymentName, 100), splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "ofx", fitid: cln(rowFitid, 200), trnType: rowType, bank: cln(bankName, 100) };
-      nt.push(newTx2); ad++; if (dL) nm[dL] = cid;
+      nt.push(newTx2); ad++; if (dL) {
+        nm[dL] = cid;
+        // Persiste split como regra se o usuário marcou Dividir com splits válidos.
+        // Se desmarcou, mantém a regra antiga intacta (decisão arquitetural confirmada).
+        if (sp.length > 0) nsm[dL] = sp.map(function(s) { return { person: s.person, pct: s.pct }; });
+      }
       if (inst && inst.c < inst.t) {
         for (var ii2 = inst.c + 1; ii2 <= inst.t; ii2++) {
           var fmo2 = (mo + (ii2 - inst.c)) % 12;
@@ -4276,7 +4290,7 @@ export default function App() {
         }
       }
     });
-    saveMd({ ...md, tx: txs.concat(nt) }); saveMaps(nm);
+    saveMd({ ...md, tx: txs.concat(nt) }); saveMaps(nm); saveSplitMaps(nsm);
     Object.entries(fut).forEach(function(e2) {
       var fKey3 = e2[0]; var ft = e2[1];
       ld("fc2-m-" + fKey3, { tx: [], cr: [], fs: {} }).then(function(fd) {
