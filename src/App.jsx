@@ -3140,6 +3140,7 @@ var EMOJI_PALETTE = ["🏠","🍽️","👶","🚗","🏥","📚","💳","📋",
 function ConfigPrumo(props) {
   var cfg = props.cfg;
   var saveCfg = props.saveCfg;
+  var onResetData = props.onResetData;
 
   var [openCatId, sOpenCatId] = useState(null);
   var [newCatGroup, sNewCatGroup] = useState(null); // mostra o form de categoria principal pra um grupo
@@ -3573,6 +3574,38 @@ function ConfigPrumo(props) {
         </div>
       </div>
 
+      {/* ═══ ZONA DE PERIGO ═══ */}
+      <div className="prumo-card full" style={{ border: "1.5px solid var(--neg)", background: "color-mix(in oklch, var(--neg) 6%, var(--surface))" }}>
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl" style={{ color: "var(--neg)" }}>{"⚠ ZONA DE PERIGO"}</div>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Zerar dados operacionais"}</h3>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 16 }}>
+          {"Remove todos os lançamentos, créditos, projeções e registros de fixas pagas de todos os meses (2023–2027). "}
+          <strong>{"Configurações, categorias, fixas recorrentes, formas de pagamento, metas e patrimônio são preservados."}</strong>
+        </div>
+        <button
+          className="prumo-btn"
+          style={{ background: "var(--neg)", color: "#fff", border: "none", width: "100%", padding: "12px 0", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "var(--f-ui)", letterSpacing: "0.01em" }}
+          onClick={function() {
+            if (!onResetData) return;
+            var ok1 = window.confirm("⚠️ Isso vai apagar TODOS os seus lançamentos, projeções e registros de fixas pagas de 2023 a 2027.\n\nConfigurações, categorias e fixas recorrentes são preservadas.\n\nTem certeza que quer continuar?");
+            if (!ok1) return;
+            var conf = window.prompt('Para confirmar, digite exatamente:  RESETAR');
+            if (conf === null) return;
+            if (String(conf).trim() !== "RESETAR") {
+              alert("Confirmação incorreta. Nenhum dado foi apagado.");
+              return;
+            }
+            onResetData();
+          }}
+        >
+          {"🗑 Zerar todos os dados operacionais"}
+        </button>
+      </div>
+
     </div>
   );
 }
@@ -3774,6 +3807,31 @@ export default function App() {
   }, [cfgLoaded]);
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
   var saveSplitMaps = useCallback(function(m) { sSpMp(m); sv("fc2-splitmaps", m); }, []);
+
+  // RESET DE DADOS OPERACIONAIS — apaga meses 2023-2027 + rollover, preserva cfg/maps/splitmaps
+  var onResetData = useCallback(function() {
+    if (!user || !user.uid) return;
+    var EMPTY_MONTH = { tx: [], cr: [], fs: {}, debts: [] };
+    var years = [2023, 2024, 2025, 2026, 2027];
+    var promises = [];
+    years.forEach(function(y) {
+      for (var m = 0; m < 12; m++) {
+        promises.push(sv("fc2-m-" + tk(y, m), EMPTY_MONTH));
+      }
+    });
+    promises.push(sv("fc2-rollover", {}));
+    Promise.all(promises).then(function() {
+      // Atualiza estados reativos para refletir imediatamente na UI
+      sMd(EMPTY_MONTH);
+      sPv({ tx: [], cr: [], fs: {} });
+      sYrD(null);
+      setRollover({});
+      alert("✅ Dados operacionais zerados. Configurações, categorias, fixas e patrimônio foram preservados.");
+    }).catch(function(e) {
+      console.error("[onResetData]", e);
+      alert("❌ Erro ao zerar dados. Tente novamente.");
+    });
+  }, [user && user.uid]);
 
   var ifTarget = (cfg && cfg.ifTarget) ? cfg.ifTarget : "";
   var sIfTarget = function(v) { saveCfg({ ...cfg, ifTarget: v }); };
@@ -4708,7 +4766,7 @@ export default function App() {
 
         {/* ═══ CONFIGURAÇÕES ═══ */}
         {tab === "cfg" && (
-          <ConfigPrumo cfg={cfg} saveCfg={saveCfg} />
+          <ConfigPrumo cfg={cfg} saveCfg={saveCfg} onResetData={onResetData} />
         )}
 
         {/* ═══ MENSAL ═══ */}
