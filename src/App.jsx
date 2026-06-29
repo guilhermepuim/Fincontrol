@@ -280,6 +280,59 @@ function myP(tx) { if (tx.reimbursed) return 0; return tx.amount - spt(tx); }
 function pi(d) { var m = d.match(/(\d+)\s*\/\s*(\d+)/); return m ? { c: +m[1], t: +m[2] } : null; }
 function nd(d) { return d.toLowerCase().replace(/\s*\d+\s*\/\s*\d+\s*/g, "").replace(/parcela\s*/gi, "").trim(); }
 
+/* ══ FATURA DE CARTÃO (REGIME DE CAIXA) ══
+   Resolve em qual fatura (mês de vencimento) uma compra de cartão cai, dado o dia de fechamento.
+   Regra: compra no dia D > fechamento → fatura do mês seguinte; senão, mês corrente.
+   Ex.: Nubank fecha dia 2. Compra 29/jun (29 > 2) → fatura de julho. Compra 01/jun (1 ≤ 2) → fatura de junho.
+   Isso espelha a leitura do app do banco ("Fatura atual"), sem alterar onde a transação é armazenada (competência preservada). */
+function invoiceKeyForYMD(y, mo0, day, closingDay) {
+  var cd = (typeof closingDay === "number" && closingDay >= 1 && closingDay <= 31) ? closingDay : 1;
+  if (day > cd) {
+    mo0 = mo0 + 1;
+    if (mo0 > 11) { mo0 = 0; y = y + 1; }
+  }
+  return tk(y, mo0);
+}
+// Retorna o dia de fechamento se o nome bater com um pagamento tipo crédito; senão null (não é cartão).
+function creditClosingFor(paymentName, payments) {
+  if (!paymentName) return null;
+  var list = payments || DEFAULT_PAYMENTS;
+  var nameL = String(paymentName).toLowerCase().trim();
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
+    if (!p || p.type !== "credito") continue;
+    if (String(p.name).toLowerCase().trim() === nameL) {
+      return (typeof p.closing === "number" && p.closing >= 1 && p.closing <= 31) ? p.closing : 1;
+    }
+  }
+  return null;
+}
+// Varre os 12 meses do ano (yrD) e consolida as faturas de cartão por mês de vencimento.
+// Retorna { "YYYY-MM": { gross, net } }. gross = total que sai da conta; net = parte própria (myP, após splits/reembolsos).
+// Transações projetadas (src:proj, sem data) assumem dia 15 do balde como referência — limitação conhecida.
+function calcInvoices(yrD, year, payments) {
+  var byMonth = {};
+  if (!yrD || yrD.length === 0) return byMonth;
+  yrD.forEach(function(mData, bucketMo) {
+    var txList = (mData && mData.tx) || [];
+    txList.forEach(function(t) {
+      var closing = creditClosingFor(t.payment, payments);
+      if (closing === null) return; // não é cartão de crédito
+      var y, mo0, day;
+      if (t.date) {
+        var dt = new Date(t.date);
+        if (!isNaN(dt.getTime())) { y = dt.getFullYear(); mo0 = dt.getMonth(); day = dt.getDate(); }
+      }
+      if (y === undefined) { y = year; mo0 = bucketMo; day = 15; } // proj/sem data: assume meio do mês
+      var key = invoiceKeyForYMD(y, mo0, day, closing);
+      if (!byMonth[key]) byMonth[key] = { gross: 0, net: 0 };
+      byMonth[key].gross += (t.amount || 0);
+      byMonth[key].net += myP(t);
+    });
+  });
+  return byMonth;
+}
+
 /* ══ PRUMO DESIGN SYSTEM — TOKENS + CLASSES ══ */
 var PRUMO_TOKENS = `
 :root {
@@ -900,6 +953,7 @@ function DashboardPrumo(props) {
   var hovM = props.hovM;
   var sHM = props.sHM;
   var mo = props.mo;
+  var yr = props.yr;
   var sTab = props.sTab;
   var eSal = props.eSal;
   var sES = props.sES;
@@ -1065,6 +1119,22 @@ function DashboardPrumo(props) {
     return null;
   };
 
+  /* ─── Fatura do cartão (regime de caixa) ─── */
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var hasAnyCard = paysList.some(function(p) { return p && p.type === "credito"; });
+  var invByMonth = calcInvoices(yrD, yr, paysList);
+  // Fatura a vencer no mês visualizado
+  var keyDue = tk(yr, mo);
+  var invDue = invByMonth[keyDue] || { gross: 0, net: 0 };
+  // Fatura em formação = a do mês seguinte (a "Fatura atual" do Nubank, que come o salário do próximo mês)
+  var formMo0 = mo + 1; var formYr = yr;
+  if (formMo0 > 11) { formMo0 = 0; formYr = yr + 1; }
+  var keyForm = tk(formYr, formMo0);
+  var invForm = invByMonth[keyForm] || { gross: 0, net: 0 };
+  var formCrossesYear = (mo === 11); // dez → fatura de jan do ano seguinte (não consolidada nesta versão)
+  var pctForm = sal > 0 ? Math.min(invForm.gross / sal, 1) : 0;
+  var pctDue = sal > 0 ? Math.min(invDue.gross / sal, 1) : 0;
+
   return (
     <div className="prumo-dash-grid">
       {/* HERO ─ Saldo + Score + Anéis ─ span2 */}
@@ -1186,6 +1256,55 @@ function DashboardPrumo(props) {
           })}
         </div>
       </div>
+
+      {/* ═══ FATURA DO CARTÃO (REGIME DE CAIXA) ═══ */}
+      {hasAnyCard && (
+        <div className="prumo-card l-accent span2">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Fatura do cartão"}</div>
+              <div className="prumo-cap">{"Quanto do salário já está comprometido"}</div>
+            </div>
+          </div>
+
+          {/* EM FORMAÇÃO — a próxima fatura (igual "Fatura atual" do Nubank) */}
+          <div style={{ marginTop: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 700 }}>
+                {"Em formação · vence em " + (formCrossesYear ? (MS[formMo0] + "/" + String(formYr)) : MS[formMo0])}
+              </span>
+              {!formCrossesYear && <span className="prumo-chip warn">{pct(pctForm) + " do salário"}</span>}
+            </div>
+            {formCrossesYear ? (
+              <div>
+                <div className="prumo-big accent" style={{ marginTop: 2, opacity: 0.4 }}>{"—"}</div>
+                <div className="prumo-cap" style={{ marginTop: 6 }}>{"⚠ A fatura de janeiro cruza o ano e não é consolidada nesta versão. Navegue até janeiro pra ver o detalhe."}</div>
+              </div>
+            ) : (
+              <div>
+                <div className="prumo-big accent" style={{ marginTop: 2 }}>{fmt(invForm.gross)}</div>
+                <div className="prumo-meter" style={{ height: 8, marginTop: 8 }}>
+                  <i style={{ width: pct(pctForm), background: "var(--accent)" }} />
+                </div>
+                <div className="prumo-cap" style={{ marginTop: 6 }}>{"Líquido após reembolsos: " + fmt(invForm.net)}</div>
+              </div>
+            )}
+          </div>
+
+          {/* A VENCER ESTE MÊS — o que efetivamente sai da conta agora */}
+          <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 700 }}>{"A vencer este mês · " + MS[mo]}</span>
+              <span className={"prumo-chip " + (pctDue > 0.6 ? "neg" : "brand")}>{pct(pctDue) + " do salário"}</span>
+            </div>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 22, fontWeight: 700, color: "var(--ink)", marginTop: 2, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>{fmt(invDue.gross)}</div>
+            <div className="prumo-meter" style={{ height: 6, marginTop: 8 }}>
+              <i style={{ width: pct(pctDue), background: pctDue > 0.6 ? "var(--neg)" : "var(--brand)" }} />
+            </div>
+            <div className="prumo-cap" style={{ marginTop: 6 }}>{"Líquido após reembolsos: " + fmt(invDue.net)}</div>
+          </div>
+        </div>
+      )}
 
       {/* RESERVA */}
       <div className="prumo-card l-pos">
