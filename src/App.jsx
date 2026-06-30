@@ -779,16 +779,19 @@ function SE(props) {
 function CatS(props) {
   // Categorias sem parent são principais; com parent são subcategorias
   var allCats = props.cats || [];
+  // option nativo não aceita cor/negrito no mobile → usamos bolinha colorida por grupo + CAIXA ALTA nas principais
+  var groupDot = { essenciais: "\uD83D\uDD35", desejos: "\uD83D\uDD34", investimentos: "\uD83D\uDFE2" };
   var renderOptions = function(groupId) {
+    var dot = groupDot[groupId] || "";
     var principais = allCats.filter(function(c) { return c.group === groupId && !c.parent; });
     var nodes = [];
     principais.forEach(function(p) {
-      // Própria categoria principal como opção
-      nodes.push(<option key={p.id} value={p.id}>{p.icon + " " + p.name}</option>);
-      // Subcategorias indentadas
+      // Principal: bolinha do grupo + ícone + NOME EM CAIXA ALTA (destaque)
+      nodes.push(<option key={p.id} value={p.id}>{(dot ? dot + " " : "") + (p.icon ? p.icon + " " : "") + String(p.name).toUpperCase()}</option>);
+      // Subcategorias indentadas, em caixa normal
       var subs = allCats.filter(function(c) { return c.parent === p.id; });
       subs.forEach(function(s) {
-        nodes.push(<option key={s.id} value={s.id}>{"\u00A0\u00A0\u00A0\u00A0└ " + (s.icon ? s.icon + " " : "") + s.name}</option>);
+        nodes.push(<option key={s.id} value={s.id}>{"\u00A0\u00A0\u00A0\u00A0\u2514 " + (s.icon ? s.icon + " " : "") + s.name}</option>);
       });
     });
     return nodes;
@@ -800,7 +803,7 @@ function CatS(props) {
         <option value="">{"Categoria"}</option>
         {GR.map(function(g) {
           return (
-            <optgroup key={g.id} label={g.label + " (" + String(props.pcts[g.id]) + "%)"}>
+            <optgroup key={g.id} label={(groupDot[g.id] ? groupDot[g.id] + " " : "") + g.label + " (" + String(props.pcts[g.id]) + "%)"}>
               {renderOptions(g.id)}
             </optgroup>
           );
@@ -813,7 +816,7 @@ function CatS(props) {
       <option value="">{"Categoria"}</option>
       {GR.map(function(g) {
         return (
-          <optgroup key={g.id} label={g.label + " (" + String(props.pcts[g.id]) + "%)"}>
+          <optgroup key={g.id} label={(groupDot[g.id] ? groupDot[g.id] + " " : "") + g.label + " (" + String(props.pcts[g.id]) + "%)"}>
             {renderOptions(g.id)}
           </optgroup>
         );
@@ -1135,6 +1138,50 @@ function DashboardPrumo(props) {
   var pctForm = sal > 0 ? Math.min(invForm.gross / sal, 1) : 0;
   var pctDue = sal > 0 ? Math.min(invDue.gross / sal, 1) : 0;
 
+  /* ─── Fluxo de caixa projetado · próximos 4 meses (fixo sempre cheio, sem depender de tick) ─── */
+  var cashflowMonths = [];
+  if (yrD && cfg) {
+    var fxRaw = cfg.fixed || [];
+    for (var cfi = 0; cfi < 4; cfi++) {
+      var tgtMo = mo + cfi;
+      if (tgtMo > 11) break; // não cruza o ano (limitação de cross-year já combinada)
+      var mb = yrD[tgtMo] || { tx: [], cr: [] };
+      var rec = sal + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
+      var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
+      var fxSum = fxList.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+      var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
+      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - fxSum - varSum });
+    }
+  }
+  // Semáforo por piso fixo: verde ≥ 3000, amarelo 0–3000, vermelho ≤ 0
+  var cashflowColor = function(s) {
+    if (s <= 0) return "var(--neg)";
+    if (s < 3000) return "var(--accent)";
+    return "var(--pos)";
+  };
+  var bestMonth = null; var tightMonth = null;
+  cashflowMonths.forEach(function(m) {
+    if (!bestMonth || m.sobra > bestMonth.sobra) bestMonth = m;
+    if (!tightMonth || m.sobra < tightMonth.sobra) tightMonth = m;
+  });
+
+  /* ─── Ranking de maiores gastos do mês (subs agregam na principal) ─── */
+  var rankColor = function(grp) {
+    if (grp === "essenciais") return "var(--brand)";
+    if (grp === "investimentos") return "var(--pos)";
+    return "var(--neg)"; // desejos / não-essenciais
+  };
+  var topSpend = [];
+  (cats || []).filter(function(c) { return !c.parent; }).forEach(function(p) {
+    var own = spC[p.id] || 0;
+    var subTotal = (cats || []).filter(function(c) { return c.parent === p.id; }).reduce(function(a, s) { return a + (spC[s.id] || 0); }, 0);
+    var tot = own + subTotal;
+    if (tot > 0) topSpend.push({ cat: p, total: tot });
+  });
+  topSpend.sort(function(a, b) { return b.total - a.total; });
+  var topSpendMax = topSpend.length > 0 ? topSpend[0].total : 1;
+  topSpend = topSpend.slice(0, 6);
+
   return (
     <div className="prumo-dash-grid">
       {/* HERO ─ Saldo + Score + Anéis ─ span2 */}
@@ -1257,6 +1304,42 @@ function DashboardPrumo(props) {
         </div>
       </div>
 
+      {/* ═══ FLUXO DE CAIXA · PRÓXIMOS 4 MESES ═══ */}
+      {cashflowMonths.length > 0 && (
+        <div className="prumo-card span2">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Fluxo de caixa · próximos meses"}</div>
+              <div className="prumo-cap">{"Sobra projetada depois dos fixos e parcelas do cartão"}</div>
+            </div>
+          </div>
+          {bestMonth && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+              <span className="prumo-chip pos">{"Melhor pra compra grande: " + bestMonth.label + " · " + fmt(bestMonth.sobra)}</span>
+              {tightMonth && tightMonth.mo0 !== bestMonth.mo0 && (
+                <span className="prumo-chip neg">{"Mais apertado: " + tightMonth.label + " · " + fmt(tightMonth.sobra)}</span>
+              )}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))", gap: 10 }}>
+            {cashflowMonths.map(function(m, idx) {
+              var col = cashflowColor(m.sobra);
+              var isCur = idx === 0;
+              return (
+                <div key={m.mo0} style={{ borderRadius: 14, padding: "14px 12px", background: "color-mix(in oklch, " + col + " 8%, var(--surface))", border: "1.5px solid color-mix(in oklch, " + col + " 32%, transparent)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em" }}>{m.label + (isCur ? " · agora" : "")}</span>
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: col, display: "inline-block" }} />
+                  </div>
+                  <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{fmt(m.sobra)}</div>
+                  <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{"livre"}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ═══ FATURA DO CARTÃO (REGIME DE CAIXA) ═══ */}
       {hasAnyCard && (
         <div className="prumo-card l-accent span2">
@@ -1369,6 +1452,24 @@ function DashboardPrumo(props) {
         </div>
       </div>
 
+      {/* TAXA DE POUPANÇA */}
+      <div className="prumo-card l-brand">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Taxa de poupança"}</div>
+            <div className="prumo-cap">{"Investido / Renda do mês"}</div>
+          </div>
+          <div className="prumo-big" style={{ color: savR >= 0.25 ? "var(--pos)" : savR >= 0.1 ? "var(--accent)" : "var(--neg)" }}>{pct(savR)}</div>
+        </div>
+        <div className="prumo-meter" style={{ height: 8, marginTop: 8 }}>
+          <i style={{ width: pct(Math.min((spent.investimentos || 0) / Math.max(totalInc, 1), 1)), background: "var(--brand)" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11 }}>
+          <span className="prumo-num">{fmt(spent.investimentos || 0)}</span>
+          <span className="prumo-cap">{"Meta 25%: " + fmt(totalInc * 0.25)}</span>
+        </div>
+      </div>
+
       {/* A RECEBER */}
       <div className="prumo-card l-warn" style={{ cursor: "pointer" }} onClick={function() { sTab("deve"); }}>
         <div className="prumo-lbl">{"A receber"}</div>
@@ -1393,38 +1494,33 @@ function DashboardPrumo(props) {
         })}
       </div>
 
-      {/* ATIVIDADE RECENTE ─ span2 */}
+      {/* ═══ MAIORES GASTOS DO MÊS ─ span2 ═══ */}
       <div className="prumo-card span2">
         <div className="prumo-card-hd">
           <div>
-            <div className="prumo-lbl">{"Atividade recente"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Últimos lançamentos"}</h2>
+            <div className="prumo-lbl">{"Maiores gastos do mês"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{"Ranking de consumo · " + MS[mo]}</h2>
           </div>
-          <button className="prumo-btn ghost" onClick={function() { sTab("input"); }}>{"Ver todos →"}</button>
+          <button className="prumo-btn ghost" onClick={function() { sTab("input"); }}>{"Ver lançamentos →"}</button>
         </div>
-        {groupedRecent.length === 0 ? (
-          <div className="prumo-cap" style={{ padding: "20px 0", textAlign: "center" }}>{"Nenhum lançamento neste mês ainda. Use o botão + para começar."}</div>
-        ) : groupedRecent.map(function(grp) {
-          var hdrSum = grp.totalCr - grp.totalDb;
-          var hdrLabel = grp.totalCr > 0 && grp.totalDb === 0 ? ("+ " + fmt(grp.totalCr)) : (grp.totalDb > 0 && grp.totalCr === 0 ? fmt(grp.totalDb) : (hdrSum >= 0 ? "+ " + fmt(hdrSum) : fmt(Math.abs(hdrSum))));
+        {topSpend.length === 0 ? (
+          <div className="prumo-cap" style={{ padding: "20px 0", textAlign: "center" }}>{"Nenhum gasto lançado neste mês ainda. Use o botão + para começar."}</div>
+        ) : topSpend.map(function(item, idx) {
+          var grpColor = rankColor(item.cat.group);
+          var w = pct(item.total / topSpendMax);
           return (
-            <div key={grp.key}>
-              <div className="prumo-section-h">
-                <span>{dayLabel(grp.key).toUpperCase() + (grp.key.length === 10 ? " · " + grp.key.slice(8, 10) + " " + new Date(grp.key).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "") : "")}</span>
-                <span>{hdrLabel}</span>
+            <div key={item.cat.id} style={{ padding: "11px 0", borderBottom: idx < topSpend.length - 1 ? "1px solid var(--line)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--ink-3)", fontWeight: 700, width: 14, textAlign: "right" }}>{String(idx + 1)}</span>
+                  <span style={{ fontSize: 16 }}>{item.cat.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.cat.name}</span>
+                </div>
+                <span style={{ fontFamily: "var(--f-display)", fontSize: 15, fontWeight: 700, color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmt(item.total)}</span>
               </div>
-              {grp.items.map(function(it) {
-                return (
-                  <div key={it.kind + "-" + it.id} className="prumo-tx">
-                    <div className="prumo-tx-icon">{it.icon}</div>
-                    <div className="prumo-tx-meat">
-                      <div className="prumo-tx-desc">{it.desc}</div>
-                      <div className="prumo-tx-meta">{it.catName}</div>
-                    </div>
-                    <div className={"prumo-tx-amt" + (it.kind === "cr" ? " in" : "")}>{(it.kind === "cr" ? "+" : "") + fmt(it.amount)}</div>
-                  </div>
-                );
-              })}
+              <div className="prumo-meter" style={{ height: 6 }}>
+                <i style={{ width: w, background: grpColor }} />
+              </div>
             </div>
           );
         })}
@@ -2960,7 +3056,7 @@ function DevedoresPrumo(props) {
       <div className="prumo-card l-warn full">
         <div className="prumo-card-hd">
           <div>
-            <div className="prumo-lbl">{"Devedores · " + MS[mo]}</div>
+            <div className="prumo-lbl">{"A receber · " + MS[mo]}</div>
             <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{devEntries.length > 0 ? fmt(totalPending) + " a receber" : "Nenhuma dívida"}</h2>
           </div>
           <button className={"prumo-btn " + (showDebt ? "ghost" : "accent")} onClick={function() { sSDbt(!showDebt); }}>{showDebt ? "Cancelar" : "+ Devedor manual"}</button>
@@ -4392,8 +4488,9 @@ export default function App() {
       var ic = {}; var is2 = {};
       rows.forEach(function(r) {
         var d2 = String(r.desc || "").toLowerCase().trim();
-        ic[r._idx] = maps[d2] || "";
-        var savedSp = splitMaps[d2];
+        var k2 = nd(r.desc || ""); // chave normalizada: remove "Parcela N/M" para generalizar entre meses
+        ic[r._idx] = (k2 && maps[k2]) || maps[d2] || ""; // normalizada primeiro; full-desc como fallback legado
+        var savedSp = (k2 && splitMaps[k2]) || splitMaps[d2];
         if (savedSp && savedSp.length > 0) {
           is2[r._idx] = { on: true, sp: savedSp.map(function(s) { return { person: s.person, pct: s.pct }; }) };
         } else {
@@ -4450,11 +4547,13 @@ export default function App() {
         if (pIdx >= 0) { txs.splice(pIdx, 1); rp++; }
       }
       var newTx2 = { id: uid(), desc: cln(desc, 500), amount: cnum(amt), cat: cid, payment: cln(paymentName, 100), splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "ofx", fitid: cln(rowFitid, 200), trnType: rowType, bank: cln(bankName, 100) };
-      nt.push(newTx2); ad++; if (dL) {
-        nm[dL] = cid;
+      nt.push(newTx2); ad++;
+      var kSave = nd(desc); // chave normalizada (sem parcela) — regra vale para todas as parcelas e meses
+      if (kSave) {
+        nm[kSave] = cid;
         // Persiste split como regra se o usuário marcou Dividir com splits válidos.
         // Se desmarcou, mantém a regra antiga intacta (decisão arquitetural confirmada).
-        if (sp.length > 0) nsm[dL] = sp.map(function(s) { return { person: s.person, pct: s.pct }; });
+        if (sp.length > 0) nsm[kSave] = sp.map(function(s) { return { person: s.person, pct: s.pct }; });
       }
       if (inst && inst.c < inst.t) {
         for (var ii2 = inst.c + 1; ii2 <= inst.t; ii2++) {
@@ -4496,7 +4595,7 @@ export default function App() {
     { id: "proj", l: "Projeção", ico: "↗", grp: "Visão" },
     { id: "input", l: "Lançamentos", ico: "≡", grp: "Operação" },
     { id: "fixas", l: "Fixas", ico: "⌶", grp: "Operação" },
-    { id: "deve", l: "Devedores", ico: "⊕", grp: "Operação" },
+    { id: "deve", l: "A receber", ico: "⊕", grp: "Operação" },
     { id: "vida", l: "Vida (PL)", ico: "○", grp: "Patrimônio" },
     { id: "metas", l: "Metas", ico: "◯", grp: "Patrimônio" },
     { id: "monthly", l: "Mensal", ico: "▦", grp: "Patrimônio" },
