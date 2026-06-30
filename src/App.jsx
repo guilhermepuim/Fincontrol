@@ -287,7 +287,9 @@ function nd(d) { return d.toLowerCase().replace(/\s*\d+\s*\/\s*\d+\s*/g, "").rep
    Isso espelha a leitura do app do banco ("Fatura atual"), sem alterar onde a transação é armazenada (competência preservada). */
 function invoiceKeyForYMD(y, mo0, day, closingDay) {
   var cd = (typeof closingDay === "number" && closingDay >= 1 && closingDay <= 31) ? closingDay : 1;
-  if (day > cd) {
+  // Borda: o próprio dia do fechamento já pertence à fatura do mês seguinte.
+  // Confirmado pelo OFX do Nubank (fatura vai de DTSTART=dia-fechamento a DTEND=dia-fechamento do mês seguinte).
+  if (day >= cd) {
     mo0 = mo0 + 1;
     if (mo0 > 11) { mo0 = 0; y = y + 1; }
   }
@@ -966,9 +968,44 @@ function DashboardPrumo(props) {
   var DS = props.DS;
   var nw = props.nw;
   var monthlyInvest = props.monthlyInvest;
+  var yrD = props.yrD;
+  var cashView = props.cashView;
+  var onToggleCashView = props.onToggleCashView;
+
+  /* ─── Regime de caixa: quanto SAI da conta em cada mês (com anti-duplicação fixa/cartão) ─── */
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var hasAnyCard = paysList.some(function(p) { return p && p.type === "credito"; });
+  var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
+  var isCreditPay = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
+  var invByMonth = calcInvoices(yrD, yr, paysList);
+  // Meses que já têm fatura REAL (compras de cartão não-projetadas): nesses, a fixa-cartão é ignorada (já está na compra real)
+  var realInvoiceMonths = {};
+  (yrD || []).forEach(function(mb2, bidx) {
+    (mb2.tx || []).forEach(function(t) {
+      if (t.src === "proj" || !isCreditPay(t.payment)) return;
+      var yy, mm, dd;
+      if (t.date) { var dt = new Date(t.date); if (!isNaN(dt.getTime())) { yy = dt.getFullYear(); mm = dt.getMonth(); dd = dt.getDate(); } }
+      if (yy === undefined) { yy = yr; mm = bidx; dd = 15; }
+      realInvoiceMonths[invoiceKeyForYMD(yy, mm, dd, creditClosingFor(t.payment, paysList) || 1)] = true;
+    });
+  });
+  var calcCashOut = function(monthIdx) {
+    var key = tk(yr, monthIdx);
+    var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
+    var cartao = (invByMonth[key] || { gross: 0 }).gross; // fatura (compras reais + parcelas) que vence neste mês
+    var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
+    if (!realInvoiceMonths[key]) {
+      // mês ainda sem fatura importada → usa a fixa-cartão como estimativa do que vai cair
+      cartao += fxList.filter(function(f) { return isCreditPay(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+    }
+    var fixasNaoCartao = fxList.filter(function(f) { return !isCreditPay(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+    var varNaoCartao = (mb.tx || []).filter(function(t) { return !isCreditPay(t.payment); }).reduce(function(a, t) { return a + myP(t); }, 0);
+    return cartao + fixasNaoCartao + varNaoCartao;
+  };
 
   /* ─── Hero numbers ─── */
-  var saldoLivre = totalInc - totDb + dRcv;
+  var debitoMes = cashView ? calcCashOut(mo) : totDb;
+  var saldoLivre = totalInc - debitoMes + dRcv;
   var saldoSinal = saldoLivre >= 0;
   var saldoCents = Math.round((Math.abs(saldoLivre) % 1) * 100);
   var saldoIntStr = Math.floor(Math.abs(saldoLivre)).toLocaleString("pt-BR");
@@ -1122,23 +1159,21 @@ function DashboardPrumo(props) {
     return null;
   };
 
-  /* ─── Fatura do cartão (regime de caixa) ─── */
-  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
-  var hasAnyCard = paysList.some(function(p) { return p && p.type === "credito"; });
-  var invByMonth = calcInvoices(yrD, yr, paysList);
-  // Fatura a vencer no mês visualizado
-  var keyDue = tk(yr, mo);
-  var invDue = invByMonth[keyDue] || { gross: 0, net: 0 };
-  // Fatura em formação = a do mês seguinte (a "Fatura atual" do Nubank, que come o salário do próximo mês)
-  var formMo0 = mo + 1; var formYr = yr;
-  if (formMo0 > 11) { formMo0 = 0; formYr = yr + 1; }
-  var keyForm = tk(formYr, formMo0);
-  var invForm = invByMonth[keyForm] || { gross: 0, net: 0 };
-  var formCrossesYear = (mo === 11); // dez → fatura de jan do ano seguinte (não consolidada nesta versão)
-  var pctForm = sal > 0 ? Math.min(invForm.gross / sal, 1) : 0;
-  var pctDue = sal > 0 ? Math.min(invDue.gross / sal, 1) : 0;
+  /* ─── Faturas do cartão (espelha o app do banco: atual + próximas) ─── */
+  // Lista a partir da próxima fatura a fechar (mês visualizado + 1), igual à tela "Selecione uma fatura" do banco
+  var invoiceList = [];
+  for (var ik = 1; ik <= 6; ik++) {
+    var imo = mo + ik;
+    if (imo > 11) break; // fatura que cruza o ano fica fora (limitação de cross-year já combinada)
+    var inv = invByMonth[tk(yr, imo)] || { gross: 0, net: 0 };
+    invoiceList.push({ mo0: imo, label: MS[imo], gross: inv.gross, net: inv.net });
+  }
+  var curInvoice = invoiceList.length > 0 ? invoiceList[0] : null;
+  var nextInvoices = invoiceList.slice(1);
+  var pctCur = (curInvoice && sal > 0) ? Math.min(curInvoice.gross / sal, 1) : 0;
+  var curCrossesYear = (mo === 11); // dez → próxima fatura vence em janeiro do ano seguinte
 
-  /* ─── Fluxo de caixa projetado · próximos 4 meses (fixo sempre cheio, sem depender de tick) ─── */
+  /* ─── Fluxo de caixa projetado · próximos 4 meses ─── */
   var cashflowMonths = [];
   if (yrD && cfg) {
     var fxRaw = cfg.fixed || [];
@@ -1147,10 +1182,16 @@ function DashboardPrumo(props) {
       if (tgtMo > 11) break; // não cruza o ano (limitação de cross-year já combinada)
       var mb = yrD[tgtMo] || { tx: [], cr: [] };
       var rec = sal + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
-      var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
-      var fxSum = fxList.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-      var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
-      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - fxSum - varSum });
+      var desp;
+      if (cashView) {
+        desp = calcCashOut(tgtMo); // regime de caixa: o que efetivamente sai da conta no mês
+      } else {
+        var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
+        var fxSum = fxList.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+        var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
+        desp = fxSum + varSum; // competência: tudo que foi lançado no mês
+      }
+      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp });
     }
   }
   // Semáforo por piso fixo: verde ≥ 3000, amarelo 0–3000, vermelho ≤ 0
@@ -1189,6 +1230,10 @@ function DashboardPrumo(props) {
         <div className="prumo-card-hd">
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="prumo-lbl">{"Saldo livre do mês"}</div>
+            <div style={{ display: "inline-flex", marginTop: 5, border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }} title="Caixa: quando o dinheiro sai da conta (fatura). Competência: quando a despesa aconteceu.">
+              <span onClick={function() { if (!cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: cashView ? "var(--brand)" : "transparent", color: cashView ? "#fff" : "var(--ink-3)" }}>{"Caixa"}</span>
+              <span onClick={function() { if (cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: !cashView ? "var(--brand)" : "transparent", color: !cashView ? "#fff" : "var(--ink-3)" }}>{"Competência"}</span>
+            </div>
             <div className="prumo-big brand" style={{ marginTop: 6 }}>
               {(saldoSinal ? "" : "−") + "R$ " + saldoIntStr}<sup>{"," + saldoCentsStr}</sup>
             </div>
@@ -1310,7 +1355,7 @@ function DashboardPrumo(props) {
           <div className="prumo-card-hd">
             <div>
               <div className="prumo-lbl">{"Fluxo de caixa · próximos meses"}</div>
-              <div className="prumo-cap">{"Sobra projetada depois dos fixos e parcelas do cartão"}</div>
+              <div className="prumo-cap">{cashView ? "Sobra projetada depois do que sai da conta (caixa)" : "Sobra projetada por competência (quando gastou)"}</div>
             </div>
           </div>
           {bestMonth && (
@@ -1340,52 +1385,47 @@ function DashboardPrumo(props) {
         </div>
       )}
 
-      {/* ═══ FATURA DO CARTÃO (REGIME DE CAIXA) ═══ */}
+      {/* ═══ FATURA DO CARTÃO (espelha o app do banco: atual + próximas) ═══ */}
       {hasAnyCard && (
         <div className="prumo-card l-accent span2">
           <div className="prumo-card-hd">
             <div>
               <div className="prumo-lbl">{"Fatura do cartão"}</div>
-              <div className="prumo-cap">{"Quanto do salário já está comprometido"}</div>
+              <div className="prumo-cap">{"A próxima a fechar e as seguintes — como no app do banco"}</div>
             </div>
           </div>
 
-          {/* EM FORMAÇÃO — a próxima fatura (igual "Fatura atual" do Nubank) */}
-          <div style={{ marginTop: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 700 }}>
-                {"Em formação · vence em " + (formCrossesYear ? (MS[formMo0] + "/" + String(formYr)) : MS[formMo0])}
-              </span>
-              {!formCrossesYear && <span className="prumo-chip warn">{pct(pctForm) + " do salário"}</span>}
-            </div>
-            {formCrossesYear ? (
-              <div>
-                <div className="prumo-big accent" style={{ marginTop: 2, opacity: 0.4 }}>{"—"}</div>
-                <div className="prumo-cap" style={{ marginTop: 6 }}>{"⚠ A fatura de janeiro cruza o ano e não é consolidada nesta versão. Navegue até janeiro pra ver o detalhe."}</div>
+          {(curCrossesYear || !curInvoice) ? (
+            <div className="prumo-cap" style={{ padding: "12px 0" }}>{"⚠ A próxima fatura vence em janeiro e cruza o ano — navegue até janeiro pra ver o detalhe."}</div>
+          ) : (
+            <div>
+              {/* FATURA ATUAL — a próxima a fechar/vencer (destaque) */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 700 }}>{"Fatura atual · vence em " + curInvoice.label}</span>
+                <span className="prumo-chip warn">{pct(pctCur) + " do salário"}</span>
               </div>
-            ) : (
-              <div>
-                <div className="prumo-big accent" style={{ marginTop: 2 }}>{fmt(invForm.gross)}</div>
-                <div className="prumo-meter" style={{ height: 8, marginTop: 8 }}>
-                  <i style={{ width: pct(pctForm), background: "var(--accent)" }} />
+              <div className="prumo-big accent" style={{ marginTop: 2 }}>{fmt(curInvoice.gross)}</div>
+              <div className="prumo-meter" style={{ height: 8, marginTop: 8 }}>
+                <i style={{ width: pct(pctCur), background: "var(--accent)" }} />
+              </div>
+              <div className="prumo-cap" style={{ marginTop: 6 }}>{"Líquido após reembolsos: " + fmt(curInvoice.net)}</div>
+
+              {/* PRÓXIMAS FATURAS — parcelas já comprometidas, estilo "Selecione uma fatura" */}
+              {nextInvoices.length > 0 && (
+                <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                  <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Próximas faturas"}</div>
+                  {nextInvoices.map(function(iv) {
+                    return (
+                      <div key={iv.mo0} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{iv.label}</span>
+                        <span style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 700, color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>{fmt(iv.gross)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="prumo-cap" style={{ marginTop: 6 }}>{"Líquido após reembolsos: " + fmt(invForm.net)}</div>
-              </div>
-            )}
-          </div>
-
-          {/* A VENCER ESTE MÊS — o que efetivamente sai da conta agora */}
-          <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 700 }}>{"A vencer este mês · " + MS[mo]}</span>
-              <span className={"prumo-chip " + (pctDue > 0.6 ? "neg" : "brand")}>{pct(pctDue) + " do salário"}</span>
+              )}
             </div>
-            <div style={{ fontFamily: "var(--f-display)", fontSize: 22, fontWeight: 700, color: "var(--ink)", marginTop: 2, fontFeatureSettings: "'tnum'", fontVariantNumeric: "tabular-nums" }}>{fmt(invDue.gross)}</div>
-            <div className="prumo-meter" style={{ height: 6, marginTop: 8 }}>
-              <i style={{ width: pct(pctDue), background: pctDue > 0.6 ? "var(--neg)" : "var(--brand)" }} />
-            </div>
-            <div className="prumo-cap" style={{ marginTop: 6 }}>{"Líquido após reembolsos: " + fmt(invDue.net)}</div>
-          </div>
+          )}
         </div>
       )}
 
@@ -3864,6 +3904,7 @@ export default function App() {
   var [md, sMd] = useState({ tx: [], cr: [], fs: {}, debts: [] });
   var [maps, sMp] = useState({});
   var [splitMaps, sSpMp] = useState({});
+  var [cashView, sCashView] = useState(true); // true = visão de caixa (quando pago); false = competência (quando gastei)
   var [yrD, sYrD] = useState(null);
   var [pvMd, sPv] = useState(null);
   var [loading, sLd] = useState(true);
@@ -3977,7 +4018,7 @@ export default function App() {
         c = { ...c, categories: existingCats };
         sv("fc2-cfg", c); // persiste a migração no Firebase
       }
-      sCfg(c); sMp(mp); sSpMp(smp || {}); sSI(String(c.salary)); setRollover(rv); sCfgLoaded(true);
+      sCfg(c); sMp(mp); sSpMp(smp || {}); sSI(String(c.salary)); setRollover(rv); sCashView(c.cashView !== false); sCfgLoaded(true);
     })();
     return function() { active = false; };
   }, [user && user.uid]);
@@ -4022,6 +4063,13 @@ export default function App() {
   }, [cfgLoaded]);
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
   var saveSplitMaps = useCallback(function(m) { sSpMp(m); sv("fc2-splitmaps", m); }, []);
+
+  // TOGGLE VISÃO DE CAIXA ↔ COMPETÊNCIA — persiste a preferência no cfg
+  var toggleCashView = useCallback(function() {
+    var nv = !cashView;
+    sCashView(nv);
+    if (cfgLoaded && cfg) saveCfg({ ...cfg, cashView: nv });
+  }, [cashView, cfgLoaded, cfg]);
 
   // RESET DE DADOS OPERACIONAIS — apaga meses 2023-2027 + rollover, preserva cfg/maps/splitmaps
   var onResetData = useCallback(function() {
@@ -4729,7 +4777,7 @@ export default function App() {
             savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd} fs={fs}
             md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
             sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg} DS={DS}
-            nw={nw} monthlyInvest={monthlyInvest} yrD={yrD} myP={myP}
+            nw={nw} monthlyInvest={monthlyInvest} yrD={yrD} myP={myP} cashView={cashView} onToggleCashView={toggleCashView}
           />
         )}
 
