@@ -967,6 +967,7 @@ function DashboardPrumo(props) {
   var sSI = props.sSI;
   var saveCfg = props.saveCfg;
   var yrD = props.yrD;
+  var myP = props.myP;
   var cashView = props.cashView;
   var onToggleCashView = props.onToggleCashView;
 
@@ -1016,7 +1017,6 @@ function DashboardPrumo(props) {
   var saldoDelta = prevSaldo !== null ? saldoLivre - prevSaldo : null;
 
   /* ─── Reserva: configurável (atual / média 6m / média 12m / manual) ─── */
-  var myP = props.myP;
   var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
   var reservaModo = (cfg && cfg.reservaModo) ? cfg.reservaModo : "current";
   var reservaManual = (cfg && cfg.reservaManual) ? cfg.reservaManual : 0;
