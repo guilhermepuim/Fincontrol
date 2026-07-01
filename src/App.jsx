@@ -112,6 +112,16 @@ function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", c
 function pct(v) { return String(((v || 0) * 100).toFixed(1)) + "%"; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function tk(y, m) { return String(y) + "-" + String(m + 1).padStart(2, "0"); }
+// Dada uma chave "YYYY-MM", retorna a do mês seguinte (com virada de ano). Usado como default de settleMonth.
+function nextMonthOfKey(key) {
+  var parts = String(key || "").split("-");
+  var y = parseInt(parts[0], 10);
+  var m0 = parseInt(parts[1], 10) - 1;
+  if (isNaN(y) || isNaN(m0)) return "";
+  m0 = m0 + 1;
+  if (m0 > 11) { m0 = 0; y = y + 1; }
+  return tk(y, m0);
+}
 function sd(d) { try { return new Date(d).toLocaleDateString("pt-BR"); } catch (e) { return String(d || ""); } }
 function fK(v) { var a = Math.abs(v || 0); if (a >= 1000) return (v < 0 ? "-" : "") + (a / 1000).toFixed(1) + "k"; return String(Math.round(v || 0)); }
 
@@ -3084,6 +3094,9 @@ function DevedoresPrumo(props) {
   var togRcv = props.togRcv;
   var rmD = props.rmD;
   var mo = props.mo;
+  var setSettle = props.setSettle;
+  var yr = props.yr;
+  var mK = props.mK;
 
   var devEntries = Object.entries(debtors);
   var totalPending = devEntries.reduce(function(a, e) { return a + e[1].pending; }, 0);
@@ -3159,13 +3172,13 @@ function DevedoresPrumo(props) {
             <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 8 }}>
               {data.items.map(function(it, idx) {
                 return (
-                  <div key={idx} className="prumo-tx" style={{ opacity: it.rcv ? 0.55 : 1, padding: "10px 0" }}>
+                  <div key={idx} className="prumo-tx" style={{ opacity: it.rcv ? 0.55 : 1, padding: "10px 0", flexWrap: "wrap" }}>
                     <label className="prumo-check">
                       <input type="checkbox" checked={it.rcv || false}
                         onChange={function() {
                           if (it.src === "fx") togFR(it.id);
                           else if (it.src === "manual") togDR(it.id);
-                          else togRcv(it.id);
+                          else togRcv(it.id, it.bucketKey);
                         }} />
                     </label>
                     <div className="prumo-tx-meat">
@@ -3179,6 +3192,15 @@ function DevedoresPrumo(props) {
                     <div className={"prumo-tx-amt"} style={{ color: it.rcv ? "var(--pos)" : "var(--accent-2)" }}>{fmt(it.debt)}</div>
                     {it.src === "manual" && (
                       <button onClick={function() { rmD(it.id); }} className="prumo-icon-x">{"×"}</button>
+                    )}
+                    {it.src === "tx" && setSettle && (
+                      <div style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: 6, marginTop: 6, paddingLeft: 30 }}>
+                        <span className="prumo-cap" style={{ fontSize: 10 }}>{"Recebo em"}</span>
+                        <input type="month" className="prumo-input mono"
+                          value={it.settleMonth || mK}
+                          style={{ fontSize: 11, padding: "5px 8px", width: "auto", flex: "0 0 auto" }}
+                          onChange={function(e) { if (e.target.value) setSettle(it.id, it.bucketKey, e.target.value); }} />
+                      </div>
                     )}
                   </div>
                 );
@@ -4173,8 +4195,29 @@ export default function App() {
     debtors[p].total += it.debt;
     if (!it.rcv) debtors[p].pending += it.debt;
   }
-  txs.forEach(function(tx) {
-    gsp(tx).forEach(function(s) { addD(s.person || "?", { id: tx.id, desc: tx.desc, amount: tx.amount, debt: tx.amount * (s.pct / 100), rcv: tx.received, src: "tx" }); });
+  // A RECEBER (regime de caixa): splits aparecem no mês em que o dinheiro entra (settleMonth), não na competência.
+  // Default de settleMonth = mês seguinte ao lançamento. Ausência do campo = comportamento antigo (aparece na competência).
+  // Varre o ano inteiro (yrD) filtrando por settleMonth === mês exibido; usa txs live para o mês atual.
+  // Fronteira de ano: em janeiro, dez/ano-anterior tem settleMonth=janeiro mas está fora do yrD → puxa via pvMd.
+  var settleBuckets = [];
+  if (yrD) {
+    yrD.forEach(function(mDt, idx) {
+      settleBuckets.push({ key: tk(yr, idx), list: (idx === mo ? txs : ((mDt && mDt.tx) || [])) });
+    });
+    if (mo === 0 && pvMd) settleBuckets.push({ key: tk(yr - 1, 11), list: (pvMd.tx || []) });
+  } else {
+    settleBuckets.push({ key: mK, list: txs });
+  }
+  settleBuckets.forEach(function(bk) {
+    bk.list.forEach(function(tx) {
+      var sps = gsp(tx);
+      if (sps.length === 0) return;
+      var sm = tx.settleMonth || bk.key; // sem settleMonth → competência (bucket físico)
+      if (sm !== mK) return;
+      sps.forEach(function(s) {
+        addD(s.person || "?", { id: tx.id, desc: tx.desc, amount: tx.amount, debt: tx.amount * (s.pct / 100), rcv: tx.received, src: "tx", bucketKey: bk.key, settleMonth: tx.settleMonth || bk.key });
+      });
+    });
   });
   fxd.filter(function(f) { return gsp(f).length > 0; }).forEach(function(f) {
     gsp(f).forEach(function(s) { addD(s.person || "?", { id: f.id, desc: f.name, amount: f.amount, debt: f.amount * (s.pct / 100), rcv: !!fs[f.id + "_r"], src: "fx" }); });
@@ -4342,6 +4385,8 @@ export default function App() {
     sErr("");
     var sp = fm.hs ? fm.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
     var newTx = { id: uid(), desc: cln(fm.desc, 500), amount: v, cat: fm.cat, payment: cln(fm.pay, 100), splits: sp, hasSplit: sp.length > 0, date: fm.date || new Date().toISOString(), received: false, reimbursed: fm.reimb, note: cln(fm.note || "", 2000), src: "manual" };
+    // settleMonth = mês em que a dívida a receber deve aparecer (default: mês seguinte ao lançamento). Só relevante para splits.
+    if (sp.length > 0) newTx.settleMonth = nextMonthOfKey(mK);
     saveMd({ ...md, tx: txs.concat([newTx]) });
     var ic = parseInt(fm.ic);
     var it = parseInt(fm.it);
@@ -4352,6 +4397,7 @@ export default function App() {
         var fKey = tk(fy, fmo);
         var projDesc = cln(fm.desc, 480) + " " + String(ii) + "/" + String(it);
         var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
+        if (projTx.hasSplit) projTx.settleMonth = nextMonthOfKey(fKey);
         ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
           sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
         });
@@ -4465,9 +4511,44 @@ export default function App() {
   var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
   var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
   var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxd.filter(function(f) { return f.id !== id; }) }); };
-  var togRcv = function(id) {
-    var updated = txs.map(function(t) { return t.id === id ? { ...t, received: !t.received } : t; });
-    saveMd({ ...md, tx: updated });
+  var togRcv = function(id, bucketKey) {
+    var bk = bucketKey || mK;
+    if (bk === mK) {
+      var updated = txs.map(function(t) { return t.id === id ? { ...t, received: !t.received } : t; });
+      saveMd({ ...md, tx: updated });
+      return;
+    }
+    // O item mora fisicamente em outro mês (settleMonth deslocado). Grava direto no doc e reflete no yrD em memória.
+    ld("fc2-m-" + bk, { tx: [], cr: [], fs: {} }).then(function(fd) {
+      var upd = (fd.tx || []).map(function(t) { return t.id === id ? { ...t, received: !t.received } : t; });
+      sv("fc2-m-" + bk, { ...fd, tx: upd });
+      var bParts = String(bk).split("-");
+      var bY = parseInt(bParts[0], 10);
+      var bIdx = parseInt(bParts[1], 10) - 1;
+      if (yrD && bY === yr && bIdx >= 0 && bIdx < 12) {
+        var ny = yrD.slice();
+        ny[bIdx] = { ...(ny[bIdx] || { tx: [], cr: [], fs: {} }), tx: upd };
+        sYrD(ny);
+      }
+    });
+  };
+  // Move a dívida para outro mês de recebimento (edita settleMonth no bucket físico do lançamento).
+  var setSettle = function(id, bucketKey, newSM) {
+    var bk = bucketKey || mK;
+    var apply = function(list) { return list.map(function(t) { return t.id === id ? { ...t, settleMonth: newSM } : t; }); };
+    if (bk === mK) { saveMd({ ...md, tx: apply(txs) }); return; }
+    ld("fc2-m-" + bk, { tx: [], cr: [], fs: {} }).then(function(fd) {
+      var upd = apply(fd.tx || []);
+      sv("fc2-m-" + bk, { ...fd, tx: upd });
+      var bParts = String(bk).split("-");
+      var bY = parseInt(bParts[0], 10);
+      var bIdx = parseInt(bParts[1], 10) - 1;
+      if (yrD && bY === yr && bIdx >= 0 && bIdx < 12) {
+        var ny = yrD.slice();
+        ny[bIdx] = { ...(ny[bIdx] || { tx: [], cr: [], fs: {} }), tx: upd };
+        sYrD(ny);
+      }
+    });
   };
   var togRe = function(id) {
     var updated = txs.map(function(t) { return t.id === id ? { ...t, reimbursed: !t.reimbursed } : t; });
@@ -4489,7 +4570,13 @@ export default function App() {
   };
   var savSE = function(id) {
     var cl = eD.filter(function(s) { return s.person && s.pct > 0; });
-    var updated = txs.map(function(t) { return t.id === id ? { ...t, splits: cl, hasSplit: cl.length > 0 } : t; });
+    var updated = txs.map(function(t) {
+      if (t.id !== id) return t;
+      var nt2 = { ...t, splits: cl, hasSplit: cl.length > 0 };
+      // Ganhou split e não tinha settleMonth → aplica default (mês seguinte à competência atual)
+      if (cl.length > 0 && !nt2.settleMonth) nt2.settleMonth = nextMonthOfKey(mK);
+      return nt2;
+    });
     saveMd({ ...md, tx: updated }); sEId(null);
   };
   var rmSE = function(id) {
@@ -4604,6 +4691,7 @@ export default function App() {
         if (pIdx >= 0) { txs.splice(pIdx, 1); rp++; }
       }
       var newTx2 = { id: uid(), desc: cln(desc, 500), amount: cnum(amt), cat: cid, payment: cln(paymentName, 100), splits: sp, hasSplit: sp.length > 0, date: dt || new Date().toISOString(), received: false, reimbursed: false, note: "", src: "ofx", fitid: cln(rowFitid, 200), trnType: rowType, bank: cln(bankName, 100) };
+      if (sp.length > 0) newTx2.settleMonth = nextMonthOfKey(mK);
       nt.push(newTx2); ad++;
       var kSave = nd(desc); // chave normalizada (sem parcela) — regra vale para todas as parcelas e meses
       if (kSave) {
@@ -4619,7 +4707,9 @@ export default function App() {
           var fKey2 = tk(fy2, fmo2);
           if (!fut[fKey2]) fut[fKey2] = [];
           var futDesc = desc.replace(/\d+\s*\/\s*\d+/, String(ii2) + "/" + String(inst.t));
-          fut[fKey2].push({ ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj", fitid: "" });
+          var futTx = { ...newTx2, id: uid(), desc: futDesc, date: "", src: "proj", fitid: "" };
+          if (futTx.hasSplit) futTx.settleMonth = nextMonthOfKey(fKey2);
+          fut[fKey2].push(futTx);
         }
       }
     });
@@ -5026,6 +5116,7 @@ export default function App() {
           <DevedoresPrumo
             debtors={debtors} df={df} sDf={sDf} showDebt={showDebt} sSDbt={sSDbt}
             addDebt={addDebt} togFR={togFR} togDR={togDR} togRcv={togRcv} rmD={rmD} mo={mo}
+            setSettle={setSettle} yr={yr} mK={mK}
           />
         )}
 
