@@ -4273,15 +4273,24 @@ export default function App() {
       });
       if (hasR && !isPastNoData) {
         fR.forEach(function(f2) {
-          if (mFs[f2.id] === "paid" && (f2.mode || "budget") === "budget") {
-            var ct = cR.find(function(c2) { return c2.id === f2.cat; });
-            if (ct) {
-              var v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
-              if (ct.group === "essenciais") es += v2;
-              else if (ct.group === "investimentos") iv += v2;
-              else de += v2;
-              aCB(ct.id, v2);
-            }
+          if ((f2.mode || "budget") !== "budget") return;
+          var ct = cR.find(function(c2) { return c2.id === f2.cat; });
+          if (!ct) return;
+          var parts = mFs[f2.id + "_p"] || [];
+          var pS = parts.reduce(function(a3, p3) { return a3 + p3.amount; }, 0);
+          var v2 = 0;
+          if (mFs[f2.id] === "paid") {
+            v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
+          } else if (pS > 0) {
+            // pagamento parcial: mesma regra do ranking (calcSpent), senão gráfico e ranking divergem
+            var myPc = f2.hasSplit ? (1 - gsp(f2).reduce(function(a4, s) { return a4 + s.pct / 100; }, 0)) : 1;
+            v2 = pS * myPc;
+          }
+          if (v2 > 0) {
+            if (ct.group === "essenciais") es += v2;
+            else if (ct.group === "investimentos") iv += v2;
+            else de += v2;
+            aCB(ct.id, v2);
           }
         });
       } else if (!isPastNoData && ci >= mo) {
