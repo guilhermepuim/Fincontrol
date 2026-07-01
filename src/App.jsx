@@ -15,9 +15,6 @@ var BR = "#D8E8F4";
 var OK = "#2D7A3E";
 var ER = "#C0392B";
 var WN = "#9A7420";
-var TEAL = "#1B5FAA";
-var AMB = "#9A7420";
-var PETR = "#003F5D";
 var CARD = "#FDFAF5";
 var BGMAIN = "#F5F0E8";
 
@@ -79,7 +76,6 @@ function inferPaymentType(name) {
 }
 var MS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 var MA = MS.map(function(m) { return m.slice(0, 3); });
-var PC = ["#1B5FAA","#1A3A5C","#9A7420","#003F5D","#4E97D1","#C9A84C","#7BB4E3","#2D7A3E","#0F2540","#6A90B8"];
 
 /* ══ HELPERS ══ */
 
@@ -703,16 +699,13 @@ function calcSpent(mData, cats, fxd) {
 /* ══ STYLES ══ */
 var S = {
   card: { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR },
-  cardA: function(c) { return { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR, borderLeft: "3px solid " + c }; },
   inp: { background: BG, border: "1px solid " + BR, borderRadius: 6, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
   btn: function(c) { return { background: c, border: "none", borderRadius: 6, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
   btnO: { background: CARD, border: "1px solid " + BR, borderRadius: 6, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
   tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: c + "20", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
   g2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
-  ck: { accentColor: OK, width: 16, height: 16, cursor: "pointer" },
   lbl: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: TM, textTransform: "uppercase", marginBottom: 4 },
   h2: { fontFamily: "'Montserrat',sans-serif", fontSize: 14, fontWeight: 700, color: BD },
-  data: function(c) { return { fontSize: 28, fontWeight: 700, color: c || TX, fontFamily: "'Inter',sans-serif", lineHeight: 1.1 }; },
   cap: { fontSize: 11, color: TM, fontFamily: "'Inter',sans-serif" },
 };
 
@@ -959,8 +952,6 @@ function DashboardPrumo(props) {
   var txs = props.txs;
   var crs = props.crs;
   var fxd = props.fxd;
-  var fs = props.fs;
-  var md = props.md;
   var catLimits = props.catLimits;
   var goals = props.goals;
   var chD = props.chD;
@@ -975,9 +966,6 @@ function DashboardPrumo(props) {
   var salI = props.salI;
   var sSI = props.sSI;
   var saveCfg = props.saveCfg;
-  var DS = props.DS;
-  var nw = props.nw;
-  var monthlyInvest = props.monthlyInvest;
   var yrD = props.yrD;
   var cashView = props.cashView;
   var onToggleCashView = props.onToggleCashView;
@@ -1028,7 +1016,6 @@ function DashboardPrumo(props) {
   var saldoDelta = prevSaldo !== null ? saldoLivre - prevSaldo : null;
 
   /* ─── Reserva: configurável (atual / média 6m / média 12m / manual) ─── */
-  var yrD = props.yrD;
   var myP = props.myP;
   var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
   var reservaModo = (cfg && cfg.reservaModo) ? cfg.reservaModo : "current";
@@ -3970,12 +3957,9 @@ export default function App() {
   var [rollover, setRollover] = useState({});
   var [chatOpen, sChatOpen] = useState(false);
   var [showMore, sShowMore] = useState(false);
-  var [aiInsight, sAiInsight] = useState("");
-  var [aiLoading, sAiLoading] = useState(false);
   var [chatMsgs, sChatMsgs] = useState([]);
   var [chatInput, sChatIn] = useState("");
   var [chatLd, sChatLd] = useState(false);
-  var chatEndRef = useRef(null);
 
   var mK = tk(yr, mo);
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
@@ -4147,7 +4131,6 @@ export default function App() {
   var cur = calcSpent(md, cats, fxd);
   var spent = cur.spent;
   var spC = cur.spentByCat;
-  var totCr = totalInc;
   var totDbTx = txs.filter(function(t) { return !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
   var totDbFx = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] === "paid"; }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
   var totDbP = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] !== "paid"; })
@@ -4165,28 +4148,6 @@ export default function App() {
   });
   var budWithRollover = {};
   GR.forEach(function(g) { budWithRollover[g.id] = bud[g.id] + (rvCredit[g.id] || 0); });
-
-  /* ── Anomaly detection ── */
-  var anomalies = [];
-  if (yrD) {
-    cats.forEach(function(cat2) {
-      var hist = [];
-      yrD.forEach(function(mDt, idx) {
-        if (idx === mo) return;
-        var mTxs = mDt.tx || [];
-        var total = mTxs.filter(function(t) { return t.cat === cat2.id && !t.reimbursed; })
-          .reduce(function(a, t) { return a + myP(t); }, 0);
-        if (total > 0) hist.push(total);
-      });
-      if (hist.length < 2) return;
-      var avg = hist.reduce(function(a, v) { return a + v; }, 0) / hist.length;
-      var cur2 = spC[cat2.id] || 0;
-      if (avg > 50 && cur2 > avg * 1.5) {
-        anomalies.push({ cat: cat2, cur: cur2, avg: avg, delta: cur2 - avg, pct: (cur2 - avg) / avg });
-      }
-    });
-    anomalies.sort(function(a, b) { return b.delta - a.delta; });
-  }
 
   var debtors = {};
   function addD(p, it) {
@@ -4276,12 +4237,6 @@ export default function App() {
   /* Net worth projection */
   var nwBalance = nw.balance || 0;
   var nwHistory = nw.history || [];
-  var monthlyInvest = invSp > 0 ? invSp : totalInc * 0.25;
-  var nwProjection = [];
-  for (var pi2 = 0; pi2 < 12; pi2++) {
-    nwProjection.push(Math.round(nwBalance + monthlyInvest * (pi2 + 1)));
-  }
-  var nwMax = Math.max.apply(null, nwProjection.concat([nwBalance, 1]));
 
   /* Annual chart */
   var chD = [];
@@ -4354,13 +4309,6 @@ export default function App() {
     chMx = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
     chMs = Math.max.apply(null, chD.map(function(d) { return Math.abs(d.s); }).concat([1]));
   }
-
-  var pieD = {};
-  GR.forEach(function(g) {
-    pieD[g.id] = cats.filter(function(c) { return c.group === g.id && (spC[c.id] || 0) > 0; })
-      .map(function(c) { return { id: c.id, name: c.name, icon: c.icon, value: spC[c.id] }; })
-      .sort(function(a, b) { return b.value - a.value; });
-  });
 
   /* ── Navigation ── */
   var goPrev = function() {
@@ -4873,10 +4821,10 @@ export default function App() {
           <DashboardPrumo
             cfg={cfg} sal={sal} totalInc={totalInc} extraCr={extraCr} bud={bud} budWithRollover={budWithRollover}
             spent={spent} prevSp={prevSp} GR={GR} cats={cats} spC={spC} totDb={totDb}
-            savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd} fs={fs}
-            md={md} catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
-            sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg} DS={DS}
-            nw={nw} monthlyInvest={monthlyInvest} yrD={yrD} myP={myP} cashView={cashView} onToggleCashView={toggleCashView}
+            savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd}
+            catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
+            sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg}
+            yrD={yrD} myP={myP} cashView={cashView} onToggleCashView={toggleCashView}
           />
         )}
 
@@ -4906,8 +4854,6 @@ export default function App() {
         {tab === "analise" && (
           <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrD} cats={cats} myP={myP} />
         )}
-
-        {/* ═══ METAS ═══ */}
 
         {/* ═══ LANÇAMENTOS (INPUT) ═══ */}
         {tab === "input" && (
@@ -5097,8 +5043,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* ═══ FIXAS ═══ */}
 
         {/* ═══ FIXAS ═══ */}
         {tab === "fixas" && (
@@ -5319,8 +5263,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ═══ DEVEDORES ═══ */}
-
       </div>
         </main>
       </div>
@@ -5383,13 +5325,10 @@ export default function App() {
       {/* ══ FLOATING AI CHAT ══ */}
       <style>{`
         @keyframes fadeInTab { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #1B72B840; } 50% { box-shadow: 0 0 0 8px #1B72B820; } }
         .fc-tab-content { animation: fadeInTab 0.22s ease; }
         .fc-chat-msg { animation: slideUp 0.18s ease; }
-        @media (min-width: 768px) { .fc-main { max-width: 100% !important; padding: 16px 32px !important; } }
-        @media (min-width: 1200px) { .fc-main { padding: 16px 80px !important; } }
       `}</style>
 
       {chatOpen && (
