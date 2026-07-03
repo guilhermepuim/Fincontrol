@@ -1170,6 +1170,29 @@ function DashboardPrumo(props) {
   var pctCur = (curInvoice && sal > 0) ? Math.min(curInvoice.gross / sal, 1) : 0;
   var curCrossesYear = (mo === 11); // dez → próxima fatura vence em janeiro do ano seguinte
 
+  /* ─── Estimativa de variável futuro: média do resíduo dos últimos 3 meses fechados ───
+     resíduo(mês) = variável lançado (competência, sem parcelas projetadas) − fixas-cartão do mês.
+     As fixas-cartão já estimam o recorrente de cartão nos meses futuros (ver calcCashOut);
+     o resíduo captura só o variável extra (iFood avulso, lazer, impulso) que hoje não
+     aparece em mês futuro nenhum. Média negativa vira 0 (fixa-cartão superestimou). */
+  var histResiduos = [];
+  if (yrD && cfg) {
+    for (var hmi = mo - 1; hmi >= 0 && histResiduos.length < 3; hmi--) {
+      var hmb = yrD[hmi];
+      if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
+      var hVar = (hmb.tx || []).filter(function(t) { return t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
+      var hFxCartao = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, hmi))
+        .filter(function(f) { return isCreditPay(f.payment); })
+        .reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+      histResiduos.push(hVar - hFxCartao);
+    }
+  }
+  var estVarFuturo = 0;
+  if (histResiduos.length > 0) {
+    estVarFuturo = histResiduos.reduce(function(a, v) { return a + v; }, 0) / histResiduos.length;
+    if (estVarFuturo < 0) estVarFuturo = 0;
+  }
+
   /* ─── Fluxo de caixa projetado · próximos 4 meses ─── */
   var cashflowMonths = [];
   if (yrD && cfg) {
@@ -1180,15 +1203,21 @@ function DashboardPrumo(props) {
       var mb = yrD[tgtMo] || { tx: [], cr: [] };
       var rec = sal + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
       var desp;
+      var usaEstimativa = false;
       if (cashView) {
         desp = calcCashOut(tgtMo); // regime de caixa: o que efetivamente sai da conta no mês
+        if (cfi > 0 && estVarFuturo > 0) {
+          // mês futuro: soma a média histórica de variável pra ficar comparável ao mês atual
+          desp += estVarFuturo;
+          usaEstimativa = true;
+        }
       } else {
         var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
         var fxSum = fxList.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
         var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
         desp = fxSum + varSum; // competência: tudo que foi lançado no mês
       }
-      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp });
+      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp, est: usaEstimativa });
     }
   }
   // Semáforo por piso fixo: verde ≥ 3000, amarelo 0–3000, vermelho ≤ 0
@@ -1357,9 +1386,9 @@ function DashboardPrumo(props) {
           </div>
           {bestMonth && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              <span className="prumo-chip pos">{"Melhor pra compra grande: " + bestMonth.label + " · " + fmt(bestMonth.sobra)}</span>
+              <span className="prumo-chip pos">{"Melhor pra compra grande: " + bestMonth.label + " · " + (bestMonth.est ? "≈ " : "") + fmt(bestMonth.sobra)}</span>
               {tightMonth && tightMonth.mo0 !== bestMonth.mo0 && (
-                <span className="prumo-chip neg">{"Mais apertado: " + tightMonth.label + " · " + fmt(tightMonth.sobra)}</span>
+                <span className="prumo-chip neg">{"Mais apertado: " + tightMonth.label + " · " + (tightMonth.est ? "≈ " : "") + fmt(tightMonth.sobra)}</span>
               )}
             </div>
           )}
@@ -1373,8 +1402,8 @@ function DashboardPrumo(props) {
                     <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em" }}>{m.label + (isCur ? " · agora" : "")}</span>
                     <span style={{ width: 9, height: 9, borderRadius: "50%", background: col, display: "inline-block" }} />
                   </div>
-                  <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{fmt(m.sobra)}</div>
-                  <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{"livre"}</div>
+                  <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: m.est ? "color-mix(in oklch, " + col + " 62%, var(--surface))" : col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{(m.est ? "≈ " : "") + fmt(m.sobra)}</div>
+                  <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{m.est ? "livre · c/ variável estimado" : "livre"}</div>
                 </div>
               );
             })}
@@ -4602,6 +4631,33 @@ export default function App() {
     var payment = null;
     if (payId) payment = (cfg.payments || DEFAULT_PAYMENTS).find(function(p) { return p.id === payId; });
     if (!payment) { alert("Selecione a forma de pagamento (cartão) antes de importar."); return; }
+    // Validação de mês: compara o mês predominante das datas do extrato com o mês aberto na tela.
+    // Evita lançar a fatura de junho dentro de julho (mês/parcelas/settleMonth tudo errado).
+    var mesCount = {};
+    csvR.forEach(function(row) {
+      if (skipRows[row._idx] || !row.date) return;
+      var dv = new Date(row.date);
+      if (isNaN(dv.getTime())) return;
+      var kv = tk(dv.getFullYear(), dv.getMonth());
+      mesCount[kv] = (mesCount[kv] || 0) + 1;
+    });
+    var mesExtrato = ""; var mesExtratoN = 0;
+    Object.keys(mesCount).forEach(function(kc) {
+      if (mesCount[kc] > mesExtratoN) { mesExtrato = kc; mesExtratoN = mesCount[kc]; }
+    });
+    if (mesExtrato && mesExtrato !== mK) {
+      var exY = parseInt(mesExtrato.slice(0, 4), 10);
+      var exM = parseInt(mesExtrato.slice(5, 7), 10) - 1;
+      var okMes = window.confirm(
+        "⚠️ MÊS DIFERENTE\n\nAs compras deste extrato são de " + MS[exM] + "/" + String(exY) +
+        ", mas você está lançando em " + MS[mo] + "/" + String(yr) + ".\n\n" +
+        "Se continuar, TUDO cai em " + MS[mo] + " — inclusive parcelas futuras e o mês de recebimento dos splits.\n\n" +
+        "Recomendado: Cancelar, trocar o mês no topo para " + MS[exM] + "/" + String(exY) +
+        " e clicar em Importar de novo (a lista categorizada é mantida).\n\n" +
+        "Importar em " + MS[mo] + "/" + String(yr) + " mesmo assim?"
+      );
+      if (!okMes) return;
+    }
     var paymentName = payment.name;
     var bankName = ofxBank ? ofxBank.name : "";
     var nt = []; var nm = Object.assign({}, maps); var nsm = Object.assign({}, splitMaps); var fut = {};
@@ -4682,6 +4738,58 @@ export default function App() {
     sDupMap({});
     sSkipRows({});
     alert("✅ " + String(ad) + " adicionadas" + (rp ? ", " + String(rp) + " projeções substituídas" : "") + (sk ? ", " + String(sk) + " duplicadas ignoradas" : "") + manualMsg + creditsMsg + paymentsMsg);
+  };
+
+  // Apaga só os lançamentos importados de extrato (OFX/CSV) do mês aberto, + as parcelas
+  // futuras projetadas por eles (mesma chave nd(desc)+nº de parcela usada na criação em impAll).
+  // Lançamentos manuais, fixas e projeções vindas de imports de OUTROS meses ficam intactos.
+  var rmImportedMonth = function() {
+    var imported = txs.filter(function(t) { return t.src === "ofx" || t.src === "csv"; });
+    if (!imported.length) { alert("Nenhum lançamento importado de extrato em " + MS[mo] + "/" + String(yr) + "."); return; }
+    var ok = window.confirm(
+      "⚠️ Apagar " + String(imported.length) + " lançamento(s) importados de extrato em " + MS[mo] + "/" + String(yr) + "?\n\n" +
+      "As parcelas futuras projetadas por esses lançamentos também serão removidas.\n\n" +
+      "Lançamentos manuais, fixas e imports de outros meses NÃO são afetados."
+    );
+    if (!ok) return;
+    // Mapeia as projeções futuras a remover: fKey → [{ nrm, pc }]
+    var projRm = {};
+    imported.forEach(function(t) {
+      var inst = pi(t.desc);
+      if (!inst || inst.c >= inst.t) return;
+      var nrm = nd(t.desc);
+      for (var ii = inst.c + 1; ii <= inst.t; ii++) {
+        var fmo = (mo + (ii - inst.c)) % 12;
+        var fy = yr + Math.floor((mo + (ii - inst.c)) / 12);
+        var fKey = tk(fy, fmo);
+        if (!projRm[fKey]) projRm[fKey] = [];
+        projRm[fKey].push({ nrm: nrm, pc: ii });
+      }
+    });
+    Object.keys(projRm).forEach(function(fKey) {
+      var marks = projRm[fKey];
+      ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
+        var kept = (fd.tx || []).filter(function(t3) {
+          if (t3.src !== "proj") return true;
+          var ei = pi(t3.desc);
+          if (!ei) return true;
+          var n3 = nd(t3.desc);
+          return !marks.some(function(mk2) { return mk2.nrm === n3 && mk2.pc === ei.c; });
+        });
+        sv("fc2-m-" + fKey, { ...fd, tx: kept });
+        var bParts = String(fKey).split("-");
+        var bY = parseInt(bParts[0], 10);
+        var bIdx = parseInt(bParts[1], 10) - 1;
+        if (yrD && bY === yr && bIdx >= 0 && bIdx < 12) {
+          var ny = yrD.slice();
+          ny[bIdx] = { ...(ny[bIdx] || { tx: [], cr: [], fs: {} }), tx: kept };
+          sYrD(ny);
+        }
+      });
+    });
+    saveMd({ ...md, tx: txs.filter(function(t) { return t.src !== "ofx" && t.src !== "csv"; }) });
+    var nFut = Object.keys(projRm).length;
+    alert("✅ " + String(imported.length) + " lançamento(s) importados removidos de " + MS[mo] + "/" + String(yr) + (nFut ? ", com parcelas projetadas limpas em " + String(nFut) + " mês(es) futuro(s)" : "") + ".");
   };
 
   var tabs = [
@@ -4951,7 +5059,11 @@ export default function App() {
                 <div className="prumo-form">
                   <div className="prumo-cap">{"Compatível com Nubank, Itaú, Bradesco, Santander, Inter, C6, BTG e XP. Dedup automático via FITID. Pagamento de fatura e estornos de crédito são ignorados nesta versão."}</div>
                   <input ref={fr} type="file" accept=".ofx,.OFX" onChange={handleOFX} style={{ display: "none" }} />
-                  <button className="prumo-btn accent" style={{ alignSelf: "flex-start", padding: "11px 18px" }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar arquivo OFX"}</button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <button className="prumo-btn accent" style={{ padding: "11px 18px" }} onClick={function() { if (fr.current) fr.current.click(); }}>{"Selecionar arquivo OFX"}</button>
+                    <button className="prumo-btn ghost" style={{ padding: "11px 14px", color: "var(--neg)" }} onClick={rmImportedMonth}>{"🗑 Apagar importados deste mês"}</button>
+                  </div>
+                  <div className="prumo-cap" style={{ fontSize: 10 }}>{"O botão de apagar remove só o que veio de extrato (OFX/CSV) do mês aberto + as parcelas projetadas por ele. Manuais e fixas ficam."}</div>
                 </div>
               ) : (
                 <div className="prumo-form">
