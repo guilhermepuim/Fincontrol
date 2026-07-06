@@ -484,6 +484,58 @@ function calcInvoices(yrD, year, payments) {
   return byMonth;
 }
 
+// Saída de caixa REAL de um mês (fatura que vence nele + fixas não-cartão + variável não-cartão lançado),
+// com a mesma anti-duplicação fixa-cartão do calcCashOut do Dashboard. Função pura pra Análise reusar.
+function calcCashOutMonth(yrD, cfg, yr, monthIdx) {
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
+  var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
+  var invByMonth = calcInvoices(yrD, yr, paysList);
+  var realInvoiceMonths = {};
+  (yrD || []).forEach(function(mb2, bidx) {
+    (mb2.tx || []).forEach(function(t) {
+      if (t.src === "proj" || !isCredit(t.payment)) return;
+      var yy, mm, dd;
+      if (t.date) { var dt = new Date(t.date); if (!isNaN(dt.getTime())) { yy = dt.getFullYear(); mm = dt.getMonth(); dd = dt.getDate(); } }
+      if (yy === undefined) { yy = yr; mm = bidx; dd = 15; }
+      realInvoiceMonths[invoiceKeyForYMD(yy, mm, dd, creditClosingFor(t.payment, paysList) || 1)] = true;
+    });
+  });
+  var key = tk(yr, monthIdx);
+  var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
+  var cartao = (invByMonth[key] || { gross: 0 }).gross;
+  var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
+  if (!realInvoiceMonths[key]) {
+    cartao += fxList.filter(function(f) { return isCredit(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+  }
+  var fixasNaoCartao = fxList.filter(function(f) { return !isCredit(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+  var varNaoCartao = (mb.tx || []).filter(function(t) { return !isCredit(t.payment); }).reduce(function(a, t) { return a + myP(t); }, 0);
+  return cartao + fixasNaoCartao + varNaoCartao;
+}
+
+// Média do resíduo variável dos últimos 3 meses fechados (Abordagem B, decidida 2026-07-01):
+// resíduo = variável lançado (sem proj) − fixas-cartão do mês. Média negativa vira 0.
+function calcEstVarFuturo(yrD, cfg, yr, mo) {
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
+  var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
+  var histResiduos = [];
+  if (yrD && cfg) {
+    for (var hmi = mo - 1; hmi >= 0 && histResiduos.length < 3; hmi--) {
+      var hmb = yrD[hmi];
+      if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
+      var hVar = (hmb.tx || []).filter(function(t) { return t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
+      var hFxCartao = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, hmi))
+        .filter(function(f) { return isCredit(f.payment); })
+        .reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+      histResiduos.push(hVar - hFxCartao);
+    }
+  }
+  if (histResiduos.length === 0) return 0;
+  var med = histResiduos.reduce(function(a, v) { return a + v; }, 0) / histResiduos.length;
+  return med < 0 ? 0 : med;
+}
+
 /* ══ PRUMO DESIGN SYSTEM — TOKENS + CLASSES ══ */
 var PRUMO_TOKENS = `
 :root {
@@ -1313,30 +1365,9 @@ function DashboardPrumo(props) {
   var pctCur = (curInvoice && sal > 0) ? Math.min(curInvoice.gross / sal, 1) : 0;
   var curCrossesYear = (mo === 11); // dez → próxima fatura vence em janeiro do ano seguinte
 
-  /* ─── Estimativa de variável futuro: média do resíduo dos últimos 3 meses fechados ───
-     resíduo(mês) = variável lançado (competência, sem parcelas projetadas) − fixas-cartão do mês.
-     As fixas-cartão já estimam o recorrente de cartão nos meses futuros (ver calcCashOut);
-     o resíduo captura só o variável extra (iFood avulso, lazer, impulso) que hoje não
-     aparece em mês futuro nenhum. Média negativa vira 0 (fixa-cartão superestimou). */
-  var histResiduos = [];
-  if (yrD && cfg) {
-    for (var hmi = mo - 1; hmi >= 0 && histResiduos.length < 3; hmi--) {
-      var hmb = yrD[hmi];
-      if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
-      var hVar = (hmb.tx || []).filter(function(t) { return t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
-      var hFxCartao = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, hmi))
-        .filter(function(f) { return isCreditPay(f.payment); })
-        .reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-      histResiduos.push(hVar - hFxCartao);
-    }
-  }
-  var estVarFuturo = 0;
-  if (histResiduos.length > 0) {
-    estVarFuturo = histResiduos.reduce(function(a, v) { return a + v; }, 0) / histResiduos.length;
-    if (estVarFuturo < 0) estVarFuturo = 0;
-  }
-
-  /* ─── Fluxo de caixa projetado · próximos 4 meses ─── */
+  /* ─── Fluxo de caixa projetado · próximos 4 meses ───
+     Só compromisso REAL (fatura + fixas + parcelas projetadas). A comparação com a média
+     de variável dos últimos 3 meses mora na aba Análise (calcEstVarFuturo). */
   var cashflowMonths = [];
   if (yrD && cfg) {
     var fxRaw = cfg.fixed || [];
@@ -1346,21 +1377,15 @@ function DashboardPrumo(props) {
       var mb = yrD[tgtMo] || { tx: [], cr: [] };
       var rec = sal + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
       var desp;
-      var usaEstimativa = false;
       if (cashView) {
-        desp = calcCashOut(tgtMo); // regime de caixa: o que efetivamente sai da conta no mês
-        if (cfi > 0 && estVarFuturo > 0) {
-          // mês futuro: soma a média histórica de variável pra ficar comparável ao mês atual
-          desp += estVarFuturo;
-          usaEstimativa = true;
-        }
+        desp = calcCashOut(tgtMo); // regime de caixa: fatura + fixas + parcelas — compromisso real, sem estimativa
       } else {
         var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
         var fxSum = fxList.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
         var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
         desp = fxSum + varSum; // competência: tudo que foi lançado no mês
       }
-      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp, est: usaEstimativa });
+      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp });
     }
   }
   // Semáforo por piso fixo: verde ≥ 3000, amarelo 0–3000, vermelho ≤ 0
@@ -1529,9 +1554,9 @@ function DashboardPrumo(props) {
           </div>
           {bestMonth && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              <span className="prumo-chip pos">{"Melhor pra compra grande: " + bestMonth.label + " · " + (bestMonth.est ? "≈ " : "") + fmt(bestMonth.sobra)}</span>
+              <span className="prumo-chip pos">{"Melhor pra compra grande: " + bestMonth.label + " · " + fmt(bestMonth.sobra)}</span>
               {tightMonth && tightMonth.mo0 !== bestMonth.mo0 && (
-                <span className="prumo-chip neg">{"Mais apertado: " + tightMonth.label + " · " + (tightMonth.est ? "≈ " : "") + fmt(tightMonth.sobra)}</span>
+                <span className="prumo-chip neg">{"Mais apertado: " + tightMonth.label + " · " + fmt(tightMonth.sobra)}</span>
               )}
             </div>
           )}
@@ -1545,8 +1570,8 @@ function DashboardPrumo(props) {
                     <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em" }}>{m.label + (isCur ? " · agora" : "")}</span>
                     <span style={{ width: 9, height: 9, borderRadius: "50%", background: col, display: "inline-block" }} />
                   </div>
-                  <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: m.est ? "color-mix(in oklch, " + col + " 62%, var(--surface))" : col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{(m.est ? "≈ " : "") + fmt(m.sobra)}</div>
-                  <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{m.est ? "livre · c/ variável estimado" : "livre"}</div>
+                  <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{fmt(m.sobra)}</div>
+                  <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{isCur ? "livre" : (cashView ? "livre · fixas + parcelas" : "livre · lançado no mês")}</div>
                 </div>
               );
             })}
@@ -1816,6 +1841,22 @@ function AnalisePrumo(props) {
   var myP = props.myP;
   var cfg = props.cfg;
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
+  var [showFluxo3m, sShowFluxo3m] = useState(false); // toggle do fluxo de caixa real × média 3m
+
+  /* Fluxo de caixa: real (fixas + parcelas) × cenário com média de variável dos últimos 3 meses */
+  var fluxoEstVar = 0;
+  var fluxoMeses = [];
+  if (showFluxo3m && yrD && cfg) {
+    fluxoEstVar = calcEstVarFuturo(yrD, cfg, yr, mo);
+    var fluxoSal = (cfg && cfg.salary) || 0;
+    for (var fmi = mo; fmi <= 11 && fluxoMeses.length < 4; fmi++) {
+      var fmb = yrD[fmi] || { tx: [], cr: [] };
+      var fRec = fluxoSal + (fmb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
+      var fReal = fRec - calcCashOutMonth(yrD, cfg, yr, fmi);
+      var fIsCur = fmi === mo;
+      fluxoMeses.push({ mo0: fmi, label: MA[fmi], real: fReal, comMedia: fIsCur ? fReal : fReal - fluxoEstVar, isCur: fIsCur });
+    }
+  }
 
   var realMonths = chD.filter(function(d) { return d.real || d.td > 0 || d.cr > 0; });
   var allMax = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
@@ -2081,6 +2122,45 @@ function AnalisePrumo(props) {
 
   return (
     <div className="prumo-form-grid">
+      {/* ⓪ FLUXO DE CAIXA · REAL × MÉDIA 3M (abre no clique) */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Fluxo de caixa · próximos meses"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Real × média dos últimos 3 meses"}</h2>
+          </div>
+          <button className={"prumo-btn " + (showFluxo3m ? "ghost" : "brand")} onClick={function() { sShowFluxo3m(!showFluxo3m); }}>{showFluxo3m ? "Fechar" : "📊 Analisar"}</button>
+        </div>
+        {!showFluxo3m && (
+          <div className="prumo-cap">{"Clique em Analisar pra comparar a sobra só com compromissos reais (fixas + parcelas) contra o cenário somando seu gasto variável médio dos últimos 3 meses."}</div>
+        )}
+        {showFluxo3m && (
+          <div>
+            <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Variável médio (últimos 3 meses fechados): " + fmt(fluxoEstVar) + "/mês · aplicado só nos meses futuros"}</div>
+            {fluxoMeses.map(function(fx2) {
+              var colR = fx2.real >= 0 ? "var(--pos)" : "var(--neg)";
+              var colM = fx2.comMedia >= 0 ? "var(--pos)" : "var(--neg)";
+              return (
+                <div key={fx2.mo0} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+                  <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 }}>{fx2.label + (fx2.isCur ? " · agora" : "")}</div>
+                  <div className="prumo-mini-stat-row cols-2">
+                    <div className="prumo-mini-stat" style={{ textAlign: "left" }}>
+                      <div className="lbl">{"Real · fixas + parcelas"}</div>
+                      <div className="val" style={{ color: colR, fontSize: 16 }}>{fmt(fx2.real)}</div>
+                    </div>
+                    <div className="prumo-mini-stat" style={{ textAlign: "left", opacity: fx2.isCur ? 0.55 : 0.9 }}>
+                      <div className="lbl">{fx2.isCur ? "Mês atual já é real" : "≈ c/ variável médio"}</div>
+                      <div className="val" style={{ color: fx2.isCur ? "var(--ink-3)" : colM, fontSize: 16 }}>{fx2.isCur ? "—" : "≈ " + fmt(fx2.comMedia)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="prumo-cap" style={{ marginTop: 10, fontSize: 11 }}>{"≈ cenário = real − variável médio. Se o ≈ fica negativo, seu padrão de gasto atual não cabe naquele mês — segura o variável ou remaneja parcela."}</div>
+          </div>
+        )}
+      </div>
+
       {/* ① DISTRIBUIÇÃO DO ANO · REAL VS META 50/25/25 */}
       {pieT > 0 && (
         <div className="prumo-card l-brand">
