@@ -4892,13 +4892,19 @@ export default function App() {
     }
     sErr("");
     var sp = fm.hs ? fm.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
-    var newTx = { id: uid(), desc: cln(fm.desc, 500), amount: v, cat: fm.cat, payment: cln(fm.pay, 100), splits: sp, hasSplit: sp.length > 0, date: fm.date || new Date().toISOString(), received: false, reimbursed: fm.reimb, note: cln(fm.note || "", 2000), src: "manual" };
+    var newTx = { id: uid(), desc: cln(fm.desc, 500), amount: v, cat: fm.cat, payment: cln(fm.pay, 100), splits: sp, hasSplit: sp.length > 0, date: fm.date ? fm.date + "T12:00:00.000Z" : new Date().toISOString(), received: false, reimbursed: fm.reimb, note: cln(fm.note || "", 2000), src: "manual" };
     // settleMonth = mês em que a dívida a receber deve aparecer (default: mês seguinte ao lançamento). Só relevante para splits.
     if (sp.length > 0) newTx.settleMonth = nextMonthOfKey(mK);
     saveMd({ ...md, tx: txs.concat([newTx]) });
     var ic = parseInt(fm.ic);
     var it = parseInt(fm.it);
     if (ic && it && ic < it) {
+      // schedule congela fKey/projTx por chamada — var no loop + .then assíncrono faria todas as parcelas caírem no último mês
+      var schedule = function(fKey, projTx) {
+        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
+          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
+        });
+      };
       for (var ii = ic + 1; ii <= it; ii++) {
         var fmo = (mo + (ii - ic)) % 12;
         var fy = yr + Math.floor((mo + (ii - ic)) / 12);
@@ -4906,9 +4912,7 @@ export default function App() {
         var projDesc = cln(fm.desc, 480) + " " + String(ii) + "/" + String(it);
         var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
         if (projTx.hasSplit) projTx.settleMonth = nextMonthOfKey(fKey);
-        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
-          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
-        });
+        schedule(fKey, projTx);
       }
     }
     sFm(emFm);
@@ -4951,7 +4955,7 @@ export default function App() {
     var sp = ff.hs ? ff.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
     var newFx = { id: uid(), name: cln(ff.name, 100), amount: a, cat: ff.cat, payment: cln(ff.pay, 100), splits: sp, hasSplit: sp.length > 0, mode: ff.mode, startDate: ff.startDate || tk(yr, mo) };
     if (ff.endDate) newFx.endDate = ff.endDate;
-    saveCfg({ ...cfg, fixed: fxd.concat([newFx]) });
+    saveCfg({ ...cfg, fixed: fxdRaw.concat([newFx]) });
     sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "" });
     sSFx(false);
   };
@@ -5018,7 +5022,7 @@ export default function App() {
 
   var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
   var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
-  var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxd.filter(function(f) { return f.id !== id; }) }); };
+  var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxdRaw.filter(function(f) { return f.id !== id; }) }); };
   var togRcv = function(id, bucketKey) {
     var bk = bucketKey || mK;
     if (bk === mK) {
