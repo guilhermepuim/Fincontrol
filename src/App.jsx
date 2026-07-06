@@ -286,6 +286,149 @@ function myP(tx) { if (tx.reimbursed) return 0; return tx.amount - spt(tx); }
 function pi(d) { var m = d.match(/(\d+)\s*\/\s*(\d+)/); return m ? { c: +m[1], t: +m[2] } : null; }
 function nd(d) { return d.toLowerCase().replace(/\s*\d+\s*\/\s*\d+\s*/g, "").replace(/parcela\s*/gi, "").trim(); }
 
+/* ══ CHAT PARSER — assistente de lançamentos por linguagem natural ══ */
+function chatNorm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+function ymdLocal(d) { return String(d.getFullYear()) + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+// Palavra-chave (normalizada, sem acento) → id de categoria. Só aplica se a categoria existir no cfg do usuário.
+var CHAT_KW = [
+  { cat: "comerfora", kw: ["ifood", "restaurante", "lanche", "pizza", "hamburguer", "burger", "sushi", "almoco", "jantar", "cafe", "padoca"] },
+  { cat: "alimentacao", kw: ["mercado", "supermercado", "feira", "padaria", "acougue", "hortifruti", "sacolao", "atacadao"] },
+  { cat: "transporte", kw: ["uber", "99", "taxi", "gasolina", "combustivel", "etanol", "estacionamento", "pedagio", "onibus", "metro"] },
+  { cat: "saude", kw: ["farmacia", "remedio", "medico", "dentista", "consulta", "exame", "psicologo", "terapia"] },
+  { cat: "moradia", kw: ["aluguel", "condominio", "luz", "energia", "agua", "internet", "gas", "iptu", "faxina", "diarista"] },
+  { cat: "pets", kw: ["pet", "racao", "veterinario", "vet", "tosa"] },
+  { cat: "bernardo", kw: ["fralda", "bebe", "filho", "escola", "crianca", "bernardo"] },
+  { cat: "educacao", kw: ["curso", "livro", "faculdade", "mensalidade"] },
+  { cat: "impostos", kw: ["imposto", "contador", "darf", "ipva"] },
+  { cat: "financiamento", kw: ["financiamento", "emprestimo", "consorcio", "divida"] },
+  { cat: "investimentos_cat", kw: ["aporte", "investimento", "investi", "cdb", "tesouro", "acoes", "fii", "cripto", "bitcoin"] },
+  { cat: "compras", kw: ["roupa", "tenis", "sapato", "amazon", "shopee", "shein", "aliexpress", "eletronico", "celular"] },
+  { cat: "viagem", kw: ["viagem", "hotel", "passagem", "airbnb", "pousada", "voo"] },
+  { cat: "lazer", kw: ["cinema", "show", "bar", "cerveja", "balada", "festa", "ingresso"] },
+  { cat: "assinaturas", kw: ["netflix", "spotify", "assinatura", "disney", "prime", "youtube", "hbo", "globoplay", "icloud", "chatgpt", "claude"] },
+  { cat: "beleza", kw: ["cabelo", "cabeleireiro", "barbearia", "barbeiro", "manicure", "salao", "skincare"] },
+  { cat: "presentes", kw: ["presente", "aniversario", "mimo"] },
+  { cat: "doacoes", kw: ["doacao", "dizimo", "caridade", "vaquinha"] },
+];
+// Interpreta a frase. Retorna null se não achar valor. Função pura: não toca em estado.
+function parseChatEntry(raw, cats, payments, maps, ctx) {
+  var msg = String(raw || "").trim();
+  if (!msg) return null;
+  var rest = " " + msg + " ";
+  var normMsg = chatNorm(msg);
+  var out = { kind: "gasto", desc: "", valor: 0, total: 0, pay: (ctx && ctx.defaultPay) || "PIX", dateYMD: "", splits: [], ic: "", it: "", cat: "", catSource: "", crType: "" };
+
+  // Receita? ("recebi 500 de bônus", "caiu 300 de reembolso")
+  if (/(^|\s)(recebi|ganhei|caiu|entrou)(\s|$)/.test(normMsg)) {
+    out.kind = "credito";
+    out.crType = /reembolso|estorno/.test(normMsg) ? "Reembolso" : (/bonus/.test(normMsg) ? "Bônus" : (/variavel/.test(normMsg) ? "Variável" : "Outro"));
+    rest = rest.replace(/(^|\s)(recebi|ganhei|caiu|entrou)(\s)/i, "$1$3");
+  }
+
+  // Parcelado: "10x de 300" (valor por parcela) | "em 10x" (valor total) | "2/6" (por parcela, padrão de fatura)
+  var m1 = rest.match(/(\d{1,2})\s*x\s+de\s+(?:R\$\s*)?(\d+(?:[.,]\d{1,2})?)/i);
+  var m2 = rest.match(/\bem\s+(\d{1,2})\s*x\b/i);
+  var m3 = rest.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+  var totalMode = false;
+  if (m1 && parseInt(m1[1], 10) >= 2) {
+    out.ic = "1"; out.it = m1[1]; out.valor = cnum(m1[2]);
+    rest = rest.replace(m1[0], " ");
+  } else if (m2 && parseInt(m2[1], 10) >= 2) {
+    out.ic = "1"; out.it = m2[1]; totalMode = true;
+    rest = rest.replace(m2[0], " ");
+  } else if (m3) {
+    var pA = parseInt(m3[1], 10); var pB = parseInt(m3[2], 10);
+    if (pA >= 1 && pB > pA && pB <= 48) { out.ic = m3[1]; out.it = m3[2]; rest = rest.replace(m3[0], " "); }
+  }
+
+  // Data: hoje (default) | ontem | anteontem | "dia 12" (do mês aberto)
+  var today = new Date();
+  if (/\bontem\b/i.test(rest)) { out.dateYMD = ymdLocal(new Date(today.getTime() - 86400000)); rest = rest.replace(/\bontem\b/i, " "); }
+  else if (/\banteontem\b/i.test(rest)) { out.dateYMD = ymdLocal(new Date(today.getTime() - 2 * 86400000)); rest = rest.replace(/\banteontem\b/i, " "); }
+  else if (/\bhoje\b/i.test(rest)) { out.dateYMD = ymdLocal(today); rest = rest.replace(/\bhoje\b/i, " "); }
+  else {
+    var mD = rest.match(/\bdia\s+(\d{1,2})\b/i);
+    if (mD && ctx) {
+      var dd = parseInt(mD[1], 10);
+      if (dd >= 1 && dd <= 31) { out.dateYMD = tk(ctx.yr, ctx.mo) + "-" + String(dd).padStart(2, "0"); rest = rest.replace(mD[0], " "); }
+    }
+  }
+
+  // Dividir: "dividir Duda" (50%) | "dividi com a Duda 30"
+  var mS = rest.match(/\b(?:dividir|dividi|dividido|divide)\s+(?:com\s+)?(?:a\s+|o\s+)?([A-Za-zÀ-ÖØ-öø-ÿ]+)(?:\s+(\d{1,2}))?\s*%?/i);
+  if (mS) {
+    var person = mS[1].charAt(0).toUpperCase() + mS[1].slice(1);
+    var pctSp = mS[2] ? parseInt(mS[2], 10) : 50;
+    if (pctSp >= 1 && pctSp <= 99) out.splits = [{ person: person, pct: pctSp }];
+    rest = rest.replace(mS[0], " ");
+  }
+
+  // Valor: primeiro número restante
+  if (!out.valor) {
+    var mV = rest.match(/(?:R\$\s*)?(\d+(?:[.,]\d{1,2})?)/);
+    if (!mV) return null;
+    out.valor = cnum(mV[1]);
+    rest = rest.replace(mV[0], " ");
+  }
+  if (out.valor <= 0) return null;
+  // "em 10x" com valor total → divide pelo nº de parcelas
+  if (totalMode && out.it) { out.total = out.valor; out.valor = Math.round((out.valor / parseInt(out.it, 10)) * 100) / 100; }
+
+  // Forma de pagamento: casa palavras da frase com os nomes dos pagamentos cadastrados
+  var payTokens = [];
+  (payments || []).forEach(function(p) {
+    chatNorm(p.name).split(/\s+/).forEach(function(t) { if (t.length >= 3 && t !== "cartao") payTokens.push({ t: t, name: p.name }); });
+  });
+  var kept = [];
+  var payFound = "";
+  rest.split(/\s+/).forEach(function(w) {
+    if (!w) return;
+    var n = chatNorm(w).replace(/[^a-z0-9]/g, "");
+    if (!payFound) {
+      for (var ti = 0; ti < payTokens.length; ti++) {
+        if (payTokens[ti].t === n) { payFound = payTokens[ti].name; return; }
+      }
+    }
+    kept.push(w);
+  });
+  if (payFound) out.pay = payFound;
+
+  // Limpa verbos e conectores nas bordas; o que sobra é a descrição (acentos preservados)
+  var FILL = { gastei: 1, paguei: 1, comprei: 1, lancei: 1, foi: 1, no: 1, na: 1, em: 1, de: 1, do: 1, da: 1, com: 1, pelo: 1, pela: 1, via: 1, reais: 1, cartao: 1 };
+  while (kept.length && FILL[chatNorm(kept[0]).replace(/[^a-z0-9]/g, "")]) kept.shift();
+  while (kept.length && FILL[chatNorm(kept[kept.length - 1]).replace(/[^a-z0-9]/g, "")]) kept.pop();
+  var desc = kept.join(" ").replace(/\s+/g, " ").trim();
+  if (desc) desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+  out.desc = desc || (out.kind === "credito" ? "Recebido" : "Lançamento");
+
+  // Categoria (só gasto): histórico (maps) → nome de categoria na frase → dicionário de palavras-chave
+  if (out.kind === "gasto") {
+    var dL = out.desc.toLowerCase().trim();
+    var hist = (maps && (maps[nd(dL)] || maps[dL])) || "";
+    if (hist && cats.some(function(c) { return c.id === hist; })) { out.cat = hist; out.catSource = "hist"; }
+    if (!out.cat) {
+      var msgWords = {};
+      normMsg.split(/\s+/).forEach(function(w2) { var n2 = w2.replace(/[^a-z0-9]/g, ""); if (n2) msgWords[n2] = 1; });
+      for (var ci2 = 0; ci2 < cats.length && !out.cat; ci2++) {
+        var cw = chatNorm(cats[ci2].name).split(/\s+/);
+        for (var wi = 0; wi < cw.length; wi++) {
+          if (cw[wi].length >= 4 && msgWords[cw[wi]]) { out.cat = cats[ci2].id; out.catSource = "nome"; break; }
+        }
+      }
+      if (!out.cat) {
+        for (var ki = 0; ki < CHAT_KW.length && !out.cat; ki++) {
+          var entryKw = CHAT_KW[ki];
+          if (!cats.some(function(c) { return c.id === entryKw.cat; })) continue;
+          for (var kj = 0; kj < entryKw.kw.length; kj++) {
+            if (msgWords[entryKw.kw[kj]]) { out.cat = entryKw.cat; out.catSource = "kw"; break; }
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
 /* ══ FATURA DE CARTÃO (REGIME DE CAIXA) ══
    Resolve em qual fatura (mês de vencimento) uma compra de cartão cai, dado o dia de fechamento.
    Regra: compra no dia D > fechamento → fatura do mês seguinte; senão, mês corrente.
@@ -4881,6 +5024,49 @@ export default function App() {
   };
 
   /* ── Actions ── */
+  // Núcleo compartilhado (formulário manual + chat): monta a tx, grava no mês aberto e projeta parcelas futuras.
+  var commitTx = function(p) {
+    var sp = (p.splits || []).filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; });
+    var newTx = { id: uid(), desc: cln(p.desc, 500), amount: cnum(p.valor), cat: p.cat, payment: cln(p.pay, 100), splits: sp, hasSplit: sp.length > 0, date: p.dateYMD ? p.dateYMD + "T12:00:00.000Z" : new Date().toISOString(), received: false, reimbursed: !!p.reimb, note: cln(p.note || "", 2000), src: "manual" };
+    // settleMonth = mês em que a dívida a receber deve aparecer (default: mês seguinte ao lançamento). Só relevante para splits.
+    if (sp.length > 0) newTx.settleMonth = nextMonthOfKey(mK);
+    saveMd({ ...md, tx: txs.concat([newTx]) });
+    var ic = parseInt(p.ic);
+    var it = parseInt(p.it);
+    if (ic && it && ic < it) {
+      // schedule congela fKey/projTx por chamada — var no loop + .then assíncrono faria todas as parcelas caírem no último mês
+      var schedule = function(fKey, projTx) {
+        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
+          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
+          // Reflete a projeção no yrD em memória — o card "Compromissos parcelados" atualiza sem trocar de mês.
+          // Update funcional: vários schedule resolvem em paralelo, snapshot direto de yrD perderia parcelas.
+          var bParts = String(fKey).split("-");
+          var bY = parseInt(bParts[0], 10);
+          var bIdx = parseInt(bParts[1], 10) - 1;
+          if (bY === yr && bIdx >= 0 && bIdx < 12) {
+            sYrD(function(prev) {
+              if (!prev) return prev;
+              var ny = prev.slice();
+              var mPrev = ny[bIdx] || { tx: [], cr: [], fs: {} };
+              ny[bIdx] = { ...mPrev, tx: (mPrev.tx || []).concat([projTx]) };
+              return ny;
+            });
+          }
+        });
+      };
+      for (var ii = ic + 1; ii <= it; ii++) {
+        var fmo = (mo + (ii - ic)) % 12;
+        var fy = yr + Math.floor((mo + (ii - ic)) / 12);
+        var fKey = tk(fy, fmo);
+        var projDesc = cln(p.desc, 480) + " " + String(ii) + "/" + String(it);
+        var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
+        if (projTx.hasSplit) projTx.settleMonth = nextMonthOfKey(fKey);
+        schedule(fKey, projTx);
+      }
+    }
+    return newTx;
+  };
+
   var addTx = function() {
     var v = cnum(fm.valor);
     if (!fm.desc) { sErr("Descrição"); return; }
@@ -4891,30 +5077,7 @@ export default function App() {
       if (spInvalid.length > 0 || fm.sp.length === 0) { sErr("Preencha nome e % de todas as pessoas no split"); return; }
     }
     sErr("");
-    var sp = fm.hs ? fm.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
-    var newTx = { id: uid(), desc: cln(fm.desc, 500), amount: v, cat: fm.cat, payment: cln(fm.pay, 100), splits: sp, hasSplit: sp.length > 0, date: fm.date ? fm.date + "T12:00:00.000Z" : new Date().toISOString(), received: false, reimbursed: fm.reimb, note: cln(fm.note || "", 2000), src: "manual" };
-    // settleMonth = mês em que a dívida a receber deve aparecer (default: mês seguinte ao lançamento). Só relevante para splits.
-    if (sp.length > 0) newTx.settleMonth = nextMonthOfKey(mK);
-    saveMd({ ...md, tx: txs.concat([newTx]) });
-    var ic = parseInt(fm.ic);
-    var it = parseInt(fm.it);
-    if (ic && it && ic < it) {
-      // schedule congela fKey/projTx por chamada — var no loop + .then assíncrono faria todas as parcelas caírem no último mês
-      var schedule = function(fKey, projTx) {
-        ld("fc2-m-" + fKey, { tx: [], cr: [], fs: {} }).then(function(fd) {
-          sv("fc2-m-" + fKey, { ...fd, tx: fd.tx.concat([projTx]) });
-        });
-      };
-      for (var ii = ic + 1; ii <= it; ii++) {
-        var fmo = (mo + (ii - ic)) % 12;
-        var fy = yr + Math.floor((mo + (ii - ic)) / 12);
-        var fKey = tk(fy, fmo);
-        var projDesc = cln(fm.desc, 480) + " " + String(ii) + "/" + String(it);
-        var projTx = { ...newTx, id: uid(), desc: projDesc, date: "", src: "proj" };
-        if (projTx.hasSplit) projTx.settleMonth = nextMonthOfKey(fKey);
-        schedule(fKey, projTx);
-      }
-    }
+    commitTx({ desc: fm.desc, valor: v, cat: fm.cat, pay: fm.pay, splits: fm.hs ? fm.sp : [], dateYMD: fm.date, reimb: fm.reimb, note: fm.note, ic: fm.ic, it: fm.it });
     sFm(emFm);
   };
 
@@ -4988,13 +5151,45 @@ export default function App() {
   var sendChat = function() {
     var msg = chatInput.trim();
     if (!msg || chatLd) return;
-    var userMsg = { role: "user", text: msg };
-    var newMsgs = chatMsgs.concat([userMsg]);
-    sChatMsgs(newMsgs);
     sChatIn("");
-    sChatLd(true);
-    sChatMsgs(function(prev) { return prev.concat([{ role: "ai", text: "🔜 Assistente financeiro em breve! Esta funcionalidade estará disponível em breve." }]); });
-    sChatLd(false);
+    var parsed = parseChatEntry(msg, cats, cfg.payments || DEFAULT_PAYMENTS, maps, { yr: yr, mo: mo, defaultPay: emFm.pay });
+    sChatMsgs(function(prev) {
+      var next = prev.concat([{ role: "user", text: msg }]);
+      if (!parsed) {
+        next = next.concat([{ role: "ai", text: "Não achei o valor 🤔 Tenta assim: 'café 18 pix', 'mercado 230 ontem' ou 'recebi 500 de bônus'." }]);
+      } else {
+        next = next.concat([{ role: "ai", kind: "confirm", entry: parsed, done: "" }]);
+      }
+      return next;
+    });
+  };
+  // Edita a entrada pendente de um cartão de confirmação (ex.: trocar categoria)
+  var updateChatEntry = function(idx, patch) {
+    sChatMsgs(function(prev) { return prev.map(function(x, i) { return i === idx ? { ...x, entry: { ...x.entry, ...patch } } : x; }); });
+  };
+  var cancelChatEntry = function(idx) {
+    sChatMsgs(function(prev) { return prev.map(function(x, i) { return i === idx ? { ...x, done: "cancel" } : x; }); });
+  };
+  var confirmChatEntry = function(idx) {
+    var m = chatMsgs[idx];
+    if (!m || m.kind !== "confirm" || m.done) return;
+    var e2 = m.entry;
+    var okText;
+    if (e2.kind === "credito") {
+      saveMd({ ...md, cr: crs.concat([{ id: uid(), desc: cln(e2.desc, 500), amount: cnum(e2.valor), type: e2.crType || "Outro" }]) });
+      okText = "✅ Recebido: " + fmt(cnum(e2.valor)) + " (" + (e2.crType || "Outro") + ")";
+    } else {
+      if (!e2.cat) return;
+      commitTx({ desc: e2.desc, valor: e2.valor, cat: e2.cat, pay: e2.pay, splits: e2.splits, dateYMD: e2.dateYMD, reimb: false, note: "", ic: e2.ic, it: e2.it });
+      // Aprende: mesma chave normalizada que o import usa — próxima vez a categoria vem do histórico
+      var k3 = nd(String(e2.desc).toLowerCase());
+      if (k3) { var nm2 = Object.assign({}, maps); nm2[k3] = e2.cat; saveMaps(nm2); }
+      var catObj2 = cats.find(function(c) { return c.id === e2.cat; });
+      okText = "✅ Lançado: " + fmt(cnum(e2.valor)) + " em " + (catObj2 ? catObj2.name : "?") + (e2.it && parseInt(e2.ic, 10) < parseInt(e2.it, 10) ? " · parcelas futuras projetadas 📅" : "");
+    }
+    sChatMsgs(function(prev) {
+      return prev.map(function(x, i) { return i === idx ? { ...x, done: "ok" } : x; }).concat([{ role: "ai", text: okText }]);
+    });
   };
 
   var updGS = function(id, v) {
@@ -5022,7 +5217,12 @@ export default function App() {
 
   var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
   var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
-  var rmFx = function(id) { saveCfg({ ...cfg, fixed: fxdRaw.filter(function(f) { return f.id !== id; }) }); };
+  var rmFx = function(id) {
+    var fx = fxdRaw.find(function(f) { return f.id === id; });
+    var nome = fx ? fx.name : "esta conta fixa";
+    if (!window.confirm("Remover '" + nome + "'?\n\nEla some de TODOS os meses (passados e futuros). Pra encerrar só daqui pra frente, use ✎ e defina um prazo final.")) return;
+    saveCfg({ ...cfg, fixed: fxdRaw.filter(function(f) { return f.id !== id; }) });
+  };
   var togRcv = function(id, bucketKey) {
     var bk = bucketKey || mK;
     if (bk === mK) {
@@ -6001,6 +6201,48 @@ export default function App() {
             )}
             {chatMsgs.map(function(m, ci) {
               var isUser = m.role === "user";
+              if (m.kind === "confirm") {
+                var e2 = m.entry;
+                var isCred = e2.kind === "credito";
+                var catOk = isCred || !!e2.cat;
+                var dtLbl = e2.dateYMD ? e2.dateYMD.slice(8, 10) + "/" + e2.dateYMD.slice(5, 7) : "hoje";
+                var foraDoMes = e2.dateYMD && e2.dateYMD.slice(0, 7) !== mK;
+                var nParc = parseInt(e2.it, 10) || 0;
+                return (
+                  <div key={ci} className="fc-chat-msg" style={{ display: "flex", justifyContent: "flex-start" }}>
+                    <div style={{ maxWidth: "92%", width: "100%", padding: "10px 12px", borderRadius: "12px 12px 12px 2px", background: "#F0F4F8", border: "1px solid " + BR, fontSize: 12, opacity: m.done === "cancel" ? 0.55 : 1 }}>
+                      <div style={{ fontWeight: 700, color: isCred ? OK : BD, marginBottom: 4, fontSize: 14 }}>
+                        {(isCred ? "➕ " : "🧾 ") + fmt(e2.valor) + (nParc > 1 ? " × " + String(nParc) + " parcelas" : "")}
+                      </div>
+                      <div style={{ color: TX, marginBottom: 6, fontWeight: 600 }}>{e2.desc}</div>
+                      <div style={{ ...S.cap, marginBottom: 6 }}>
+                        {(isCred ? (e2.crType || "Outro") : e2.pay) + " · " + dtLbl + (e2.splits && e2.splits.length > 0 ? " · ÷ " + e2.splits[0].person + " " + String(e2.splits[0].pct) + "%" : "")}
+                      </div>
+                      {nParc > 1 && e2.total > 0 && (
+                        <div style={{ ...S.cap, marginBottom: 6 }}>{"Total " + fmt(e2.total) + " → " + String(nParc) + "× de " + fmt(e2.valor)}</div>
+                      )}
+                      {foraDoMes && !m.done && (
+                        <div style={{ fontSize: 11, color: WN, marginBottom: 6 }}>{"⚠️ Data fora do mês aberto — será lançado em " + MS[mo] + "/" + String(yr) + "."}</div>
+                      )}
+                      {!isCred && !m.done && (
+                        <div style={{ marginBottom: 8 }}>
+                          <CatS value={e2.cat} onChange={function(ev) { updateChatEntry(ci, { cat: ev.target.value }); }} cats={cats} pcts={cfg.pcts} sx={{ fontSize: 12, padding: "7px 10px" }} />
+                          {!e2.cat && <div style={{ fontSize: 10, color: WN, marginTop: 3 }}>{"Escolhe a categoria pra confirmar 👆"}</div>}
+                        </div>
+                      )}
+                      {!m.done ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={function() { confirmChatEntry(ci); }} disabled={!catOk}
+                            style={{ ...S.btn(catOk ? OK : BR), flex: 1, padding: "8px 12px", fontSize: 12, cursor: catOk ? "pointer" : "default" }}>{"✓ Confirmar"}</button>
+                          <button onClick={function() { cancelChatEntry(ci); }} style={{ ...S.btnO, padding: "8px 12px", fontSize: 12 }}>{"Cancelar"}</button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, fontWeight: 700, color: m.done === "ok" ? OK : TM }}>{m.done === "ok" ? "✓ Confirmado" : "✕ Cancelado"}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={ci} className="fc-chat-msg" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
                   <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: isUser ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: isUser ? BL : "#F0F4F8", color: isUser ? "#fff" : TX, fontSize: 12, lineHeight: 1.5 }}>
