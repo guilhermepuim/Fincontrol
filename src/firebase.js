@@ -5,7 +5,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-ch
 
 const firebaseConfig = {
   apiKey: "AIzaSyBZTu_ynlaQw70wR4KWVH4D8BTbt0gSNrk",
-  authDomain: "fincontrol-one-theta.vercel.app",
+  authDomain: "prumo-puim.vercel.app",
   projectId: "fincontrol-4f015",
   storageBucket: "fincontrol-4f015.firebasestorage.app",
   messagingSenderId: "995369986592",
