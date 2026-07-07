@@ -1098,6 +1098,18 @@ function ChartTip(props) {
         <span style={{ fontWeight: 700, color: BD }}>{"Saldo"}</span>
         <span style={{ fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</span>
       </div>
+      {/* Ponte com o hero: no mês atual, soma o que os devedores já devolveram (dRcv) — mesma régua do "Saldo livre" */}
+      {(props.rcv || 0) > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, ...S.cap }}>
+            <span>{"↩ Devedores (recebido)"}</span><span style={{ fontWeight: 700, color: OK }}>{"+ " + fmt(props.rcv)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2, ...S.cap }}>
+            <span style={{ fontWeight: 700, color: BD }}>{"Saldo livre"}</span>
+            <span style={{ fontWeight: 700, color: (d.s + props.rcv) >= 0 ? OK : ER }}>{fmt(d.s + props.rcv)}</span>
+          </div>
+        </div>
+      )}
 
     </div>
   );
@@ -1817,7 +1829,7 @@ function DashboardPrumo(props) {
                     </div>
                   </div>
                   <div className={"prumo-yr-mes" + (cur ? " cur" : "")}>{d.mes}</div>
-                  {hovM === i && <ChartTip d={d} i={i} cats={cats} />}
+                  {hovM === i && <ChartTip d={d} i={i} cats={cats} rcv={cur ? dRcv : 0} />}
                 </div>
               );
             })}
@@ -2684,6 +2696,7 @@ function ProjecaoPrumo(props) {
   var spt = props.spt;
   var cats = props.cats;
   var totDb = props.totDb;
+  var dRcv = props.dRcv || 0;
   var ifTarget = props.ifTarget;
   var sIfTarget = props.sIfTarget;
   var showIfEdit = props.showIfEdit;
@@ -3154,7 +3167,7 @@ function ProjecaoPrumo(props) {
                     <i style={{ flex: String(d.d) + " 0 0", background: accCol, display: "block", minHeight: 1 }} />
                   </div>
                   <div style={{ fontSize: 9, color: cu ? "var(--ink)" : "var(--ink-3)", marginTop: 4, fontWeight: cu ? 800 : 600 }}>{d.mes}</div>
-                  {isH && d.td > 0 && <ChartTip d={d} i={idx} cats={cats} />}
+                  {isH && d.td > 0 && <ChartTip d={d} i={idx} cats={cats} rcv={cu ? dRcv : 0} />}
                 </div>
               );
             })}
@@ -5749,7 +5762,7 @@ export default function App() {
           <ProjecaoPrumo
             cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp}
             nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
-            totDb={totDb} ifTarget={ifTarget} sIfTarget={sIfTarget}
+            totDb={totDb} dRcv={dRcv} ifTarget={ifTarget} sIfTarget={sIfTarget}
             showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
             activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst}
             prevSp={prevSp} spent={spent} mo={mo} yr={yr}
@@ -6250,7 +6263,7 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>{"✨"}</span>
               <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "'Montserrat',sans-serif" }}>{"Assistente FinControl"}</div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "'Montserrat',sans-serif" }}>{"Assistente Prumo"}</div>
                 <div style={{ color: "#ffffff90", fontSize: 10 }}>{"Diga o que gastou ou recebeu"}</div>
               </div>
             </div>
