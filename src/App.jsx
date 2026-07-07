@@ -592,7 +592,6 @@ var PRUMO_TOKENS = `
 .prumo-tab .ico { font-size: 18px; line-height: 1; }
 .prumo-tab .lbl-t { font-size: 9px; font-weight: 600; }
 .prumo-tab.active { color: var(--brand); }
-.prumo-fab { position: fixed; bottom: 88px; right: 16px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: oklch(0.22 0.04 60); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3); border: none; font-size: 26px; font-weight: 300; cursor: pointer; z-index: 30; }
 
 /* CARDS ─────────────────────────────────────────── */
 .prumo-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 18px; margin-bottom: 12px; }
@@ -673,7 +672,8 @@ var PRUMO_TOKENS = `
 .prumo-yr-col:hover .prumo-yr-stack, .prumo-yr-col.active .prumo-yr-stack { outline: 2px solid var(--ink); outline-offset: 1px; }
 .prumo-yr-mes { font-size: 9px; color: var(--ink-3); margin-top: 4px; font-weight: 600; }
 .prumo-yr-mes.cur { color: var(--ink); font-weight: 800; }
-.prumo-yr-val { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); margin-bottom: 4px; font-weight: 500; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; min-height: 12px; }
+.prumo-yr-val { font-family: var(--f-mono); font-size: 9px; color: var(--ink-3); margin-bottom: 4px; font-weight: 500; font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; min-height: 12px; visibility: hidden; }
+.prumo-yr-val.show { visibility: visible; }
 
 /* DASH GRID — mobile first (DECLARADO ANTES de qualquer media query) */
 .prumo-dash-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -703,7 +703,6 @@ var PRUMO_TOKENS = `
   .prumo-mobile-header { display: none; }
   .prumo-month-mobile { display: none; }
   .prumo-tabbar { display: none; }
-  .prumo-fab { display: none; }
   .prumo-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
   .prumo-topbar h1 { font-family: var(--f-display); font-size: 32px; font-weight: 700; letter-spacing: -.02em; margin: 0; color: var(--ink); }
   .prumo-topbar .greet { font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
@@ -727,7 +726,7 @@ var PRUMO_TOKENS = `
   .prumo-ring-val { font-size: 22px; font-weight: 600; }
   .prumo-yr { height: 280px; padding-top: 30px; gap: 8px; }
   .prumo-yr-mes { font-size: 11px; }
-  .prumo-yr-val { font-size: 11px; min-height: 14px; }
+  .prumo-yr-val { font-size: 11px; min-height: 14px; visibility: visible; }
 }
 
 /* TOOLTIP ──────────────────────────────────────── */
@@ -1428,7 +1427,7 @@ function DashboardPrumo(props) {
               <span onClick={function() { if (!cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: cashView ? "var(--brand)" : "transparent", color: cashView ? "#fff" : "var(--ink-3)" }}>{"Caixa"}</span>
               <span onClick={function() { if (cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: !cashView ? "var(--brand)" : "transparent", color: !cashView ? "#fff" : "var(--ink-3)" }}>{"Competência"}</span>
             </div>
-            <div className="prumo-big brand" style={{ marginTop: 6 }}>
+            <div className={"prumo-big " + (saldoSinal ? "pos" : "neg")} style={{ marginTop: 6 }}>
               {(saldoSinal ? "" : "−") + "R$ " + saldoIntStr}<sup>{"," + saldoCentsStr}</sup>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -1809,7 +1808,7 @@ function DashboardPrumo(props) {
               var accCol = real ? "var(--accent)" : "oklch(0.88 0.06 75)";
               return (
                 <div key={i} className={"prumo-yr-col" + (hovM === i ? " active" : "")} onMouseEnter={function() { sHM(i); }} onMouseLeave={function() { sHM(null); }} onClick={function() { sHM(hovM === i ? null : i); }}>
-                  <div className="prumo-yr-val">{total > 0 ? fK(total) : ""}</div>
+                  <div className={"prumo-yr-val" + ((cur || hovM === i) ? " show" : "")}>{total > 0 ? fK(total) : ""}</div>
                   <div className="prumo-yr-spacer">
                     <div className="prumo-yr-stack" style={{ height: String(h) + "%" }}>
                       <i style={{ flex: String(d.e) + " 0 0", background: brandCol }} />
@@ -1857,19 +1856,6 @@ function AnalisePrumo(props) {
       fluxoMeses.push({ mo0: fmi, label: MA[fmi], real: fReal, comMedia: fIsCur ? fReal : fReal - fluxoEstVar, isCur: fIsCur });
     }
   }
-
-  var realMonths = chD.filter(function(d) { return d.real || d.td > 0 || d.cr > 0; });
-  var allMax = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
-  var groups = [
-    { key: "e", label: "Essenciais", color: "var(--brand)" },
-    { key: "i", label: "Investimentos", color: "var(--ink-2)" },
-    { key: "d", label: "Não Essenciais", color: "var(--accent)" },
-    { key: "cr", label: "Crédito", color: "var(--pos)" },
-  ];
-
-  var totDb = chD.reduce(function(a, d) { return a + d.td; }, 0);
-  var totCr = chD.reduce(function(a, d) { return a + d.cr; }, 0);
-  var totSd = chD.reduce(function(a, d) { return a + d.s; }, 0);
 
   /* Gastos por dia da semana (ano todo) */
   var dowStats = [
@@ -2106,16 +2092,35 @@ function AnalisePrumo(props) {
   var moverUps = movers.filter(function(m2) { return m2.delta > 0; }).sort(function(a, b) { return b.delta - a.delta; }).slice(0, 3);
   var moverDowns = movers.filter(function(m2) { return m2.delta < 0; }).sort(function(a, b) { return a.delta - b.delta; }).slice(0, 3);
 
-  /* ── ⑩ Top 10 compras do ano (variável real, sem investimentos) ── */
+  /* ── ⑩ Top 10 compras do ano (variável real, sem investimentos) ──
+     Parcelado entra pelo VALOR CHEIO da compra (parcela × total), uma vez só,
+     com mês de referência da 1ª parcela. Dedup por descrição normalizada + valor da parcela. */
   var bigBuys = [];
   if (yrD) {
+    var seenBuys = {};
     yrD.forEach(function(mDt3, mi3) {
       (mDt3.tx || []).forEach(function(t) {
         if (t.reimbursed || t.src === "proj" || invCat[t.cat]) return;
         var c = cats.find(function(cc) { return cc.id === t.cat; });
-        bigBuys.push({ id: t.id, desc: t.desc, icon: c ? c.icon : "🏷️", mes: MA[mi3], val: myP(t) });
+        var inst = pi(t.desc);
+        if (inst && inst.t > 1) {
+          var buyKey = nd(t.desc) + "|" + String(Math.round(t.amount));
+          var firstMo = mi3 - (inst.c - 1); // mês (índice) da 1ª parcela; negativo = começou ano passado
+          var buy = seenBuys[buyKey];
+          if (!buy) {
+            var cleanDesc = t.desc.replace(/\s*[-–—]?\s*Parcela\s*\d+\s*\/\s*\d+/i, "").replace(/\s*\d+\s*\/\s*\d+\s*/g, " ").replace(/\s+/g, " ").trim() || t.desc;
+            buy = { id: t.id, desc: cleanDesc, icon: c ? c.icon : "🏷️", firstMo: firstMo, val: myP(t) * inst.t, parc: inst.t, parcVal: myP(t) };
+            seenBuys[buyKey] = buy;
+            bigBuys.push(buy);
+          } else if (firstMo < buy.firstMo) {
+            buy.firstMo = firstMo;
+          }
+        } else {
+          bigBuys.push({ id: t.id, desc: t.desc, icon: c ? c.icon : "🏷️", firstMo: mi3, val: myP(t), parc: 0, parcVal: 0 });
+        }
       });
     });
+    bigBuys.forEach(function(b2) { b2.mes = b2.firstMo >= 0 ? MA[b2.firstMo] : MA[(b2.firstMo + 12) % 12] + "/" + String(yr - 1).slice(2); });
     bigBuys.sort(function(a, b) { return b.val - a.val; });
     bigBuys = bigBuys.slice(0, 10);
   }
@@ -2482,79 +2487,15 @@ function AnalisePrumo(props) {
               <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--line)" }}>
                 <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-3)", width: 18, flexShrink: 0, fontWeight: 700 }}>{String(idx + 1) + "º"}</span>
                 <span style={{ fontSize: 14 }}>{b.icon}</span>
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.desc}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.desc}</span>
+                  {b.parc > 1 && <span className="prumo-cap" style={{ display: "block", fontSize: 9 }}>{String(b.parc) + "× de " + fmt(b.parcVal)}</span>}
+                </span>
                 <span className="prumo-cap" style={{ fontSize: 9, flexShrink: 0 }}>{b.mes}</span>
                 <span className="prumo-num" style={{ fontSize: 12, flexShrink: 0 }}>{fmt(b.val)}</span>
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Comparativo Visual Mensal */}
-      {realMonths.length > 0 && (
-        <div className="prumo-card l-brand full">
-          <div className="prumo-card-hd">
-            <div>
-              <div className="prumo-lbl">{"Comparativo visual"}</div>
-              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 500, margin: "4px 0 0", color: "var(--ink)" }}>{String(yr) + " · mês a mês"}</h2>
-            </div>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              {groups.map(function(g) {
-                return (
-                  <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color }} />
-                    <span>{g.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="prumo-cap" style={{ marginBottom: 14 }}>{"Apenas meses com dados reais ou movimentações"}</div>
-          {chD.map(function(d, idx) {
-            if (!d.real && d.td === 0 && d.cr === 0) return null;
-            var isCur = idx === mo;
-            return (
-              <div key={idx} className={"prumo-month-block" + (isCur ? " cur" : "")}>
-                <div className="prumo-month-hd">
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className={"prumo-month-name" + (isCur ? "" : " muted")}>{MA[idx]}{isCur ? " ◀" : ""}</span>
-                    {!d.real && <span className="prumo-chip warn" style={{ fontSize: 9 }}>{"projeção"}</span>}
-                  </div>
-                  <div className="prumo-month-stats">
-                    <div className="prumo-month-stat"><div className="lbl">{"Crédito"}</div><div className="v" style={{ color: "var(--pos)" }}>{fmt(d.cr)}</div></div>
-                    <div className="prumo-month-stat"><div className="lbl">{"Débito"}</div><div className="v" style={{ color: "var(--neg)" }}>{fmt(d.td)}</div></div>
-                    <div className="prumo-month-stat"><div className="lbl">{"Saldo"}</div><div className="v" style={{ color: d.s >= 0 ? "var(--pos)" : "var(--neg)" }}>{fmt(d.s)}</div></div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {groups.map(function(g) {
-                    var val = d[g.key] || 0;
-                    if (val === 0) return null;
-                    var barW = allMax > 0 ? (val / allMax) * 100 : 0;
-                    return (
-                      <div key={g.key} className="prumo-cmp-row" style={{ padding: "3px 0", border: "none" }}>
-                        <div style={{ width: 78, fontSize: 10, color: "var(--ink-3)", textAlign: "right", flexShrink: 0, fontFamily: "var(--f-mono)", letterSpacing: ".05em", textTransform: "uppercase" }}>{g.label}</div>
-                        <div className="prumo-cmp-bar-wrap">
-                          <div className="prumo-cmp-bar" style={{ width: String(barW) + "%", background: g.color }}>
-                            <span className="prumo-cmp-bar-lbl">{fmt(val)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-          <div style={{ borderTop: "2px solid var(--line-2)", paddingTop: 12, marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-            <span className="prumo-lbl" style={{ marginBottom: 0, fontSize: 11, color: "var(--ink)" }}>{"Total ano"}</span>
-            <div style={{ display: "flex", gap: 14 }}>
-              <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Débito"}</div><div className="prumo-num" style={{ color: "var(--neg)", fontSize: 13 }}>{fmt(totDb)}</div></div>
-              <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Crédito"}</div><div className="prumo-num" style={{ color: "var(--pos)", fontSize: 13 }}>{fmt(totCr)}</div></div>
-              <div style={{ textAlign: "right" }}><div className="prumo-cap" style={{ fontSize: 10 }}>{"Saldo"}</div><div className="prumo-num" style={{ color: totSd >= 0 ? "var(--pos)" : "var(--neg)", fontSize: 13 }}>{fmt(totSd)}</div></div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -3714,12 +3655,12 @@ function FixasPrumo(props) {
                         <div className="prumo-meter" style={{ height: 6 }}>
                           <i style={{ width: pct(partPct), background: partPct >= 1 ? "var(--pos)" : "var(--brand)" }} />
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)" }}>{fmt(pSum) + " pago"}</span>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, flexWrap: "wrap", gap: 4 }}>
+                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmt(pSum) + " pago"}</span>
                           {remainAmt > 0 ? (
-                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--accent-2)" }}>{"falta " + fmt(remainAmt)}</span>
+                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--accent-2)", whiteSpace: "nowrap" }}>{"falta " + fmt(remainAmt)}</span>
                           ) : (
-                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--pos)" }}>{"✓ Quitada"}</span>
+                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--pos)", whiteSpace: "nowrap" }}>{"✓ Quitada"}</span>
                           )}
                         </div>
                       </div>
@@ -3729,10 +3670,10 @@ function FixasPrumo(props) {
                     <div className="prumo-num" style={{ fontSize: 14, color: "var(--ink)" }}>{fmt(f.amount)}</div>
                     {f.hasSplit && <div className="prumo-cap" style={{ fontSize: 10, color: "var(--brand)" }}>{"Você: " + fmt(myA)}</div>}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                     {!ip && mode === "budget" && (
                       <button onClick={function() { sPO(isO ? null : f.id); sPV(""); }}
-                        style={{ background: isO ? "var(--brand)" : "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: isO ? "var(--surface)" : "var(--brand)", width: 26, height: 26, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "var(--f-ui)" }}
+                        style={{ background: isO ? "var(--brand)" : "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, color: isO ? "var(--surface)" : "var(--brand)", width: 32, height: 32, cursor: "pointer", fontSize: 16, fontWeight: 600, fontFamily: "var(--f-ui)" }}
                         title="Registrar pagamento parcial">{isO ? "×" : "+"}</button>
                     )}
                     <button onClick={function() {
@@ -3740,9 +3681,9 @@ function FixasPrumo(props) {
                       var orig = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
                       sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "month", origName: f.name });
                     }}
-                      style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 6, color: "var(--ink-3)", width: 26, height: 26, cursor: "pointer", fontSize: 12, fontFamily: "var(--f-ui)" }}
+                      style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, color: "var(--ink-3)", width: 32, height: 32, cursor: "pointer", fontSize: 14, fontFamily: "var(--f-ui)" }}
                       title="Editar valor / prazo">{"✎"}</button>
-                    <button onClick={function() { rmFx(f.id); }} className="prumo-icon-x" title="Remover">{"×"}</button>
+                    <button onClick={function() { rmFx(f.id); }} className="prumo-icon-x" title="Remover" style={{ width: 32, height: 32, fontSize: 16 }}>{"×"}</button>
                   </div>
                 </div>
                 {isO && (
@@ -4761,10 +4702,14 @@ export default function App() {
     if (!user || !user.uid) { sCfgLoaded(false); return; }
     var active = true;
     (async function() {
-      var c = await ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } });
-      var rv = await ld("fc2-rollover", {});
-      var mp = await ld("fc2-maps", {});
-      var smp = await ld("fc2-splitmaps", {});
+      // Cargas em paralelo (eram 4 idas sequenciais ao Firestore — lento em rede móvel)
+      var loaded = await Promise.all([
+        ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } }),
+        ld("fc2-rollover", {}),
+        ld("fc2-maps", {}),
+        ld("fc2-splitmaps", {}),
+      ]);
+      var c = loaded[0]; var rv = loaded[1]; var mp = loaded[2]; var smp = loaded[3];
       if (!active) return;
       // MIGRAÇÃO: se o cfg existente não tem alguma categoria default nova, adiciona
       var existingCats = c.categories || [];
@@ -4818,12 +4763,14 @@ export default function App() {
     var active = true;
     (async function() {
       sLd(true);
-      var m = await ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] });
       var pMo = mo === 0 ? 11 : mo - 1;
       var pYr = mo === 0 ? yr - 1 : yr;
-      var pm = await ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} });
+      var loadedM = await Promise.all([
+        ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] }),
+        ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} }),
+      ]);
       if (!active) return;
-      sMd(m); sPv(pm); sLd(false);
+      sMd(loadedM[0]); sPv(loadedM[1]); sLd(false);
     })();
     return function() { active = false; };
   }, [yr, mo, user && user.uid, cfgLoaded]);
@@ -4832,10 +4779,12 @@ export default function App() {
     if (!user || !user.uid || !cfgLoaded) return;
     var active = true;
     (async function() {
-      var r = [];
+      // 12 meses em paralelo (era 1 await por mês em fila — principal causa do "Carregando..." longo)
+      var proms = [];
       for (var i = 0; i < 12; i++) {
-        r.push(await ld("fc2-m-" + tk(yr, i), { tx: [], cr: [], fs: {} }));
+        proms.push(ld("fc2-m-" + tk(yr, i), { tx: [], cr: [], fs: {} }));
       }
+      var r = await Promise.all(proms);
       if (active) sYrD(r);
     })();
     return function() { active = false; };
@@ -5295,8 +5244,16 @@ export default function App() {
     sNwI(""); sShowNw(false);
   };
 
-  var rmTx = function(id) { saveMd({ ...md, tx: txs.filter(function(t) { return t.id !== id; }) }); };
-  var rmCr = function(id) { saveMd({ ...md, cr: crs.filter(function(c) { return c.id !== id; }) }); };
+  var rmTx = function(id) {
+    var t = txs.find(function(x) { return x.id === id; });
+    if (!window.confirm("Apagar '" + (t ? t.desc : "este lançamento") + "'" + (t ? " (" + fmt(t.amount) + ")" : "") + "?")) return;
+    saveMd({ ...md, tx: txs.filter(function(t2) { return t2.id !== id; }) });
+  };
+  var rmCr = function(id) {
+    var c = crs.find(function(x) { return x.id === id; });
+    if (!window.confirm("Apagar o crédito '" + (c ? c.desc : "") + "'" + (c ? " (" + fmt(c.amount) + ")" : "") + "?")) return;
+    saveMd({ ...md, cr: crs.filter(function(c2) { return c2.id !== id; }) });
+  };
   var rmFx = function(id) {
     var fx = fxdRaw.find(function(f) { return f.id === id; });
     var nome = fx ? fx.name : "esta conta fixa";
@@ -5348,7 +5305,11 @@ export default function App() {
   };
   var togFP = function(id) { saveMd({ ...md, fs: { ...fs, [id]: fs[id] === "paid" ? "" : "paid" } }); };
   var togFR = function(id) { saveMd({ ...md, fs: { ...fs, [id + "_r"]: fs[id + "_r"] ? "" : "done" } }); };
-  var rmD = function(id) { saveMd({ ...md, debts: (md.debts || []).filter(function(d2) { return d2.id !== id; }) }); };
+  var rmD = function(id) {
+    var d = (md.debts || []).find(function(x) { return x.id === id; });
+    if (!window.confirm("Apagar a dívida '" + (d ? d.desc : "") + "'" + (d ? " (" + fmt(d.amount) + ")" : "") + "?")) return;
+    saveMd({ ...md, debts: (md.debts || []).filter(function(d2) { return d2.id !== id; }) });
+  };
   var togDR = function(id) {
     var updated = (md.debts || []).map(function(d2) { return d2.id === id ? { ...d2, received: !d2.received } : d2; });
     saveMd({ ...md, debts: updated });
@@ -6148,11 +6109,11 @@ export default function App() {
                           <div style={{ fontWeight: 700, fontSize: 13, color: TX }}>{fmt(tx.amount)}</div>
                           {sp2.length > 0 && <div style={{ ...S.cap, color: "#0D9488" }}>{"Vc: " + fmt(myP(tx))}</div>}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                          <span onClick={function() { openTxEdit(tx); }} style={{ cursor: "pointer", fontSize: 11, color: isEd ? BL : "#BBBBBB" }} title="Editar">{"✏️"}</span>
-                          <span onClick={function() { openSE(tx); }} style={{ cursor: "pointer", fontSize: 11, color: sp2.length > 0 ? "#D97706" : "#BBBBBB" }}>{"÷"}</span>
-                          <span onClick={function() { togRe(tx.id); }} style={{ cursor: "pointer", fontSize: 11 }}>{tx.reimbursed ? "💜" : "🔄"}</span>
-                          <span onClick={function() { rmTx(tx.id); }} style={{ cursor: "pointer", color: ER, fontSize: 14 }}>{"×"}</span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <span onClick={function() { openTxEdit(tx); }} style={{ cursor: "pointer", fontSize: 13, padding: 4, lineHeight: 1, color: isEd ? BL : "#BBBBBB" }} title="Editar">{"✏️"}</span>
+                          <span onClick={function() { openSE(tx); }} style={{ cursor: "pointer", fontSize: 13, padding: 4, lineHeight: 1, color: sp2.length > 0 ? "#D97706" : "#BBBBBB" }} title="Dividir">{"÷"}</span>
+                          <span onClick={function() { togRe(tx.id); }} style={{ cursor: "pointer", fontSize: 13, padding: 4, lineHeight: 1 }} title="Reembolsado">{tx.reimbursed ? "💜" : "🔄"}</span>
+                          <span onClick={function() { rmTx(tx.id); }} style={{ cursor: "pointer", color: ER, fontSize: 16, padding: 4, lineHeight: 1 }} title="Apagar">{"×"}</span>
                         </div>
                       </div>
                       {isEd && (
@@ -6216,8 +6177,6 @@ export default function App() {
         </button>
       </nav>
 
-      {/* MOBILE FAB */}
-      <button className="prumo-fab" onClick={function() { sChatOpen(true); }} aria-label="Assistente">{"✦"}</button>
 
       {/* MOBILE SHEET "MAIS" */}
       {showMore && (
