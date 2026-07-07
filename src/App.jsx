@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
 
 /* ══ PRUMO BRANDBOOK — AZUL ══ */
@@ -4688,7 +4688,20 @@ export default function App() {
   var mK = tk(yr, mo);
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
 
+  // true quando estamos voltando de um login por redirect (mobile) — evita o flash da tela de login
+  var [authPending, sAuthPending] = useState(function() { try { return sessionStorage.getItem("prumo-redirect") === "1"; } catch (e) { return false; } });
   useEffect(function() {
+    // Consome o resultado do login por redirect. O sucesso chega via onAuthStateChanged;
+    // aqui limpamos o flag e damos visibilidade a erros (ex.: domínio não autorizado no OAuth).
+    getRedirectResult(auth).then(function() {
+      try { sessionStorage.removeItem("prumo-redirect"); } catch (e) {}
+      sAuthPending(false);
+    }).catch(function(e) {
+      console.error("[login redirect]", e);
+      try { sessionStorage.removeItem("prumo-redirect"); } catch (e2) {}
+      sAuthPending(false);
+      alert("Falha no login: " + ((e && e.message) || e));
+    });
     var unsub = onAuthStateChanged(auth, function(u) {
       _uid = u ? u.uid : null;
       sUser(u || null);
@@ -4837,11 +4850,24 @@ export default function App() {
   var ifTarget = (cfg && cfg.ifTarget) ? cfg.ifTarget : "";
   var sIfTarget = function(v) { saveCfg({ ...cfg, ifTarget: v }); };
 
-  if (user === undefined) {
-    return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
+  // iOS Safari perde o retorno do signInWithPopup (ITP) — no celular usamos redirect,
+  // que é o fluxo que o proxy same-domain do vercel.json (/__/auth/*) existe pra suportar.
+  var handleLogin = function() {
+    var isMobile = /iPhone|iPad|iPod|Android/i.test((typeof navigator !== "undefined" && navigator.userAgent) || "");
+    if (isMobile) {
+      try { sessionStorage.setItem("prumo-redirect", "1"); } catch (e) {}
+      sAuthPending(true);
+      signInWithRedirect(auth, googleProvider);
+    } else {
+      signInWithPopup(auth, googleProvider);
+    }
+  };
+
+  if (user === undefined || (user === null && authPending)) {
+    return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{user === undefined ? "Carregando..." : "Entrando..."}</div>;
   }
   if (user === null) {
-    return <LoginScreen onLogin={function() { signInWithPopup(auth, googleProvider); }} />;
+    return <LoginScreen onLogin={handleLogin} />;
   }
   if (loading || !cfg) {
     return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
