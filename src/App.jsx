@@ -1602,6 +1602,33 @@ function DashboardPrumo(props) {
         </div>
       )}
 
+      {/* ═══ COMPARATIVO MÊS ANTERIOR → ATUAL (mudou da aba Projeção pra cá) ═══ */}
+      {prevSp && (
+        <div className="prumo-card span2">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Comparativo"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{MA[mo === 0 ? 11 : mo - 1] + " → " + MA[mo]}</h2>
+            </div>
+          </div>
+          {GR.map(function(g) {
+            var cmpCur = spent[g.id]; var cmpPv = prevSp[g.id]; var cmpDiff = cmpCur - cmpPv;
+            var cmpPD = cmpPv > 0 ? cmpDiff / cmpPv : 0;
+            var cmpGood = g.id === "investimentos" ? cmpDiff > 0 : cmpDiff < 0;
+            return (
+              <div key={g.id} className="prumo-cmp-row">
+                <div style={{ width: 4, height: 32, borderRadius: 2, background: g.color, flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", fontWeight: 600 }}>{g.label}</span>
+                <span className="prumo-num" style={{ minWidth: 80, textAlign: "right", fontSize: 12, color: "var(--ink-3)" }}>{fmt(cmpPv)}</span>
+                <span style={{ color: "var(--ink-4)" }}>{"→"}</span>
+                <span className="prumo-num" style={{ minWidth: 80, textAlign: "right", fontSize: 13 }}>{fmt(cmpCur)}</span>
+                <span className={"prumo-chip " + (cmpGood ? "pos" : "neg")} style={{ minWidth: 70, justifyContent: "center" }}>{(cmpDiff > 0 ? "▲ " : "▼ ") + pct(Math.abs(cmpPD))}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ═══ FATURA DO CARTÃO (espelha o app do banco: atual + próximas) ═══ */}
       {hasAnyCard && (
         <div className="prumo-card l-accent span2">
@@ -1863,6 +1890,9 @@ function AnalisePrumo(props) {
   var cats = props.cats;
   var myP = props.myP;
   var cfg = props.cfg;
+  var activeInst = props.activeInst || [];
+  var totalInstMonthly = props.totalInstMonthly || 0;
+  var rmInst = props.rmInst;
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
   var [showFluxo3m, sShowFluxo3m] = useState(false); // toggle do fluxo de caixa real × média 3m
   var [pieSel, sPieSel] = useState(null); // grupo expandido no card Real vs Meta
@@ -2320,6 +2350,45 @@ function AnalisePrumo(props) {
         </div>
       )}
 
+      {/* ③b PARCELAS ATIVAS (mudou da aba Projeção pra cá) */}
+      {activeInst.length > 0 && (
+        <div className="prumo-card l-warn full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Parcelas ativas"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Compromissos parcelados"}</h2>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="prumo-cap">{"Custo mensal"}</div>
+              <div className="prumo-big accent" style={{ fontSize: 22 }}>{fmt(totalInstMonthly)}</div>
+            </div>
+          </div>
+          {activeInst.map(function(it, idx) {
+            var catI = cats.find(function(c) { return c.id === it.cat; });
+            return (
+              <div key={idx} className="prumo-tx">
+                <div className="prumo-tx-icon">{catI ? catI.icon : "💳"}</div>
+                <div className="prumo-tx-meat">
+                  <div className="prumo-tx-desc">{it.desc}</div>
+                  <div className="prumo-tx-meta">{String(it.remaining) + " parcelas restantes"}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div className="prumo-tx-amt" style={{ color: "var(--accent-2)" }}>{fmt(it.amount) + "/m"}</div>
+                  <div className="prumo-cap" style={{ fontSize: 10 }}>{"Total: " + fmt(it.amount * it.remaining)}</div>
+                </div>
+                {rmInst && (
+                  <button onClick={function() { rmInst(it); }} className="prumo-icon-x" title="Remover esta parcela de todas as projeções" style={{ width: 28, height: 28, fontSize: 14, marginLeft: 8, flexShrink: 0 }}>{"×"}</button>
+                )}
+              </div>
+            );
+          })}
+          <div style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+            <span className="prumo-lbl" style={{ marginBottom: 0, color: "var(--ink)" }}>{"Compromisso total"}</span>
+            <span className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 14 }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
+          </div>
+        </div>
+      )}
+
       {/* ④ CATEGORIAS MÊS A MÊS */}
       {topCats.length > 0 && (
         <div className="prumo-card l-accent full">
@@ -2742,9 +2811,6 @@ function ProjecaoPrumo(props) {
   var sIfTarget = props.sIfTarget;
   var showIfEdit = props.showIfEdit;
   var sShowIfEdit = props.sShowIfEdit;
-  var activeInst = props.activeInst;
-  var totalInstMonthly = props.totalInstMonthly;
-  var rmInst = props.rmInst;
   var prevSp = props.prevSp;
   var spent = props.spent;
   var mo = props.mo;
@@ -3096,72 +3162,6 @@ function ProjecaoPrumo(props) {
           <div className="prumo-cap" style={{ textAlign: "center", padding: 14 }}>{"Cadastre contas fixas para ver quais o seu PL já consegue pagar."}</div>
         )}
       </div>
-
-      {/* PARCELAS ATIVAS */}
-      {activeInst.length > 0 && (
-        <div className="prumo-card l-warn full">
-          <div className="prumo-card-hd">
-            <div>
-              <div className="prumo-lbl">{"Parcelas ativas"}</div>
-              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Compromissos parcelados"}</h2>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div className="prumo-cap">{"Custo mensal"}</div>
-              <div className="prumo-big accent" style={{ fontSize: 22 }}>{fmt(totalInstMonthly)}</div>
-            </div>
-          </div>
-          {activeInst.map(function(it, idx) {
-            var cat2 = cats.find(function(c) { return c.id === it.cat; });
-            return (
-              <div key={idx} className="prumo-tx">
-                <div className="prumo-tx-icon">{cat2 ? cat2.icon : "💳"}</div>
-                <div className="prumo-tx-meat">
-                  <div className="prumo-tx-desc">{it.desc}</div>
-                  <div className="prumo-tx-meta">{String(it.remaining) + " parcelas restantes"}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div className="prumo-tx-amt" style={{ color: "var(--accent-2)" }}>{fmt(it.amount) + "/m"}</div>
-                  <div className="prumo-cap" style={{ fontSize: 10 }}>{"Total: " + fmt(it.amount * it.remaining)}</div>
-                </div>
-                {rmInst && (
-                  <button onClick={function() { rmInst(it); }} className="prumo-icon-x" title="Remover esta parcela de todas as projeções" style={{ width: 22, height: 22, fontSize: 13, marginLeft: 8, flexShrink: 0 }}>{"×"}</button>
-                )}
-              </div>
-            );
-          })}
-          <div style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-            <span className="prumo-lbl" style={{ marginBottom: 0, color: "var(--ink)" }}>{"Compromisso total"}</span>
-            <span className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 14 }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
-          </div>
-        </div>
-      )}
-
-      {/* COMPARATIVO MÊS A MÊS */}
-      {prevSp && (
-        <div className="prumo-card full">
-          <div className="prumo-card-hd">
-            <div>
-              <div className="prumo-lbl">{"Comparativo"}</div>
-              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{MA[mo === 0 ? 11 : mo - 1] + " → " + MA[mo]}</h2>
-            </div>
-          </div>
-          {GR.map(function(g) {
-            var c2 = spent[g.id]; var pv = prevSp[g.id]; var diff = c2 - pv;
-            var pD = pv > 0 ? diff / pv : 0;
-            var isGood = g.id === "investimentos" ? diff > 0 : diff < 0;
-            return (
-              <div key={g.id} className="prumo-cmp-row">
-                <div style={{ width: 4, height: 32, borderRadius: 2, background: g.color, flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", fontWeight: 600 }}>{g.label}</span>
-                <span className="prumo-num" style={{ minWidth: 80, textAlign: "right", fontSize: 12, color: "var(--ink-3)" }}>{fmt(pv)}</span>
-                <span style={{ color: "var(--ink-4)" }}>{"→"}</span>
-                <span className="prumo-num" style={{ minWidth: 80, textAlign: "right", fontSize: 13 }}>{fmt(c2)}</span>
-                <span className={"prumo-chip " + (isGood ? "pos" : "neg")} style={{ minWidth: 70, justifyContent: "center" }}>{(diff > 0 ? "▲ " : "▼ ") + pct(Math.abs(pD))}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* GRÁFICO ANUAL + TABELA */}
       {chD.length > 0 && (
@@ -5823,7 +5823,6 @@ export default function App() {
             nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
             totDb={totDb} dRcv={dRcv} ifTarget={ifTarget} sIfTarget={sIfTarget}
             showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
-            activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst}
             prevSp={prevSp} spent={spent} mo={mo} yr={yr}
             chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
             showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
@@ -5834,7 +5833,7 @@ export default function App() {
 
         {/* ═══ ANÁLISE ═══ */}
         {tab === "analise" && (
-          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrD} cats={cats} myP={myP} cfg={cfg} />
+          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrD} cats={cats} myP={myP} cfg={cfg} activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst} />
         )}
 
         {/* ═══ LANÇAMENTOS (INPUT) ═══ */}
