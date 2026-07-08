@@ -1091,6 +1091,12 @@ function ChartTip(props) {
                 </div>
               );
             })}
+            {gi.length > 5 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: TM, padding: "1px 0 1px 8px", fontStyle: "italic" }}>
+                <span>{"+ " + String(gi.length - 5) + " outras"}</span>
+                <span>{fmt(gi.slice(5).reduce(function(a, x) { return a + x.total; }, 0))}</span>
+              </div>
+            )}
           </div>
         );
       })}
@@ -1542,6 +1548,12 @@ function DashboardPrumo(props) {
                         </div>
                       );
                     })}
+                    {agg.length > 6 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, color: "var(--ink-3)", fontStyle: "italic" }}>
+                        <span>{"+ " + String(agg.length - 6) + " outras"}</span>
+                        <span className="prumo-num">{fmt(agg.slice(6).reduce(function(a, x) { return a + x.total; }, 0))}</span>
+                      </div>
+                    )}
                     <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 6, display: "flex", justifyContent: "space-between", fontSize: 11 }}>
                       <span className="prumo-cap">{"Orçado"}</span>
                       <span className="prumo-num">{fmt(r.b)}</span>
@@ -1853,6 +1865,8 @@ function AnalisePrumo(props) {
   var cfg = props.cfg;
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
   var [showFluxo3m, sShowFluxo3m] = useState(false); // toggle do fluxo de caixa real × média 3m
+  var [pieSel, sPieSel] = useState(null); // grupo expandido no card Real vs Meta
+  var [rvSel, sRvSel] = useState(null); // mês expandido no card Recorrente vs Variável
 
   /* Fluxo de caixa: real (fixas + parcelas) × cenário com média de variável dos últimos 3 meses */
   var fluxoEstVar = 0;
@@ -1923,17 +1937,19 @@ function AnalisePrumo(props) {
   var invCat = {};
   (cats || []).forEach(function(c) { if (c.group === "investimentos") invCat[c.id] = true; });
 
-  /* ── ① Distribuição do ano: real vs meta 50/25/25 ── */
+  /* ── ① Distribuição do ano: real vs a META CONFIGURADA (cfg.pcts — segue o que o Gui definir no Dash/Config) ── */
   var pieMonths = chD.filter(function(d) { return d.real; });
   var pieE = pieMonths.reduce(function(a, d) { return a + d.e; }, 0);
   var pieI = pieMonths.reduce(function(a, d) { return a + d.i; }, 0);
   var pieDe = pieMonths.reduce(function(a, d) { return a + d.d; }, 0);
   var pieT = pieE + pieI + pieDe;
+  var metaPcts = (cfg && cfg.pcts) || DP;
   var pieParts = [
-    { id: "essenciais", label: "Essenciais", meta: 50, val: pieE, pct: pieT > 0 ? (pieE / pieT) * 100 : 0, color: GR[0].color, goodAbove: false },
-    { id: "investimentos", label: "Investimentos", meta: 25, val: pieI, pct: pieT > 0 ? (pieI / pieT) * 100 : 0, color: GR[1].color, goodAbove: true },
-    { id: "desejos", label: "Não Essenciais", meta: 25, val: pieDe, pct: pieT > 0 ? (pieDe / pieT) * 100 : 0, color: GR[2].color, goodAbove: false },
+    { id: "essenciais", label: "Essenciais", meta: metaPcts.essenciais || 0, val: pieE, pct: pieT > 0 ? (pieE / pieT) * 100 : 0, color: GR[0].color, goodAbove: false },
+    { id: "investimentos", label: "Investimentos", meta: metaPcts.investimentos || 0, val: pieI, pct: pieT > 0 ? (pieI / pieT) * 100 : 0, color: GR[1].color, goodAbove: true },
+    { id: "desejos", label: "Não Essenciais", meta: metaPcts.desejos || 0, val: pieDe, pct: pieT > 0 ? (pieDe / pieT) * 100 : 0, color: GR[2].color, goodAbove: false },
   ];
+  var metaLbl = String(metaPcts.essenciais || 0) + " · " + String(metaPcts.investimentos || 0) + " · " + String(metaPcts.desejos || 0);
   var conicOf = function(parts) {
     var acc = 0;
     var segs = parts.map(function(p) {
@@ -2184,7 +2200,7 @@ function AnalisePrumo(props) {
           <div className="prumo-card-hd">
             <div>
               <div className="prumo-lbl">{"Distribuição do ano"}</div>
-              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Real vs meta 50/25/25"}</h2>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Real vs meta " + String(metaPcts.essenciais || 0) + "/" + String(metaPcts.investimentos || 0) + "/" + String(metaPcts.desejos || 0)}</h2>
             </div>
           </div>
           <div style={{ display: "flex", gap: 22, justifyContent: "center", flexWrap: "wrap", padding: "12px 0 16px" }}>
@@ -2198,22 +2214,44 @@ function AnalisePrumo(props) {
               <div style={{ width: 112, height: 112, borderRadius: "50%", background: pieMetaBg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
                 <div style={{ width: 68, height: 68, borderRadius: "50%", background: "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "var(--ink-2)" }}>{"Meta"}</div>
               </div>
-              <div className="prumo-cap" style={{ marginTop: 8 }}>{"50 · 25 · 25"}</div>
+              <div className="prumo-cap" style={{ marginTop: 8 }}>{metaLbl}</div>
             </div>
           </div>
           {pieParts.map(function(p) {
             var diff = p.pct - p.meta;
             var onTrack = Math.abs(diff) <= 2 || ((diff > 0) === p.goodAbove);
+            var isOpen2 = pieSel === p.id;
+            var grpCats = catYearList.filter(function(c) { return c.group === p.id; });
             return (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
-                <div style={{ width: 10, height: 10, borderRadius: 2, background: p.color, flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{p.label}</span>
-                <span className="prumo-num" style={{ fontSize: 12 }}>{String(p.pct.toFixed(0)) + "%"}</span>
-                <span className="prumo-cap" style={{ fontSize: 10 }}>{"meta " + String(p.meta) + "%"}</span>
-                <span className={"prumo-chip " + (onTrack ? "pos" : "warn")} style={{ fontSize: 9 }}>{(diff >= 0 ? "+" : "") + String(diff.toFixed(0)) + "pp"}</span>
+              <div key={p.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                <div onClick={function() { sPieSel(isOpen2 ? null : p.id); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", cursor: "pointer" }}>
+                  <span style={{ fontSize: 10, color: "var(--ink-3)", width: 10 }}>{isOpen2 ? "▾" : "▸"}</span>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: p.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{p.label}</span>
+                  <span className="prumo-num" style={{ fontSize: 12 }}>{String(p.pct.toFixed(0)) + "%"}</span>
+                  <span className="prumo-cap" style={{ fontSize: 10 }}>{"meta " + String(p.meta) + "%"}</span>
+                  <span className={"prumo-chip " + (onTrack ? "pos" : "warn")} style={{ fontSize: 9 }}>{(diff >= 0 ? "+" : "") + String(diff.toFixed(0)) + "pp"}</span>
+                </div>
+                {isOpen2 && (
+                  <div style={{ padding: "0 0 10px 28px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--f-mono)", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 4 }}>
+                      <span>{"Gastos do ano"}</span><span>{fmt(p.val)}</span>
+                    </div>
+                    {grpCats.length === 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{"Nenhum gasto registrado neste grupo."}</div>}
+                    {grpCats.map(function(c) {
+                      return (
+                        <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, color: "var(--ink-2)" }}>
+                          <span>{(c.icon ? c.icon + " " : "") + c.name}</span>
+                          <span className="prumo-num" style={{ fontSize: 11 }}>{fmt(c.total)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
+          <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Toque num grupo pra ver os gastos que o compõem · toque de novo pra fechar"}</div>
         </div>
       )}
 
@@ -2264,18 +2302,21 @@ function AnalisePrumo(props) {
           {rvData.map(function(r, idx) {
             var tot4 = r.comp + r.vari;
             if (tot4 <= 0) return null;
+            var rvOpen = rvSel === idx;
             return (
-              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+              <div key={idx} onClick={function() { sRvSel(rvOpen ? null : idx); }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px", position: "relative", cursor: "pointer", borderRadius: 6, background: rvOpen ? "var(--surface-2)" : "transparent" }}>
                 <span style={{ width: 34, fontSize: 10, color: idx === mo ? "var(--ink)" : "var(--ink-3)", fontWeight: idx === mo ? 800 : 600, fontFamily: "var(--f-mono)", textTransform: "uppercase", flexShrink: 0 }}>{r.mes}</span>
                 <div style={{ flex: 1, display: "flex", height: 18, borderRadius: 5, overflow: "hidden", background: "var(--surface-2)" }}>
                   <div style={{ width: String((r.comp / rvMax) * 100) + "%", background: "var(--brand)", opacity: r.real ? 1 : 0.45 }} />
                   <div style={{ width: String((r.vari / rvMax) * 100) + "%", background: "var(--accent)", opacity: r.real ? 1 : 0.45 }} />
                 </div>
                 <span style={{ width: 52, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-2)", flexShrink: 0 }}>{fK(tot4)}</span>
+                {rvOpen && chD[idx] && <ChartTip d={chD[idx]} i={idx} cats={cats} />}
               </div>
             );
           })}
-          <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Meses futuros (mais claros) mostram só o já comprometido. Se a barra escura cresce mês a mês, sua margem de manobra está encolhendo."}</div>
+          <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Toque num mês pra ver o detalhamento por categoria · toque de novo pra fechar. Meses futuros (mais claros) mostram só o já comprometido."}</div>
         </div>
       )}
 
@@ -4973,7 +5014,9 @@ export default function App() {
   var savR = totalInc > 0 ? invSp / totalInc : 0;
   var prevSp = pvMd ? calcSpent(pvMd, cats, fxd).spent : null;
 
-  /* Active installments — só conta projeções a partir do mês visualizado (mo) em diante */
+  /* Active installments — projeções a partir do mês visualizado. "Restantes" vem da NUMERAÇÃO
+     da parcela (total − menor nº visível + 1), não da contagem de meses no yrD — que só cobre
+     o ano atual e truncava compras que cruzam a virada (ex.: 1/10 de julho ia até abril). */
   var activeInst = [];
   if (yrD) {
     var seen = {};
@@ -4984,11 +5027,18 @@ export default function App() {
         var inst = pi(tx.desc);
         if (!inst) return;
         var key = nd(tx.desc) + "|" + String(Math.round(tx.amount));
-        if (!seen[key]) seen[key] = { desc: nd(tx.desc), amount: tx.amount, cat: tx.cat, remaining: 0 };
-        seen[key].remaining++;
+        if (!seen[key]) {
+          seen[key] = { desc: nd(tx.desc), amount: tx.amount, cat: tx.cat, minC: inst.c, t: inst.t };
+        } else {
+          if (inst.c < seen[key].minC) seen[key].minC = inst.c;
+          if (inst.t > seen[key].t) seen[key].t = inst.t;
+        }
       });
     });
-    Object.values(seen).forEach(function(it) { if (it.remaining > 0) activeInst.push(it); });
+    Object.values(seen).forEach(function(it) {
+      it.remaining = it.t - it.minC + 1;
+      if (it.remaining > 0) activeInst.push(it);
+    });
     activeInst.sort(function(a, b) { return b.amount - a.amount; });
   }
   var totalInstMonthly = activeInst.reduce(function(a, it) { return a + it.amount; }, 0);
