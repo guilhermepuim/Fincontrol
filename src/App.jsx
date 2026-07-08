@@ -1434,6 +1434,40 @@ function DashboardPrumo(props) {
   var topSpendMax = topSpend.length > 0 ? topSpend[0].total : 1;
   topSpend = topSpend.slice(0, 6);
 
+  /* ─── Alertas do mês: limites estourados (spC, mesma régua da aba Metas), gastos fora da
+     média (só tx do mês vs tx históricas — fixas fora pra comparar igual com igual) e fatura pesada ─── */
+  var alertas = [];
+  cats.forEach(function(c) {
+    if (c.group === "investimentos") return;
+    var limA = catLimits[c.id];
+    var spA = spC[c.id] || 0;
+    if (limA && spA > limA) {
+      alertas.push({ sev: 0, ico: "🚨", txt: c.name + " estourou o limite: " + fmt(spA) + " de " + fmt(limA) + " (+" + fmt(spA - limA) + ")." });
+    }
+  });
+  if (yrD) {
+    cats.forEach(function(c) {
+      if (c.group === "investimentos") return;
+      var histA = [];
+      yrD.forEach(function(mDt4, mi4) {
+        if (mi4 === mo) return;
+        var tot5 = ((mDt4 && mDt4.tx) || []).filter(function(t) { return t.cat === c.id && !t.reimbursed && t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
+        if (tot5 > 0) histA.push(tot5);
+      });
+      if (histA.length < 2) return;
+      var avgA = histA.reduce(function(a, v) { return a + v; }, 0) / histA.length;
+      var curA = txs.filter(function(t) { return t.cat === c.id && !t.reimbursed && t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
+      if (avgA > 50 && curA > avgA * 1.5) {
+        alertas.push({ sev: 1, ico: "📈", txt: c.name + " está " + String(Math.round(((curA - avgA) / avgA) * 100)) + "% acima da sua média: " + fmt(curA) + " vs " + fmt(avgA) + "/mês." });
+      }
+    });
+  }
+  if (curInvoice && sal > 0 && curInvoice.gross > sal * 0.3) {
+    alertas.push({ sev: 2, ico: "💳", txt: "Fatura de " + curInvoice.label + " já em " + fmt(curInvoice.gross) + " — " + String(Math.round((curInvoice.gross / sal) * 100)) + "% da sua renda." });
+  }
+  alertas.sort(function(a, b) { return a.sev - b.sev; });
+  alertas = alertas.slice(0, 4);
+
   return (
     <div className="prumo-dash-grid">
       {/* HERO ─ Saldo + Score + Anéis ─ span2 */}
@@ -1670,6 +1704,21 @@ function DashboardPrumo(props) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ALERTAS DO MÊS — a luz vermelha do painel */}
+      {alertas.length > 0 && (
+        <div className="prumo-card l-neg span2">
+          <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Alertas do mês"}</div>
+          {alertas.map(function(al, ai) {
+            return (
+              <div key={ai} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: ai < alertas.length - 1 ? "1px solid var(--line)" : "none" }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>{al.ico}</span>
+                <span style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.5 }}>{al.txt}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -2183,6 +2232,39 @@ function AnalisePrumo(props) {
     bigBuys = bigBuys.slice(0, 10);
   }
 
+  /* ── ⑪ Insights por regras (sem IA): resumo executivo do que os cards da aba detalham.
+     ATENÇÃO à ordem: precisa ficar DEPOIS de bigBuys/movers/dowStats (var hoisting — ver memória do projeto). */
+  var insights = [];
+  if (moverUps.length > 0 && moverUps[0].delta > 50) {
+    insights.push({ ico: "📈", txt: moverUps[0].name + " está " + fmt(moverUps[0].delta) + " acima da sua média dos últimos 3 meses (" + fmt(moverUps[0].avg) + "/mês)." });
+  }
+  if (moverDowns.length > 0 && moverDowns[0].delta < -50) {
+    insights.push({ ico: "📉", txt: moverDowns[0].name + " caiu " + fmt(Math.abs(moverDowns[0].delta)) + " vs sua média recente — bom sinal." });
+  }
+  var pieWorst = null;
+  pieParts.forEach(function(pp2) {
+    var dv2 = pp2.pct - pp2.meta;
+    var bad2 = pp2.goodAbove ? -dv2 : dv2; // desvio na direção ruim
+    if (bad2 > 3 && (!pieWorst || bad2 > pieWorst.bad)) pieWorst = { p: pp2, bad: bad2, dv: dv2 };
+  });
+  if (pieWorst) {
+    insights.push({ ico: "🎯", txt: pieWorst.p.label + " está " + (pieWorst.dv >= 0 ? "+" : "") + String(pieWorst.dv.toFixed(0)) + "pp fora da meta de " + String(pieWorst.p.meta) + "% no acumulado do ano." });
+  }
+  if (savData.length > 0) {
+    var metaInv2 = (metaPcts.investimentos || 0) / 100;
+    insights.push({ ico: savAvg >= metaInv2 ? "💰" : "⚠️", txt: "Você investiu em média " + String((savAvg * 100).toFixed(0)) + "% da renda" + (metaInv2 > 0 ? " — meta: " + String((metaInv2 * 100).toFixed(0)) + "%" + (savAvg >= metaInv2 ? " ✓" : "") : "") + "." });
+  }
+  if (rvTotComp + rvTotVar > 0) {
+    insights.push({ ico: "🔒", txt: String((rvCompPct * 100).toFixed(0)) + "% do gasto do ano já estava comprometido (fixas + parcelas) antes de cada mês começar." });
+  }
+  if (dowStats[dowTopIdx] && dowStats[dowTopIdx].count > 0) {
+    insights.push({ ico: "📅", txt: "Seu dia de maior gasto é " + dowStats[dowTopIdx].name + ": " + fmt(dowStats[dowTopIdx].total) + " no ano, média de " + fmt(dowStats[dowTopIdx].avg) + " por compra." });
+  }
+  if (bigBuys.length > 0) {
+    insights.push({ ico: "🛍️", txt: "Maior compra do ano: " + bigBuys[0].desc + " (" + fmt(bigBuys[0].val) + (bigBuys[0].parc > 1 ? " em " + String(bigBuys[0].parc) + "×" : "") + ")." });
+  }
+  insights = insights.slice(0, 6);
+
   return (
     <div className="prumo-form-grid">
       {/* ⓪ FLUXO DE CAIXA · REAL × MÉDIA 3M (abre no clique) */}
@@ -2223,6 +2305,27 @@ function AnalisePrumo(props) {
           </div>
         )}
       </div>
+
+      {/* ⓪b INSIGHTS DO ANO — resumo executivo por regras locais */}
+      {insights.length > 0 && (
+        <div className="prumo-card l-accent full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Insights"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"O que os números estão dizendo"}</h2>
+            </div>
+            <span style={{ fontSize: 22 }}>{"🧠"}</span>
+          </div>
+          {insights.map(function(ins, ii3) {
+            return (
+              <div key={ii3} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: ii3 < insights.length - 1 ? "1px solid var(--line)" : "none" }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>{ins.ico}</span>
+                <span style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.5 }}>{ins.txt}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ① DISTRIBUIÇÃO DO ANO · REAL VS META 50/25/25 */}
       {pieT > 0 && (
@@ -2713,20 +2816,6 @@ function AnalisePrumo(props) {
         </div>
       )}
 
-      {/* AI Insights placeholder */}
-      <div className="prumo-card l-accent">
-        <div className="prumo-card-hd">
-          <div>
-            <div className="prumo-lbl">{"Insights com IA"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Análise inteligente"}</h2>
-          </div>
-          <span className="prumo-chip warn">{"Em breve"}</span>
-        </div>
-        <div style={{ textAlign: "center", padding: "26px 0" }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>{"🧠"}</div>
-          <div className="prumo-cap" style={{ lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{"Análise inteligente do seu padrão financeiro anual com identificação de tendências, anomalias e recomendações personalizadas."}</div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2838,6 +2927,22 @@ function ProjecaoPrumo(props) {
   var pBase = pat.invVariable || 0;
   var rp = calcRendaPassiva(pBase, fxd, spt);
   var fi = calcIF(pBase, totDb, totalInc, ifTarget);
+
+  /* ── Quando chega lá: simula a base RV rendendo 0,7% a.m. + aporte médio real (média dos
+     meses com aporte no ano) até o alvo de cada marco da IF. Premissa: aporte vai pra RV. ── */
+  var aporteHist = chD.filter(function(d) { return d.real && d.i > 0; }).map(function(d) { return d.i; });
+  var aporteMedio = aporteHist.length > 0 ? aporteHist.reduce(function(a, v) { return a + v; }, 0) / aporteHist.length : 0;
+  var ifQuando = [];
+  if (fi.totalExp > 0 && (pBase > 0 || aporteMedio > 0)) {
+    fi.milestones.forEach(function(mst) {
+      var alvo = Math.ceil((mst.pct * fi.totalExp) / 0.007);
+      if (pBase >= alvo) { ifQuando.push({ label: mst.label, alvo: alvo, meses: 0 }); return; }
+      var balSim = pBase;
+      var nM = 0;
+      while (balSim < alvo && nM < 1200) { balSim = balSim * 1.007 + aporteMedio; nM++; }
+      ifQuando.push({ label: mst.label, alvo: alvo, meses: nM < 1200 ? nM : -1 });
+    });
+  }
 
   var hist = nwHistory.slice(-12);
   var maxV = nwHistory.length > 0 ? Math.max.apply(null, hist.map(function(h) { return h.balance; }).concat([1])) : 1;
@@ -3002,6 +3107,41 @@ function ProjecaoPrumo(props) {
           <div className="prumo-cap" style={{ textAlign: "center", marginTop: 10, fontSize: 11 }}>{"IF Total: RV de " + fmt(fi.plFor100) + " gerando " + fmt(fi.totalExp) + "/mês"}</div>
         )}
       </div>
+
+      {/* QUANDO CHEGA LÁ · DATA ESTIMADA DE CADA MARCO DA IF */}
+      {ifQuando.length > 0 && (
+        <div className="prumo-card l-pos full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{"Quando você chega lá"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Data estimada de cada marco, no seu ritmo atual"}</h2>
+            </div>
+            <span style={{ fontSize: 22 }}>{"🗓️"}</span>
+          </div>
+          <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Premissas: RV de " + fmt(pBase) + " rendendo 0,7% a.m. + aporte médio real de " + fmt(aporteMedio) + "/mês indo pra RV. Gasto-alvo: " + fmt(fi.totalExp) + "/mês."}</div>
+          {ifQuando.map(function(q) {
+            var lblData;
+            var atingido = q.meses === 0;
+            if (atingido) lblData = "✓ já atingido";
+            else if (q.meses < 0) lblData = "+100 anos — sobe o aporte 😅";
+            else {
+              var dtQ = new Date();
+              dtQ.setMonth(dtQ.getMonth() + q.meses);
+              lblData = MS[dtQ.getMonth()].slice(0, 3) + "/" + String(dtQ.getFullYear()) + " · " + (q.meses / 12).toFixed(1).replace(".", ",") + " anos";
+            }
+            return (
+              <div key={q.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+                <span style={{ width: 64, fontSize: 11, fontWeight: 700, color: "var(--brand)", fontFamily: "var(--f-mono)", flexShrink: 0 }}>{q.label}</span>
+                <span className="prumo-cap" style={{ flex: 1 }}>{"RV de " + fmt(q.alvo)}</span>
+                <span className="prumo-num" style={{ fontSize: 12, color: atingido ? "var(--pos)" : "var(--ink)" }}>{lblData}</span>
+              </div>
+            );
+          })}
+          {aporteMedio <= 0 && (
+            <div className="prumo-cap" style={{ marginTop: 8, color: "var(--accent-2)" }}>{"Sem aportes registrados no ano — a estimativa usa só o rendimento da base atual."}</div>
+          )}
+        </div>
+      )}
 
       {/* SIMULADOR DE APORTES */}
       <div className="prumo-card l-brand full">
