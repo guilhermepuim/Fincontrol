@@ -4,26 +4,26 @@ import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectRes
 import { db, auth, googleProvider } from "./firebase";
 
 /* ══ PRUMO BRANDBOOK — AZUL ══ */
-var BL = "#1A3A5C";
-var BD = "#0F2540";
-var BG = "#E8F0FA";
-var TX = "#0F2540";
-var T2 = "#1A3A5C";
-var T3 = "#2A5A8C";
-var TM = "#6A90B8";
-var BR = "#D8E8F4";
-var OK = "#2D7A3E";
-var ER = "#C0392B";
-var WN = "#9A7420";
-var CARD = "#FDFAF5";
-var BGMAIN = "#F5F0E8";
+var BL = "var(--brand)";
+var BD = "var(--ink)";
+var BG = "var(--surface-2)";
+var TX = "var(--ink)";
+var T2 = "var(--ink-2)";
+var T3 = "var(--ink-2)";
+var TM = "var(--ink-3)";
+var BR = "var(--line)";
+var OK = "var(--pos)";
+var ER = "var(--neg)";
+var WN = "var(--accent-2)";
+var CARD = "var(--surface)";
+var BGMAIN = "var(--bg)";
 
 var DS = 14000;
 var DP = { essenciais: 50, investimentos: 25, desejos: 25 };
 var GR = [
-  { id: "essenciais", label: "Essenciais", color: "#1B5FAA" },
-  { id: "investimentos", label: "Investimentos", color: "#1A3A5C" },
-  { id: "desejos", label: "Não Essenciais", color: "#9A7420" },
+  { id: "essenciais", label: "Essenciais", color: "var(--g-ess)" },
+  { id: "investimentos", label: "Investimentos", color: "var(--g-inv)" },
+  { id: "desejos", label: "Não Essenciais", color: "var(--g-des)" },
 ];
 var DC = [
   // ESSENCIAIS
@@ -563,11 +563,76 @@ var PRUMO_TOKENS = `
   --shadow-1: 0 1px 2px oklch(0.22 0.02 250 / 0.04);
   --shadow-2: 0 4px 14px oklch(0.22 0.02 250 / 0.06);
   --shadow-3: 0 12px 40px oklch(0.22 0.02 250 / 0.10);
+  --brand-line: oklch(0.38 0.07 235 / .2);
+  --pos-line: oklch(0.58 0.13 155 / .2);
+  --pos-line-strong: oklch(0.58 0.13 155 / .3);
+  --neg-line: oklch(0.58 0.16 25 / .2);
+  --warn-line: oklch(0.62 0.14 65 / .2);
+  --glass: oklch(1 0 0 / .92);
+  --scrim: oklch(0.22 0.02 250 / .35);
+  --sheet-shadow: 0 -10px 40px oklch(0.22 0.02 250 / .15);
+  --focus-ring: oklch(0.38 0.07 235 / .12);
+  --on-accent: oklch(0.22 0.04 60);
+  --surface-warn: #FFF8E7;
+  --brand-soft: oklch(0.78 0.04 235);
+  --ink-soft: oklch(0.78 0.015 250);
+  --accent-soft: oklch(0.88 0.06 75);
+  --g-ess: #1B5FAA; --g-inv: #1A3A5C; --g-des: #9A7420;
+  --cat-0: #1B5FAA; --cat-1: #9A7420; --cat-2: #B0532F; --cat-3: #4C7A4C; --cat-4: #1A3A5C;
+  --cat-5: #7A4C7A; --cat-6: #2F7E78; --cat-7: #A84860; --cat-8: #6E7F3C; --cat-9: #8A6FB0;
+  --cat-outros: #94A3B8;
   --f-ui: 'Inter', system-ui, sans-serif;
   --f-display: 'Inter', system-ui, sans-serif;
   --f-mono: 'JetBrains Mono', ui-monospace, monospace;
   --sb: 240px;
+  color-scheme: light;
 }
+[data-theme="dark"] {
+  --bg: oklch(0.16 0.02 250);
+  --surface: oklch(0.205 0.025 250);
+  --surface-2: oklch(0.255 0.027 250);
+  --ink: oklch(0.93 0.01 250);
+  --ink-2: oklch(0.78 0.018 250);
+  --ink-3: oklch(0.60 0.022 250);
+  --ink-4: oklch(0.40 0.02 250);
+  --line: oklch(0.28 0.025 250);
+  --line-2: oklch(0.33 0.025 250);
+  --brand: oklch(0.72 0.09 235);
+  --brand-2: oklch(0.80 0.08 235);
+  --brand-tint: oklch(0.26 0.05 235);
+  --accent: oklch(0.78 0.12 80);
+  --accent-2: oklch(0.83 0.12 85);
+  --accent-tint: oklch(0.27 0.05 80);
+  --pos: oklch(0.74 0.13 155);
+  --pos-tint: oklch(0.25 0.045 155);
+  --warn: oklch(0.78 0.12 80);
+  --neg: oklch(0.72 0.15 25);
+  --neg-tint: oklch(0.26 0.05 25);
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-2: 0 4px 14px oklch(0 0 0 / 0.35);
+  --shadow-3: 0 12px 40px oklch(0 0 0 / 0.45);
+  --brand-line: oklch(0.72 0.09 235 / .3);
+  --pos-line: oklch(0.74 0.13 155 / .3);
+  --pos-line-strong: oklch(0.74 0.13 155 / .4);
+  --neg-line: oklch(0.72 0.15 25 / .3);
+  --warn-line: oklch(0.78 0.12 80 / .3);
+  --glass: oklch(0.16 0.02 250 / .88);
+  --scrim: oklch(0 0 0 / .5);
+  --sheet-shadow: 0 -10px 40px oklch(0 0 0 / .5);
+  --focus-ring: oklch(0.72 0.09 235 / .25);
+  --on-accent: oklch(0.20 0.045 80);
+  --surface-warn: oklch(0.26 0.05 80);
+  --brand-soft: oklch(0.42 0.05 235);
+  --ink-soft: oklch(0.42 0.02 250);
+  --accent-soft: oklch(0.45 0.06 80);
+  --g-ess: #5D9BE0; --g-inv: #7E9FC7; --g-des: #D4A94E;
+  --cat-0: #5D9BE0; --cat-1: #D4A94E; --cat-2: #E08A63; --cat-3: #7FB57F; --cat-4: #7E9FC7;
+  --cat-5: #B585B5; --cat-6: #63B5AE; --cat-7: #D9829A; --cat-8: #A6B96E; --cat-9: #B49FD6;
+  --cat-outros: #7C8BA1;
+  color-scheme: dark;
+}
+[data-theme="dark"] .prumo-root { color: var(--ink); }
+html { background: var(--bg, #F5F0E8); }
 .prumo-root, .prumo-root * { box-sizing: border-box; }
 .prumo-root { font-family: var(--f-ui); color: var(--ink); -webkit-font-smoothing: antialiased; }
 .prumo-root button { font-family: var(--f-ui); }
@@ -579,7 +644,9 @@ var PRUMO_TOKENS = `
 .prumo-mobile-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 18px 8px; background: var(--bg); }
 .prumo-mobile-header .greet { font-size: 11px; color: var(--ink-3); font-weight: 500; }
 .prumo-mobile-header .title { font-family: var(--f-display); font-size: 26px; font-weight: 500; letter-spacing: -.015em; line-height: 1.1; color: var(--ink); }
-.prumo-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--surface); font-weight: 700; font-size: 13px; flex-shrink: 0; cursor: pointer; }
+.prumo-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--surface); font-weight: 700; font-size: 13px; flex-shrink: 0; cursor: pointer; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
+.prumo-theme-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; line-height: 1; flex-shrink: 0; transition: background .15s; }
+.prumo-theme-btn:hover { background: var(--surface-2); }
 .prumo-topbar { display: none; }
 .prumo-month-mobile { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 18px 14px; padding: 8px 12px; background: var(--surface); border-radius: var(--r-pill); border: 1px solid var(--line); }
 .prumo-month-mobile button { background: var(--surface-2); border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; color: var(--ink-2); font-size: 12px; font-weight: 700; }
@@ -587,11 +654,12 @@ var PRUMO_TOKENS = `
 .prumo-quick-add { display: none; }
 
 /* TABBAR / FAB MOBILE ───────────────────────────── */
-.prumo-tabbar { position: fixed; bottom: 0; left: 0; right: 0; height: 76px; padding: 8px 8px 18px; background: oklch(1 0 0 / .92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; z-index: 40; }
+.prumo-tabbar { position: fixed; bottom: 0; left: 0; right: 0; height: 76px; padding: 8px 8px 18px; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; z-index: 40; }
 .prumo-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; color: var(--ink-3); padding: 4px 0; background: transparent; border: none; }
 .prumo-tab .ico { font-size: 18px; line-height: 1; }
 .prumo-tab .lbl-t { font-size: 9px; font-weight: 600; }
-.prumo-tab.active { color: var(--brand); }
+.prumo-tab.active { color: var(--accent-2); }
+.prumo-tab.active::after { content: ''; width: 16px; height: 2px; background: var(--accent-2); border-radius: 1px; margin-top: 1px; }
 
 /* CARDS ─────────────────────────────────────────── */
 .prumo-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 18px; margin-bottom: 12px; }
@@ -615,10 +683,10 @@ var PRUMO_TOKENS = `
 
 /* CHIPS ─────────────────────────────────────────── */
 .prumo-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
-.prumo-chip.pos { background: var(--pos-tint); color: var(--pos); border-color: oklch(0.58 0.13 155 / .2); }
-.prumo-chip.neg { background: var(--neg-tint); color: var(--neg); border-color: oklch(0.58 0.16 25 / .2); }
-.prumo-chip.warn { background: var(--accent-tint); color: var(--accent-2); border-color: oklch(0.62 0.14 65 / .2); }
-.prumo-chip.brand { background: var(--brand-tint); color: var(--brand); border-color: oklch(0.38 0.07 235 / .2); }
+.prumo-chip.pos { background: var(--pos-tint); color: var(--pos); border-color: var(--pos-line); }
+.prumo-chip.neg { background: var(--neg-tint); color: var(--neg); border-color: var(--neg-line); }
+.prumo-chip.warn { background: var(--accent-tint); color: var(--accent-2); border-color: var(--warn-line); }
+.prumo-chip.brand { background: var(--brand-tint); color: var(--brand); border-color: var(--brand-line); }
 
 /* METER ─────────────────────────────────────────── */
 .prumo-meter { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
@@ -646,11 +714,11 @@ var PRUMO_TOKENS = `
 .prumo-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border-radius: var(--r-pill); font-size: 12px; font-weight: 600; border: 1px solid transparent; cursor: pointer; font-family: var(--f-ui); }
 .prumo-btn.brand { background: var(--ink); color: var(--surface); }
 .prumo-btn.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
-.prumo-btn.accent { background: var(--accent); color: oklch(0.22 0.04 60); }
+.prumo-btn.accent { background: var(--accent); color: var(--on-accent); }
 
 /* MOBILE MORE SHEET ─────────────────────────────── */
-.prumo-sheet-overlay { position: fixed; inset: 0; background: oklch(0.22 0.02 250 / .35); z-index: 50; }
-.prumo-sheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 28px 28px 0 0; padding: 6px 18px 28px; box-shadow: 0 -10px 40px oklch(0.22 0.02 250 / .15); z-index: 51; max-height: 80vh; overflow-y: auto; }
+.prumo-sheet-overlay { position: fixed; inset: 0; background: var(--scrim); z-index: 50; }
+.prumo-sheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 28px 28px 0 0; padding: 6px 18px 28px; box-shadow: var(--sheet-shadow); z-index: 51; max-height: 80vh; overflow-y: auto; }
 .prumo-sheet-handle { width: 36px; height: 4px; background: var(--line-2); border-radius: 2px; margin: 4px auto 14px; }
 .prumo-sheet-h { font-family: var(--f-display); font-size: 20px; font-weight: 500; margin-bottom: 4px; color: var(--ink); }
 .prumo-sheet-sub { font-size: 11px; color: var(--ink-3); margin-bottom: 14px; }
@@ -693,9 +761,9 @@ var PRUMO_TOKENS = `
   .prumo-sb-item:hover { background: var(--surface-2); color: var(--ink); }
   .prumo-sb-item.active { background: var(--ink); color: var(--surface); }
   .prumo-sb-item .ico { font-size: 14px; width: 18px; text-align: center; }
-  .prumo-sb-item .badge { margin-left: auto; background: var(--accent); color: oklch(0.22 0.04 60); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+  .prumo-sb-item .badge { margin-left: auto; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
   .prumo-sb-foot { margin-top: 18px; padding: 12px; background: var(--surface-2); border-radius: 12px; display: flex; align-items: center; gap: 10px; }
-  .prumo-sb-foot .av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), var(--accent)); color: var(--surface); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .prumo-sb-foot .av { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), var(--accent)); color: var(--surface); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 3.5px var(--accent); }
   .prumo-sb-foot .nm { font-size: 12px; font-weight: 600; color: var(--ink); }
   .prumo-sb-foot .em { font-size: 10px; color: var(--ink-3); }
 
@@ -734,7 +802,7 @@ var PRUMO_TOKENS = `
 
 /* INPUTS PRUMO ──────────────────────────────────── */
 .prumo-input { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; font-family: var(--f-ui); font-size: 14px; color: var(--ink); outline: none; transition: border-color .15s, box-shadow .15s; width: 100%; -webkit-appearance: none; appearance: none; }
-.prumo-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px oklch(0.38 0.07 235 / .12); }
+.prumo-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 .prumo-input::placeholder { color: var(--ink-3); }
 .prumo-input.mono { font-family: var(--f-mono); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
 .prumo-input.right { text-align: right; }
@@ -763,7 +831,7 @@ select.prumo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='
 .prumo-btn-add:disabled { opacity: .4; cursor: not-allowed; }
 
 .prumo-icon-x { cursor: pointer; color: var(--neg); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; background: transparent; border: 1px solid transparent; transition: background .15s; }
-.prumo-icon-x:hover { background: var(--neg-tint); border-color: oklch(0.58 0.16 25 / .2); }
+.prumo-icon-x:hover { background: var(--neg-tint); border-color: var(--neg-line); }
 
 @media (min-width: 1100px) {
   .prumo-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
@@ -840,13 +908,31 @@ select.prumo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='
 .prumo-input-affix .prumo-input.with-suffix { padding-right: 28px; }
 
 /* SUCCESS BANNER ────────────────────────────────── */
-.prumo-success { background: var(--pos-tint); border: 1px solid oklch(0.58 0.13 155 / .3); border-radius: 10px; padding: 10px 12px; }
+.prumo-success { background: var(--pos-tint); border: 1px solid var(--pos-line-strong); border-radius: 10px; padding: 10px 12px; }
 .prumo-success-strong { font-size: 12px; font-weight: 700; color: var(--pos); }
 
 /* LEGACY CHAT FAB — só aparece em desktop */
 .prumo-legacy-chat-fab { display: none !important; }
 @media (min-width: 1100px) { .prumo-legacy-chat-fab { display: flex !important; } }
 `;
+
+/* ══ TEMA (claro/escuro) ══ */
+var THEME_KEY = "prumo-theme";
+function getThemePref() {
+  try { var v = localStorage.getItem(THEME_KEY); return (v === "light" || v === "dark" || v === "auto") ? v : "auto"; } catch (e) { return "auto"; }
+}
+function resolveTheme(pref) {
+  if (pref === "light" || pref === "dark") return pref;
+  try { return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; } catch (e) { return "light"; }
+}
+function applyTheme(pref) {
+  var t = resolveTheme(pref);
+  document.documentElement.setAttribute("data-theme", t);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) { meta = document.createElement("meta"); meta.setAttribute("name", "theme-color"); document.head.appendChild(meta); }
+  meta.setAttribute("content", t === "dark" ? "#131c29" : "#F5F0E8");
+}
+applyTheme(getThemePref());
 
 var _uid = null;
 async function ld(k, fb) {
@@ -894,9 +980,9 @@ function calcSpent(mData, cats, fxd) {
 var S = {
   card: { background: CARD, borderRadius: 8, padding: 16, marginBottom: 10, border: "1px solid " + BR },
   inp: { background: BG, border: "1px solid " + BR, borderRadius: 6, padding: "10px 12px", color: TX, fontSize: 14, fontFamily: "'Inter',sans-serif", width: "100%", outline: "none", boxSizing: "border-box" },
-  btn: function(c) { return { background: c, border: "none", borderRadius: 6, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
+  btn: function(c) { return { background: c, border: "none", borderRadius: 6, padding: "10px 18px", color: "var(--surface)", fontWeight: 700, fontSize: 13, cursor: "pointer" }; },
   btnO: { background: CARD, border: "1px solid " + BR, borderRadius: 6, padding: "10px 18px", color: T3, fontWeight: 600, fontSize: 13, cursor: "pointer" },
-  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: c + "20", color: c, whiteSpace: "nowrap", marginRight: 3 }; },
+  tag: function(c) { return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: "color-mix(in oklch, " + c + " 14%, var(--surface))", color: "color-mix(in oklch, " + c + " 60%, var(--ink))", whiteSpace: "nowrap", marginRight: 3 }; },
   g2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
   lbl: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: TM, textTransform: "uppercase", marginBottom: 4 },
   h2: { fontFamily: "'Montserrat',sans-serif", fontSize: 14, fontWeight: 700, color: BD },
@@ -908,7 +994,7 @@ function PB(props) {
   var r = props.max > 0 ? props.value / props.max : 0;
   var c = props.noWarn ? (props.color || BL) : (r > 1 ? ER : r > 0.85 ? WN : (props.color || BL));
   return (
-    <div style={{ background: "#F0F0F0", borderRadius: 4, height: 6, overflow: "hidden", width: "100%" }}>
+    <div style={{ background: "var(--surface-2)", borderRadius: 4, height: 6, overflow: "hidden", width: "100%" }}>
       <div style={{ width: String(Math.min(r * 100, 100)) + "%", height: "100%", borderRadius: 4, background: c, transition: "width 0.4s" }} />
     </div>
   );
@@ -1057,9 +1143,9 @@ function ChartTip(props) {
   var left = i < 6 ? 0 : "auto";
   var right = i >= 6 ? 0 : "auto";
   return (
-    <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "#fff", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", zIndex: 20, minWidth: 220, whiteSpace: "nowrap" }}
+    <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "var(--surface)", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "var(--shadow-2)", zIndex: 20, minWidth: 220, whiteSpace: "nowrap" }}
       onClick={function(e) { e.stopPropagation(); }}>
-      <div style={{ ...S.h2, fontSize: 12, marginBottom: 6, borderBottom: "1px solid #F0F0F0", paddingBottom: 4 }}>{MS[i] + (d.real ? "" : " (projeção)")}</div>
+      <div style={{ ...S.h2, fontSize: 12, marginBottom: 6, borderBottom: "1px solid var(--line)", paddingBottom: 4 }}>{MS[i] + (d.real ? "" : " (projeção)")}</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, ...S.cap }}>
         <span>{"Débitos"}</span><span style={{ fontWeight: 700, color: ER }}>{fmt(d.td)}</span>
       </div>
@@ -1100,7 +1186,7 @@ function ChartTip(props) {
           </div>
         );
       })}
-      <div style={{ borderTop: "1px solid #F0F0F0", paddingTop: 4, marginTop: 2, display: "flex", justifyContent: "space-between", ...S.cap }}>
+      <div style={{ borderTop: "1px solid var(--line)", paddingTop: 4, marginTop: 2, display: "flex", justifyContent: "space-between", ...S.cap }}>
         <span style={{ fontWeight: 700, color: BD }}>{"Saldo"}</span>
         <span style={{ fontWeight: 700, color: d.s >= 0 ? OK : ER }}>{fmt(d.s)}</span>
       </div>
@@ -1476,8 +1562,8 @@ function DashboardPrumo(props) {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="prumo-lbl">{"Saldo livre do mês"}</div>
             <div style={{ display: "inline-flex", marginTop: 5, border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }} title="Caixa: quando o dinheiro sai da conta (fatura). Competência: quando a despesa aconteceu.">
-              <span onClick={function() { if (!cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: cashView ? "var(--brand)" : "transparent", color: cashView ? "#fff" : "var(--ink-3)" }}>{"Caixa"}</span>
-              <span onClick={function() { if (cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: !cashView ? "var(--brand)" : "transparent", color: !cashView ? "#fff" : "var(--ink-3)" }}>{"Competência"}</span>
+              <span onClick={function() { if (!cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: cashView ? "var(--brand)" : "transparent", color: cashView ? "var(--surface)" : "var(--ink-3)" }}>{"Caixa"}</span>
+              <span onClick={function() { if (cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: !cashView ? "var(--brand)" : "transparent", color: !cashView ? "var(--surface)" : "var(--ink-3)" }}>{"Competência"}</span>
             </div>
             <div className={"prumo-big " + (saldoSinal ? "pos" : "neg")} style={{ marginTop: 6 }}>
               {(saldoSinal ? "" : "−") + "R$ " + saldoIntStr}<sup>{"," + saldoCentsStr}</sup>
@@ -1903,9 +1989,9 @@ function DashboardPrumo(props) {
               var h = chMx > 0 ? (total / chMx) * 100 : 0;
               var cur = i === mo;
               var real = d.real;
-              var brandCol = real ? "var(--brand)" : "oklch(0.78 0.04 235)";
-              var inkCol = real ? "var(--ink-2)" : "oklch(0.78 0.015 250)";
-              var accCol = real ? "var(--accent)" : "oklch(0.88 0.06 75)";
+              var brandCol = real ? "var(--brand)" : "var(--brand-soft)";
+              var inkCol = real ? "var(--ink-2)" : "var(--ink-soft)";
+              var accCol = real ? "var(--accent)" : "var(--accent-soft)";
               return (
                 <div key={i} className={"prumo-yr-col" + (hovM === i ? " active" : "")} onMouseEnter={function() { sHM(i); }} onMouseLeave={function() { sHM(null); }} onClick={function() { sHM(hovM === i ? null : i); }}>
                   <div className={"prumo-yr-val" + ((cur || hovM === i) ? " show" : "")}>{total > 0 ? fK(total) : ""}</div>
@@ -2066,26 +2152,36 @@ function AnalisePrumo(props) {
   }
   var rvCompPct = (rvTotComp + rvTotVar) > 0 ? rvTotComp / (rvTotComp + rvTotVar) : 0;
 
-  /* ── ④/⑧ Total anual por categoria (só meses reais) ── */
-  var CATP = ["#1B5FAA", "#9A7420", "#B0532F", "#4C7A4C", "#1A3A5C", "#7A4C7A", "#94A3B8"];
+  /* ── ④/⑧ Total anual por categoria (só meses reais; subcategoria agrega na principal, igual ao ranking do Dashboard) ── */
+  var CATP = ["var(--cat-0)", "var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)", "var(--cat-9)"];
+  var CAT_OUTROS_COLOR = "var(--cat-outros)";
+  var catParentOf = {};
+  cats.forEach(function(c) { if (c.parent && cats.some(function(p) { return p.id === c.parent; })) catParentOf[c.id] = c.parent; });
+  var rollCats = function(obj) {
+    var out = {};
+    Object.keys(obj || {}).forEach(function(cid) { var rid = catParentOf[cid] || cid; out[rid] = (out[rid] || 0) + obj[cid]; });
+    return out;
+  };
   var catYear = {};
   pieMonths.forEach(function(d) {
-    Object.keys(d.cats || {}).forEach(function(cid) { catYear[cid] = (catYear[cid] || 0) + d.cats[cid]; });
+    var rolledY = rollCats(d.cats);
+    Object.keys(rolledY).forEach(function(cid) { catYear[cid] = (catYear[cid] || 0) + rolledY[cid]; });
   });
   var catYearList = Object.keys(catYear).map(function(cid) {
     var c = cats.find(function(cc) { return cc.id === cid; });
     return { id: cid, name: c ? c.name : cid, icon: c ? c.icon : "🏷️", group: c ? c.group : "", total: catYear[cid] };
   }).filter(function(c) { return c.total > 0; }).sort(function(a, b) { return b.total - a.total; });
   var catYearTot = catYearList.reduce(function(a, c) { return a + c.total; }, 0);
-  var topCats = catYearList.slice(0, 6);
+  var topCats = catYearList.slice(0, CATP.length);
   var topCatIds = topCats.map(function(c) { return c.id; });
 
   /* ── ④ Categorias mês a mês (barras horizontais empilhadas; legenda clicável isola uma) ── */
   var stackData = chD.map(function(d, i2) {
-    var segs = topCats.map(function(c, ti) { return { id: c.id, name: c.name, color: CATP[ti], val: (d.cats || {})[c.id] || 0 }; });
+    var rolled = rollCats(d.cats);
+    var segs = topCats.map(function(c, ti) { return { id: c.id, name: c.name, color: CATP[ti], val: rolled[c.id] || 0 }; });
     var outros = 0;
-    Object.keys(d.cats || {}).forEach(function(cid) { if (topCatIds.indexOf(cid) < 0) outros += d.cats[cid]; });
-    segs.push({ id: "_outros", name: "Outras", color: CATP[6], val: outros });
+    Object.keys(rolled).forEach(function(cid) { if (topCatIds.indexOf(cid) < 0) outros += rolled[cid]; });
+    segs.push({ id: "_outros", name: "Outras", color: CAT_OUTROS_COLOR, val: outros });
     var tot2 = segs.reduce(function(a, s2) { return a + s2.val; }, 0);
     return { mes: MA[i2], idx: i2, segs: segs, tot: tot2, real: d.real };
   });
@@ -2182,14 +2278,15 @@ function AnalisePrumo(props) {
   }
   var movers = [];
   if (chD.length === 12 && prevRealIdx.length > 0) {
-    var curCats = chD[mo].cats || {};
+    var curCats = rollCats(chD[mo].cats || {});
+    var prevRolledCats = prevRealIdx.map(function(pi2) { return rollCats(chD[pi2].cats || {}); });
     var moverIds = {};
     Object.keys(catYear).forEach(function(cid) { moverIds[cid] = true; });
     Object.keys(curCats).forEach(function(cid) { moverIds[cid] = true; });
     Object.keys(moverIds).forEach(function(cid) {
       var cur2 = curCats[cid] || 0;
       var s4 = 0;
-      prevRealIdx.forEach(function(pi2) { s4 += (chD[pi2].cats || {})[cid] || 0; });
+      prevRolledCats.forEach(function(pc) { s4 += pc[cid] || 0; });
       var avg3 = s4 / prevRealIdx.length;
       if (cur2 === 0 && avg3 === 0) return;
       var c = cats.find(function(cc) { return cc.id === cid; });
@@ -2558,7 +2655,7 @@ function AnalisePrumo(props) {
                 var mixPct = v > 0 ? 10 + (v / hmMax) * 62 : 0;
                 var isPk = wi === hmPeak.wk && di === hmPeak.dow;
                 cells.push(
-                  <div key={String(wi) + "-" + String(di)} style={{ height: 34, borderRadius: 6, background: v > 0 ? "color-mix(in oklch, var(--accent) " + String(Math.round(mixPct)) + "%, var(--surface))" : "var(--surface-2)", border: isPk ? "2px solid var(--accent-2, var(--accent))" : "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-mono)", fontSize: 9, color: (v / hmMax) > 0.55 ? "#fff" : "var(--ink-2)", fontWeight: isPk ? 800 : 500 }}>
+                  <div key={String(wi) + "-" + String(di)} style={{ height: 34, borderRadius: 6, background: v > 0 ? "color-mix(in oklch, var(--accent) " + String(Math.round(mixPct)) + "%, var(--surface))" : "var(--surface-2)", border: isPk ? "2px solid var(--accent-2, var(--accent))" : "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-mono)", fontSize: 9, color: (v / hmMax) > 0.55 ? "var(--on-accent)" : "var(--ink-2)", fontWeight: isPk ? 800 : 500 }}>
                     {v > 0 ? fK(v) : ""}
                   </div>
                 );
@@ -2999,7 +3096,7 @@ function ProjecaoPrumo(props) {
                 var isUp = idx > 0 && h.balance >= hist[idx - 1].balance;
                 return (
                   <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "oklch(0.58 0.13 155 / .55)" : "oklch(0.58 0.16 25 / .45)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
+                    <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "color-mix(in oklch, var(--pos) 55%, transparent)" : "color-mix(in oklch, var(--neg) 45%, transparent)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
                     <div style={{ fontSize: 8, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 3, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)" }}>{sd(h.date).slice(0, 5)}</div>
                   </div>
                 );
@@ -3333,9 +3430,9 @@ function ProjecaoPrumo(props) {
               var cH = chMx > 0 ? (d.cr / chMx) * 170 : 0;
               var cu = idx === mo;
               var isH = hovM === idx;
-              var brandCol = d.real ? "var(--brand)" : "oklch(0.78 0.04 235)";
-              var inkCol = d.real ? "var(--ink-2)" : "oklch(0.78 0.015 250)";
-              var accCol = d.real ? "var(--accent)" : "oklch(0.88 0.06 75)";
+              var brandCol = d.real ? "var(--brand)" : "var(--brand-soft)";
+              var inkCol = d.real ? "var(--ink-2)" : "var(--ink-soft)";
+              var accCol = d.real ? "var(--accent)" : "var(--accent-soft)";
               return (
                 <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", cursor: "pointer" }}
                   onClick={function() { sHM(isH ? null : idx); }}
@@ -3626,7 +3723,7 @@ function VidaPrumo(props) {
               }
               return (
                 <div key={h.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
-                  <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "oklch(0.58 0.13 155 / .55)" : "oklch(0.58 0.16 25 / .45)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
+                  <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "color-mix(in oklch, var(--pos) 55%, transparent)" : "color-mix(in oklch, var(--neg) 45%, transparent)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
                   <div style={{ fontSize: 9, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 4, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{lbl}</div>
                 </div>
               );
@@ -4272,7 +4369,7 @@ function MetasPrumo(props) {
                       <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{cat2.name}</span>
                       <span className="prumo-num" style={{ fontSize: 13, color: overLimit ? "var(--neg)" : "var(--ink)" }}>{fmt(spent2)}</span>
                       <button onClick={function() { sELimId(isEditLim2 ? null : cat2.id); sELimV(lim ? String(lim) : ""); }}
-                        className={"prumo-chip " + (lim ? "brand" : "")} style={{ cursor: "pointer", fontSize: 10, border: lim ? "1px solid oklch(0.38 0.07 235 / .25)" : "1px solid var(--line)" }}>
+                        className={"prumo-chip " + (lim ? "brand" : "")} style={{ cursor: "pointer", fontSize: 10, border: lim ? "1px solid var(--brand-line)" : "1px solid var(--line)" }}>
                         {lim ? "🎯 " + fmt(lim) : "+ definir"}
                       </button>
                     </div>
@@ -4323,6 +4420,8 @@ function ConfigPrumo(props) {
   var cfg = props.cfg;
   var saveCfg = props.saveCfg;
   var onResetData = props.onResetData;
+  var themePref = props.themePref;
+  var sThemePref = props.sThemePref;
 
   var [openCatId, sOpenCatId] = useState(null);
   var [newCatGroup, sNewCatGroup] = useState(null); // mostra o form de categoria principal pra um grupo
@@ -4454,6 +4553,28 @@ function ConfigPrumo(props) {
           </div>
         </div>
         <div className="prumo-cap">{"Personalize o app de acordo com sua realidade. Mudanças aqui afetam todos os meses."}</div>
+      </div>
+
+      {/* APARÊNCIA */}
+      <div className="prumo-card full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Aparência"}</div>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Tema do app"}</h3>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 12 }}>{"No automático, o Prumo acompanha o modo claro/escuro do seu aparelho."}</div>
+        <div style={{ display: "inline-flex", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-pill)", padding: 3, gap: 2 }}>
+          {[{ v: "auto", l: "◐ Automático" }, { v: "light", l: "☀ Claro" }, { v: "dark", l: "☾ Escuro" }].map(function(op) {
+            var on = themePref === op.v;
+            return (
+              <button key={op.v} onClick={function() { sThemePref(op.v); }}
+                style={{ border: "none", borderRadius: "var(--r-pill)", padding: "8px 16px", fontSize: 12, fontWeight: 600, fontFamily: "var(--f-ui)", cursor: "pointer", background: on ? "var(--ink)" : "transparent", color: on ? "var(--surface)" : "var(--ink-2)", transition: "background .15s" }}>
+                {op.l}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* CATEGORIAS */}
@@ -4770,7 +4891,7 @@ function ConfigPrumo(props) {
         </div>
         <button
           className="prumo-btn"
-          style={{ background: "var(--neg)", color: "#fff", border: "none", width: "100%", padding: "12px 0", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "var(--f-ui)", letterSpacing: "0.01em" }}
+          style={{ background: "var(--neg)", color: "var(--surface)", border: "none", width: "100%", padding: "12px 0", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "var(--f-ui)", letterSpacing: "0.01em" }}
           onClick={function() {
             if (!onResetData) return;
             var ok1 = window.confirm("⚠️ Isso vai apagar TODOS os seus lançamentos, projeções e registros de fixas pagas de 2023 a 2027.\n\nConfigurações, categorias e fixas recorrentes são preservadas.\n\nTem certeza que quer continuar?");
@@ -4806,7 +4927,7 @@ function LoginScreen({ onLogin }) {
           <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ width: 6, height: 6, background: "var(--accent)", borderRadius: "50%", display: "block" }} />
           </span>
-          <span style={{ fontFamily: "var(--f-display)", fontSize: 26, fontWeight: 500, letterSpacing: "-0.015em", color: "var(--ink)" }}>{"Prumo"}</span>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 26, fontWeight: 500, letterSpacing: "-0.015em", color: "var(--ink)" }}><span style={{ color: "var(--accent-2)" }}>{"P"}</span>{"rumo"}</span>
         </div>
         <p style={{ color: "var(--ink-3)", fontSize: 13, marginBottom: 28, lineHeight: 1.55, marginTop: 6 }}>{"Seu controle financeiro pessoal"}</p>
         <button onClick={onLogin}
@@ -4878,6 +4999,21 @@ export default function App() {
   var [chatMsgs, sChatMsgs] = useState([]);
   var [chatInput, sChatIn] = useState("");
   var [chatLd, sChatLd] = useState(false);
+  var [themePref, sThemePref] = useState(getThemePref());
+
+  useEffect(function() {
+    try { localStorage.setItem(THEME_KEY, themePref); } catch (e) {}
+    applyTheme(themePref);
+    if (themePref !== "auto") return;
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    var onChg = function() { applyTheme("auto"); };
+    if (mq.addEventListener) mq.addEventListener("change", onChg); else mq.addListener(onChg);
+    return function() { if (mq.removeEventListener) mq.removeEventListener("change", onChg); else mq.removeListener(onChg); };
+  }, [themePref]);
+
+  function toggleTheme() {
+    sThemePref(resolveTheme(themePref) === "dark" ? "light" : "dark");
+  }
 
   var mK = tk(yr, mo);
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
@@ -5857,8 +5993,13 @@ export default function App() {
           <div className="greet">{"Olá, " + ((user && user.displayName) ? String(user.displayName).split(" ")[0] : "Gui")}</div>
           <div className="title">{curTab.l}</div>
         </div>
-        <div className="prumo-avatar" onClick={function() { signOut(auth); }} title="Sair">
-          {((user && user.displayName) ? String(user.displayName).charAt(0) : "G").toUpperCase()}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button className="prumo-theme-btn" onClick={toggleTheme} title={resolveTheme(themePref) === "dark" ? "Modo claro" : "Modo escuro"} aria-label="Alternar tema">
+            {resolveTheme(themePref) === "dark" ? "☀" : "☾"}
+          </button>
+          <div className="prumo-avatar" onClick={function() { signOut(auth); }} title="Sair">
+            {((user && user.displayName) ? String(user.displayName).charAt(0) : "G").toUpperCase()}
+          </div>
         </div>
       </header>
 
@@ -5874,7 +6015,7 @@ export default function App() {
         <aside className="prumo-sidebar">
           <div className="prumo-sb-logo">
             <span className="glyph"></span>
-            <span className="word">{"Prumo"}</span>
+            <span className="word"><span style={{ color: "var(--accent-2)" }}>{"P"}</span>{"rumo"}</span>
           </div>
           {tabGroups.map(function(grp) {
             return (
@@ -5921,6 +6062,9 @@ export default function App() {
               <h1>{curTab.l}</h1>
             </div>
             <div className="prumo-topbar-r">
+              <button className="prumo-theme-btn" onClick={toggleTheme} title={resolveTheme(themePref) === "dark" ? "Modo claro" : "Modo escuro"} aria-label="Alternar tema">
+                {resolveTheme(themePref) === "dark" ? "☀" : "☾"}
+              </button>
               <div className="prumo-month-pill">
                 <button onClick={goPrev}>{"‹"}</button>
                 <span>{MS[mo].toUpperCase() + " " + String(yr)}</span>
@@ -6212,7 +6356,7 @@ export default function App() {
 
         {/* ═══ CONFIGURAÇÕES ═══ */}
         {tab === "cfg" && (
-          <ConfigPrumo cfg={cfg} saveCfg={saveCfg} onResetData={onResetData} />
+          <ConfigPrumo cfg={cfg} saveCfg={saveCfg} onResetData={onResetData} themePref={themePref} sThemePref={sThemePref} />
         )}
 
         {/* ═══ MENSAL ═══ */}
@@ -6316,7 +6460,7 @@ export default function App() {
                   {catF && <span style={{ marginLeft: 6, fontSize: 10, color: "var(--brand)", textTransform: "none" }}>{"— filtrado"}</span>}
                 </div>
                 {txs.length > 0 && !cfCl && (
-                  <button onClick={function() { sCfC(true); }} className="prumo-btn ghost" style={{ padding: "5px 10px", fontSize: 10, color: "var(--neg)", borderColor: "oklch(0.58 0.16 25 / .3)" }}>{"🗑️ Limpar"}</button>
+                  <button onClick={function() { sCfC(true); }} className="prumo-btn ghost" style={{ padding: "5px 10px", fontSize: 10, color: "var(--neg)", borderColor: "var(--neg-line)" }}>{"🗑️ Limpar"}</button>
                 )}
                 {cfCl && (
                   <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
@@ -6347,9 +6491,9 @@ export default function App() {
                           {tx.note && <div className="prumo-cap" style={{ fontSize: 11, fontStyle: "italic", marginTop: 1 }}>{"📝 " + tx.note}</div>}
                           <div style={{ display: "flex", gap: 3, marginTop: 2, flexWrap: "wrap" }}>
                             <span style={S.tag(grp ? grp.color : "#6A90B8")}>{cat2 ? cat2.name : "?"}</span>
-                            {sp2.map(function(s, idx) { return <span key={idx} style={S.tag("#9A7420")}>{"÷" + s.person}</span>; })}
+                            {sp2.map(function(s, idx) { return <span key={idx} style={S.tag("var(--g-des)")}>{"÷" + s.person}</span>; })}
                             {tx.reimbursed && <span style={S.tag("#7C3AED")}>{"Reemb."}</span>}
-                            {tx.src === "proj" && <span style={S.tag("#1B5FAA")}>{"Proj."}</span>}
+                            {tx.src === "proj" && <span style={S.tag("var(--g-ess)")}>{"Proj."}</span>}
                           </div>
                         </div>
                         <div style={{ textAlign: "right", minWidth: 55 }}>
@@ -6386,7 +6530,7 @@ export default function App() {
                           <SE prumo compact splits={eD} onChange={function(s) { sED(s); }} />
                           <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
                             <button className="prumo-btn accent" onClick={function() { savSE(tx.id); }}>{"Salvar"}</button>
-                            {sp2.length > 0 && <button onClick={function() { rmSE(tx.id); }} className="prumo-btn ghost" style={{ color: "var(--neg)", borderColor: "oklch(0.58 0.16 25 / .3)", fontSize: 11 }}>{"Remover"}</button>}
+                            {sp2.length > 0 && <button onClick={function() { rmSE(tx.id); }} className="prumo-btn ghost" style={{ color: "var(--neg)", borderColor: "var(--neg-line)", fontSize: 11 }}>{"Remover"}</button>}
                             <button onClick={function() { sEId(null); }} className="prumo-btn ghost">{"×"}</button>
                           </div>
                         </div>
@@ -6472,10 +6616,10 @@ export default function App() {
               <span style={{ fontSize: 18 }}>{"✦"}</span>
               <div>
                 <div style={{ color: "var(--surface)", fontWeight: 600, fontSize: 13, fontFamily: "var(--f-display)" }}>{"Assistente Prumo"}</div>
-                <div style={{ color: "oklch(1 0 0 / .65)", fontSize: 10 }}>{"Diga o que gastou ou recebeu"}</div>
+                <div style={{ color: "var(--surface)", opacity: 0.65, fontSize: 10 }}>{"Diga o que gastou ou recebeu"}</div>
               </div>
             </div>
-            <span onClick={function() { sChatOpen(false); }} style={{ color: "oklch(1 0 0 / .6)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>{"×"}</span>
+            <span onClick={function() { sChatOpen(false); }} style={{ color: "var(--surface)", opacity: 0.6, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>{"×"}</span>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, minHeight: 120, maxHeight: 260, background: "var(--bg)" }}>
             {chatMsgs.length === 0 && (
