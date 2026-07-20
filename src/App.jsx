@@ -519,7 +519,8 @@ function calcCashOutMonth(yrD, cfg, yr, monthIdx) {
   });
   var key = tk(yr, monthIdx);
   var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
-  var cartao = (invByMonth[key] || { gross: 0 }).gross;
+  // net = só a minha parte da fatura (splits/reembolsos fora) — a visão é "o que é realmente meu"
+  var cartao = (invByMonth[key] || { net: 0 }).net;
   var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
   if (!realInvoiceMonths[key]) {
     cartao += fxList.filter(function(f) { return isCredit(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
@@ -557,10 +558,14 @@ function calcCashDetailMonth(yrD, cfg, yr, monthIdx) {
   var fxCaixa = fxList.filter(function(f) { return !isCredit(f.payment); });
   var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
   var varCaixa = (mb.tx || []).filter(function(t) { return !isCredit(t.payment); });
-  var cartaoTot = cardTx.reduce(function(a, t) { return a + (t.amount || 0); }, 0) + fxCartao.reduce(function(a, f) { return a + myFx(f); }, 0);
+  // Totais = só a minha parte (myP); "terceiros" = o que eu adianto de splits/reembolsos e volta em A receber
+  var cartaoTot = cardTx.reduce(function(a, t) { return a + myP(t); }, 0) + fxCartao.reduce(function(a, f) { return a + myFx(f); }, 0);
+  var cartaoTerceiros = cardTx.reduce(function(a, t) { return a + ((t.amount || 0) - myP(t)); }, 0);
   var fixasTot = fxCaixa.reduce(function(a, f) { return a + myFx(f); }, 0);
+  var fixasTerceiros = fxCaixa.reduce(function(a, f) { return a + (f.hasSplit ? spt(f) : 0); }, 0);
   var varTot = varCaixa.reduce(function(a, t) { return a + myP(t); }, 0);
-  return { cardTx: cardTx, fxCartao: fxCartao, fxCaixa: fxCaixa, varCaixa: varCaixa, cartaoTot: cartaoTot, fixasTot: fixasTot, varTot: varTot, totalOut: cartaoTot + fixasTot + varTot, realInvoice: realInvoice };
+  var varTerceiros = varCaixa.reduce(function(a, t) { return a + ((t.amount || 0) - myP(t)); }, 0);
+  return { cardTx: cardTx, fxCartao: fxCartao, fxCaixa: fxCaixa, varCaixa: varCaixa, cartaoTot: cartaoTot, fixasTot: fixasTot, varTot: varTot, totalOut: cartaoTot + fixasTot + varTot, realInvoice: realInvoice, cartaoTerceiros: cartaoTerceiros, terceirosTot: cartaoTerceiros + fixasTerceiros + varTerceiros };
 }
 
 // Média do resíduo variável dos últimos 3 meses fechados (Abordagem B, decidida 2026-07-01):
@@ -2479,7 +2484,7 @@ function AnalisePrumo(props) {
             <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"O que entra e o que sai da conta"}</h2>
           </div>
         </div>
-        <div className="prumo-cap" style={{ marginBottom: 6 }}>{"Regime caixa: fatura do cartão que vence no mês + fixas e variável fora do cartão. Toque num mês pra abrir o extrato completo."}</div>
+        <div className="prumo-cap" style={{ marginBottom: 6 }}>{"Regime caixa e só a sua parte: fatura do cartão que vence no mês + fixas e variável fora do cartão, sem o que é de terceiros. Toque num mês pra abrir o extrato completo."}</div>
         {fluxoMeses.map(function(fx2) {
           var colR = fx2.real >= 0 ? "var(--pos)" : "var(--neg)";
           var usoPct = fx2.rec > 0 ? Math.min(fx2.out / fx2.rec, 1) : (fx2.out > 0 ? 1 : 0);
@@ -2544,10 +2549,13 @@ function AnalisePrumo(props) {
                 {/* SAÍDA: FATURA DO CARTÃO */}
                 <div style={{ marginTop: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--neg)", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 4 }}>
-                    <span>{"💳 Fatura do cartão" + (fluxoDet.realInvoice ? "" : " · estimada")}</span><span className="prumo-num">{fmt(fluxoDet.cartaoTot)}</span>
+                    <span>{"💳 Fatura do cartão · sua parte" + (fluxoDet.realInvoice ? "" : " · estimada")}</span><span className="prumo-num">{fmt(fluxoDet.cartaoTot)}</span>
                   </div>
+                  {fluxoDet.cartaoTerceiros > 0 && (
+                    <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 4 }}>{"+ " + fmt(fluxoDet.cartaoTerceiros) + " de terceiros na fatura — você adianta e recebe de volta (A receber)."}</div>
+                  )}
                   {fluxoDet.cartaoTot <= 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{"Nenhuma fatura vencendo neste mês."}</div>}
-                  {groupCashTx(fluxoDet.cardTx, function(t3) { return t3.amount || 0; }).map(function(g3) {
+                  {groupCashTx(fluxoDet.cardTx, myP).map(function(g3) {
                     return (
                       <div key={g3.id} style={{ marginBottom: 2 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink)", fontWeight: 600, padding: "2px 0" }}>
@@ -2622,9 +2630,12 @@ function AnalisePrumo(props) {
 
                 {/* SOBRA */}
                 <div style={{ borderTop: "2px solid var(--line-2)", marginTop: 14, paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{"Sobra do mês (caixa)"}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{"Sobra do mês (caixa · sua parte)"}</span>
                   <span className="prumo-num" style={{ fontSize: 20, color: fluxoSelMes.real >= 0 ? "var(--pos)" : "var(--neg)" }}>{fmt(fluxoSelMes.real)}</span>
                 </div>
+                {fluxoDet.terceirosTot > 0 && (
+                  <div className="prumo-cap" style={{ fontSize: 10, marginTop: 6 }}>{"Fora isso, você adianta " + fmt(fluxoDet.terceirosTot) + " de terceiros no mês (splits/reembolsos) — esse valor volta pra você em A receber."}</div>
+                )}
 
                 <button className="prumo-btn brand" style={{ width: "100%", marginTop: 12, padding: "10px 14px" }} onClick={function() { sFluxoView("cenario"); }}>
                   {"📊 E se eu gastar como nos últimos 3 meses?"}
