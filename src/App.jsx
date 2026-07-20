@@ -1468,9 +1468,26 @@ function DashboardPrumo(props) {
   var pctCur = (curInvoice && sal > 0) ? Math.min(curInvoice.gross / sal, 1) : 0;
   var curCrossesYear = (mo === 11); // dez → próxima fatura vence em janeiro do ano seguinte
 
+  /* ─── A receber por mês (caixa): partes divididas de compras no CARTÃO, no mês do settleMonth.
+     Só cartão: a fatura sai CHEIA (gross) da conta e o reembolso entra depois — sem isso os meses
+     ficam artificialmente piores que a realidade. Não-cartão e fixas divididas já entram netados
+     (myP / amount−spt) na despesa, então somar recebível deles duplicaria. Parcelas projetadas
+     divididas (src proj) contam: são compromisso real de quem dividiu. ─── */
+  var recvByMonth = {};
+  if (yrD) {
+    yrD.forEach(function(mb3, bidx3) {
+      (mb3.tx || []).forEach(function(t) {
+        if (!isCreditPay(t.payment)) return;
+        if (gsp(t).length === 0) return;
+        var smk = t.settleMonth || tk(yr, bidx3);
+        recvByMonth[smk] = (recvByMonth[smk] || 0) + spt(t);
+      });
+    });
+  }
+
   /* ─── Fluxo de caixa projetado · próximos 4 meses ───
-     Só compromisso REAL (fatura + fixas + parcelas projetadas). A comparação com a média
-     de variável dos últimos 3 meses mora na aba Análise (calcEstVarFuturo). */
+     Só compromisso REAL (fatura + fixas + parcelas projetadas + divididas a receber). A comparação
+     com a média de variável dos últimos 3 meses mora na aba Análise (calcEstVarFuturo). */
   var cashflowMonths = [];
   if (yrD && cfg) {
     var fxRaw = cfg.fixed || [];
@@ -1479,6 +1496,8 @@ function DashboardPrumo(props) {
       if (tgtMo > 11) break; // não cruza o ano (limitação de cross-year já combinada)
       var mb = yrD[tgtMo] || { tx: [], cr: [] };
       var rec = sal + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
+      var recvMes = cashView ? (recvByMonth[tk(yr, tgtMo)] || 0) : 0; // caixa: divididas do cartão entram no mês do settleMonth
+      rec += recvMes;
       var desp;
       if (cashView) {
         desp = calcCashOut(tgtMo); // regime de caixa: fatura + fixas + parcelas — compromisso real, sem estimativa
@@ -1488,7 +1507,7 @@ function DashboardPrumo(props) {
         var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
         desp = fxSum + varSum; // competência: tudo que foi lançado no mês
       }
-      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp });
+      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp, recv: recvMes });
     }
   }
   // Semáforo por piso fixo: verde ≥ 3000, amarelo 0–3000, vermelho ≤ 0
@@ -1715,6 +1734,9 @@ function DashboardPrumo(props) {
                   </div>
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{fmt(m.sobra)}</div>
                   <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{isCur ? "livre" : (cashView ? "livre · fixas + parcelas" : "livre · lançado no mês")}</div>
+                  {m.recv > 0 && (
+                    <div className="prumo-cap" style={{ marginTop: 2, fontSize: 9, color: "var(--pos)", fontFamily: "var(--f-mono)" }}>{"inclui +" + fmt(m.recv) + " a receber"}</div>
+                  )}
                 </div>
               );
             })}
@@ -2031,6 +2053,7 @@ function AnalisePrumo(props) {
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
   var [showFluxo3m, sShowFluxo3m] = useState(false); // toggle do fluxo de caixa real × média 3m
   var [pieSel, sPieSel] = useState(null); // grupo expandido no card Real vs Meta
+  var [paceSelMap, sPaceSelMap] = useState({}); // meses passados visíveis no Ritmo do mês (mi → true)
   var [rvSel, sRvSel] = useState(null); // mês expandido no card Recorrente vs Variável
 
   /* Fluxo de caixa: real (fixas + parcelas) × cenário com média de variável dos últimos 3 meses */
@@ -2230,18 +2253,21 @@ function AnalisePrumo(props) {
   var isCurMonthReal = nowDt.getFullYear() === yr && nowDt.getMonth() === mo;
   var paceDays = isCurMonthReal ? Math.min(nowDt.getDate(), 31) : 31;
   var curCum = null; var avgCum = null; var paceMax = 1;
+  var pacePrev = []; // meses passados com dado real: { mi, cum, color } — selecionáveis no card
   if (yrD && chD.length === 12) {
     curCum = cumOf(mo);
-    var prevCums = [];
-    for (var pm = 0; pm < mo; pm++) { if (chD[pm].real) prevCums.push(cumOf(pm)); }
-    if (prevCums.length > 0) {
+    for (var pm = 0; pm < mo; pm++) {
+      if (chD[pm].real) pacePrev.push({ mi: pm, cum: cumOf(pm), color: CATP[pacePrev.length % CATP.length] });
+    }
+    if (pacePrev.length > 0) {
       avgCum = [];
       for (var di4 = 0; di4 < 31; di4++) {
         var s3 = 0;
-        prevCums.forEach(function(pc) { s3 += pc[di4]; });
-        avgCum.push(s3 / prevCums.length);
+        pacePrev.forEach(function(pc) { s3 += pc.cum[di4]; });
+        avgCum.push(s3 / pacePrev.length);
       }
       paceMax = Math.max(curCum[30], avgCum[30], 1);
+      pacePrev.forEach(function(pc) { if (paceSelMap[pc.mi] && pc.cum[30] > paceMax) paceMax = pc.cum[30]; });
     }
   }
   var pacePts = function(arr, upto) {
@@ -2680,17 +2706,34 @@ function AnalisePrumo(props) {
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><div style={{ width: 14, height: 3, borderRadius: 2, background: "var(--brand)" }} /><span>{MS[mo] + ": " + fmt(paceCurNow)}</span></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><div style={{ width: 14, height: 3, borderRadius: 2, background: "var(--ink-3)" }} /><span>{"média meses anteriores: " + fmt(paceAvgNow)}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><div style={{ width: 14, height: 3, borderRadius: 2, background: "var(--ink)" }} /><span>{"média: " + fmt(paceAvgNow)}</span></div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {pacePrev.map(function(pp) {
+              var on = !!paceSelMap[pp.mi];
+              return (
+                <button key={pp.mi} onClick={function() { var nm2 = { ...paceSelMap }; if (nm2[pp.mi]) delete nm2[pp.mi]; else nm2[pp.mi] = true; sPaceSelMap(nm2); }}
+                  style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: on ? "var(--ink)" : "var(--ink-3)", background: on ? "var(--surface-2)" : "transparent", border: on ? "1.5px solid " + pp.color : "1px solid var(--line)", borderRadius: 20, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--f-ui)", fontWeight: on ? 700 : 500 }}>
+                  <div style={{ width: 12, height: 0, borderTop: "2px dotted " + pp.color }} />
+                  <span>{MA[pp.mi]}</span>
+                  {on && <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--ink-3)" }}>{fK(pp.cum[30])}</span>}
+                </button>
+              );
+            })}
           </div>
           <svg viewBox="0 0 340 148" style={{ width: "100%", height: "auto", display: "block" }}>
             <line x1="12" y1="132" x2="328" y2="132" stroke="var(--line)" strokeWidth="1" />
-            <polyline points={pacePts(avgCum, 31)} fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeDasharray="4 3" />
+            {pacePrev.map(function(pp) {
+              if (!paceSelMap[pp.mi]) return null;
+              return <polyline key={pp.mi} points={pacePts(pp.cum, 31)} fill="none" stroke={pp.color} strokeWidth="1.5" strokeDasharray="2 3" strokeLinecap="round" />;
+            })}
+            <polyline points={pacePts(avgCum, 31)} fill="none" stroke="var(--ink)" strokeWidth="2" strokeDasharray="5 3" opacity="0.8" />
             <polyline points={pacePts(curCum, paceDays)} fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" />
             <circle cx={String(Math.round(12 + ((paceDays - 1) / 30) * 316))} cy={String(Math.round(132 - (paceCurNow / paceMax) * 116))} r="4" fill="var(--brand)" />
             <text x="12" y="145" fontSize="8" fill="var(--ink-3)" fontFamily="var(--f-mono)">{"dia 1"}</text>
             <text x="310" y="145" fontSize="8" fill="var(--ink-3)" fontFamily="var(--f-mono)">{"31"}</text>
           </svg>
-          <div className="prumo-cap" style={{ marginTop: 6, fontSize: 10 }}>{"Gasto variável acumulado (sem investimentos). Se a linha azul cruza a tracejada cedo, o mês tende a estourar."}</div>
+          <div className="prumo-cap" style={{ marginTop: 6, fontSize: 10 }}>{"Gasto variável acumulado (sem investimentos). Azul = " + MS[mo] + " · tracejada escura = média · toque num mês pra sobrepor a curva dele (pontilhada)."}</div>
         </div>
       )}
 
