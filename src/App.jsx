@@ -492,9 +492,11 @@ function calcInvoices(yrD, year, payments) {
       }
       if (y === undefined) { y = year; mo0 = bucketMo; day = 15; } // proj/sem data: assume meio do mês
       var key = invoiceKeyForYMD(y, mo0, day, closing);
-      if (!byMonth[key]) byMonth[key] = { gross: 0, net: 0 };
+      if (!byMonth[key]) byMonth[key] = { gross: 0, net: 0, parc: 0 };
       byMonth[key].gross += (t.amount || 0);
       byMonth[key].net += myP(t);
+      // Parcelado: projeções (src proj) ou desc com "N/M" (padrão de import "Parcela 1/10")
+      if (t.src === "proj" || pi(t.desc || "")) byMonth[key].parc += (t.amount || 0);
     });
   });
   return byMonth;
@@ -1515,8 +1517,8 @@ function DashboardPrumo(props) {
   for (var ik = 1; ik <= 6; ik++) {
     var imo = mo + ik;
     if (imo > 11) break; // fatura que cruza o ano fica fora (limitação de cross-year já combinada)
-    var inv = invByMonth[tk(yr, imo)] || { gross: 0, net: 0 };
-    invoiceList.push({ mo0: imo, label: MS[imo], gross: inv.gross, net: inv.net });
+    var inv = invByMonth[tk(yr, imo)] || { gross: 0, net: 0, parc: 0 };
+    invoiceList.push({ mo0: imo, label: MS[imo], gross: inv.gross, net: inv.net, parc: inv.parc || 0 });
   }
   var curInvoice = invoiceList.length > 0 ? invoiceList[0] : null;
   var nextInvoices = invoiceList.slice(1);
@@ -1857,6 +1859,12 @@ function DashboardPrumo(props) {
                 <i style={{ width: pct(pctCur), background: "var(--accent)" }} />
               </div>
               <div className="prumo-cap" style={{ marginTop: 6 }}>{"Líquido após reembolsos: " + fmt(curInvoice.net)}</div>
+              {curInvoice.parc > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                  <span className="prumo-cap" style={{ fontSize: 11 }}>{"📅 Parcelado nesta fatura: " + fmt(curInvoice.parc)}</span>
+                  <span className="prumo-chip" style={{ fontSize: 10 }}>{pct(sal > 0 ? curInvoice.parc / sal : 0) + " do salário"}</span>
+                </div>
+              )}
 
               {/* PRÓXIMAS FATURAS — parcelas já comprometidas, estilo "Selecione uma fatura" */}
               {nextInvoices.length > 0 && (
@@ -1864,9 +1872,14 @@ function DashboardPrumo(props) {
                   <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Próximas faturas"}</div>
                   {nextInvoices.map(function(iv) {
                     return (
-                      <div key={iv.mo0} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{iv.label}</span>
-                        <span style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 700, color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>{fmt(iv.gross)}</span>
+                      <div key={iv.mo0} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--line)", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>{iv.label}</span>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 700, color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>{fmt(iv.gross)}</div>
+                          {iv.parc > 0 && (
+                            <div className="prumo-cap" style={{ fontSize: 10 }}>{"📅 " + fmt(iv.parc) + " parcelado · " + pct(sal > 0 ? iv.parc / sal : 0) + " do salário"}</div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -5732,6 +5745,9 @@ export default function App() {
     var newTx = { id: uid(), desc: cln(p.desc, 500), amount: cnum(p.valor), cat: p.cat, payment: cln(p.pay, 100), splits: sp, hasSplit: sp.length > 0, date: p.dateYMD ? p.dateYMD + "T12:00:00.000Z" : new Date().toISOString(), received: false, reimbursed: !!p.reimb, note: cln(p.note || "", 2000), src: "manual" };
     // settleMonth = mês em que a dívida a receber deve aparecer. Manual (form) ou default: mês seguinte. Só relevante para splits.
     if (sp.length > 0) newTx.settleMonth = p.settleMonth || nextMonthOfKey(mK);
+    // Parcelado: marca "1/10" na descrição da 1ª parcela (imports já vêm assim) — a fatura detecta parcelas por esse padrão
+    var icN = parseInt(p.ic); var itN = parseInt(p.it);
+    if (icN >= 1 && itN > 1 && !pi(newTx.desc)) newTx.desc = cln(String(p.desc) + " " + String(icN) + "/" + String(itN), 500);
     saveMd({ ...md, tx: txs.concat([newTx]) });
     var ic = parseInt(p.ic);
     var it = parseInt(p.it);
