@@ -529,6 +529,40 @@ function calcCashOutMonth(yrD, cfg, yr, monthIdx) {
   return cartao + fixasNaoCartao + varNaoCartao;
 }
 
+// Itemização do calcCashOutMonth — MESMAS regras e totais, mas devolvendo as listas (fatura, fixas, variável)
+// que alimentam o popup "extrato caixa" da Análise. Se mudar uma regra aqui, mudar lá (e vice-versa).
+function calcCashDetailMonth(yrD, cfg, yr, monthIdx) {
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
+  var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
+  var key = tk(yr, monthIdx);
+  var myFx = function(f) { return f.hasSplit ? f.amount - spt(f) : f.amount; };
+  // Fatura: toda tx de cartão (de qualquer mês) cuja fatura vence neste mês
+  var cardTx = [];
+  var realInvoice = false;
+  (yrD || []).forEach(function(mb2, bidx) {
+    (((mb2 || {}).tx) || []).forEach(function(t) {
+      var closing = creditClosingFor(t.payment, paysList);
+      if (closing === null) return;
+      var y, mo0, day;
+      if (t.date) { var dt = new Date(t.date); if (!isNaN(dt.getTime())) { y = dt.getFullYear(); mo0 = dt.getMonth(); day = dt.getDate(); } }
+      if (y === undefined) { y = yr; mo0 = bidx; day = 15; }
+      if (invoiceKeyForYMD(y, mo0, day, closing) !== key) return;
+      cardTx.push(t);
+      if (t.src !== "proj") realInvoice = true;
+    });
+  });
+  var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
+  var fxCartao = realInvoice ? [] : fxList.filter(function(f) { return isCredit(f.payment); });
+  var fxCaixa = fxList.filter(function(f) { return !isCredit(f.payment); });
+  var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
+  var varCaixa = (mb.tx || []).filter(function(t) { return !isCredit(t.payment); });
+  var cartaoTot = cardTx.reduce(function(a, t) { return a + (t.amount || 0); }, 0) + fxCartao.reduce(function(a, f) { return a + myFx(f); }, 0);
+  var fixasTot = fxCaixa.reduce(function(a, f) { return a + myFx(f); }, 0);
+  var varTot = varCaixa.reduce(function(a, t) { return a + myP(t); }, 0);
+  return { cardTx: cardTx, fxCartao: fxCartao, fxCaixa: fxCaixa, varCaixa: varCaixa, cartaoTot: cartaoTot, fixasTot: fixasTot, varTot: varTot, totalOut: cartaoTot + fixasTot + varTot, realInvoice: realInvoice };
+}
+
 // Média do resíduo variável dos últimos 3 meses fechados (Abordagem B, decidida 2026-07-01):
 // resíduo = variável lançado (sem proj) − fixas-cartão do mês. Média negativa vira 0.
 function calcEstVarFuturo(yrD, cfg, yr, mo) {
@@ -2074,25 +2108,45 @@ function AnalisePrumo(props) {
   var totalInstMonthly = props.totalInstMonthly || 0;
   var rmInst = props.rmInst;
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
-  var [showFluxo3m, sShowFluxo3m] = useState(false); // toggle do fluxo de caixa real × média 3m
+  var [fluxoSel, sFluxoSel] = useState(null); // mês aberto no popup "extrato caixa" do fluxo
+  var [fluxoView, sFluxoView] = useState("caixa"); // popup: "caixa" (extrato) | "cenario" (real × média 3m)
   var [pieSel, sPieSel] = useState(null); // grupo expandido no card Real vs Meta
   var [paceSelMap, sPaceSelMap] = useState({}); // meses passados visíveis no Ritmo do mês (mi → true)
   var [rvSel, sRvSel] = useState(null); // mês expandido no card Recorrente vs Variável
 
-  /* Fluxo de caixa: real (fixas + parcelas) × cenário com média de variável dos últimos 3 meses */
+  /* Fluxo de caixa: saldo caixa dos próximos meses (linhas clicáveis → popup extrato) + cenário média 3m */
   var fluxoEstVar = 0;
   var fluxoMeses = [];
-  if (showFluxo3m && yrD && cfg) {
+  if (yrD && cfg) {
     fluxoEstVar = calcEstVarFuturo(yrD, cfg, yr, mo);
     var fluxoSal = (cfg && cfg.salary) || 0;
     for (var fmi = mo; fmi <= 11 && fluxoMeses.length < 4; fmi++) {
       var fmb = yrD[fmi] || { tx: [], cr: [] };
       var fRec = fluxoSal + (fmb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
-      var fReal = fRec - calcCashOutMonth(yrD, cfg, yr, fmi);
+      var fOut = calcCashOutMonth(yrD, cfg, yr, fmi);
       var fIsCur = fmi === mo;
-      fluxoMeses.push({ mo0: fmi, label: MA[fmi], real: fReal, comMedia: fIsCur ? fReal : fReal - fluxoEstVar, isCur: fIsCur });
+      fluxoMeses.push({ mo0: fmi, label: MA[fmi], rec: fRec, out: fOut, real: fRec - fOut, comMedia: fIsCur ? fRec - fOut : fRec - fOut - fluxoEstVar, isCur: fIsCur });
     }
   }
+  var fluxoDet = (fluxoSel !== null && yrD && cfg) ? calcCashDetailMonth(yrD, cfg, yr, fluxoSel) : null;
+  var fluxoSelMes = fluxoSel !== null ? fluxoMeses.find(function(f2) { return f2.mo0 === fluxoSel; }) : null;
+  // Agrupa lançamentos por categoria principal (sub soma na mãe, igual ChartTip); vFn = valor bruto (fatura) ou minha parte (caixa)
+  var groupCashTx = function(txList, vFn) {
+    var by = {};
+    txList.forEach(function(t) {
+      var c = cats.find(function(c2) { return c2.id === t.cat; });
+      var pid = c ? (c.parent || c.id) : "_semcat";
+      if (!by[pid]) {
+        var pc = cats.find(function(c2) { return c2.id === pid; }) || c;
+        by[pid] = { id: pid, name: pc ? pc.name : "Sem categoria", icon: pc && pc.icon ? pc.icon : "▫️", total: 0, items: [] };
+      }
+      var v = vFn(t);
+      if (v <= 0) return;
+      by[pid].total += v;
+      by[pid].items.push({ id: t.id, desc: t.desc || "Lançamento", val: v, proj: t.src === "proj" });
+    });
+    return Object.values(by).filter(function(g) { return g.total > 0; }).sort(function(a, b) { return b.total - a.total; });
+  };
 
   /* Gastos por dia da semana (ano todo) */
   var dowStats = [
@@ -2417,44 +2471,187 @@ function AnalisePrumo(props) {
 
   return (
     <div className="prumo-form-grid">
-      {/* ⓪ FLUXO DE CAIXA · REAL × MÉDIA 3M (abre no clique) */}
+      {/* ⓪ FLUXO DE CAIXA · EXTRATO POR MÊS (popup) + CENÁRIO REAL × MÉDIA 3M */}
       <div className="prumo-card l-brand full">
         <div className="prumo-card-hd">
           <div>
             <div className="prumo-lbl">{"Fluxo de caixa · próximos meses"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Real × média dos últimos 3 meses"}</h2>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"O que entra e o que sai da conta"}</h2>
           </div>
-          <button className={"prumo-btn " + (showFluxo3m ? "ghost" : "brand")} onClick={function() { sShowFluxo3m(!showFluxo3m); }}>{showFluxo3m ? "Fechar" : "📊 Analisar"}</button>
         </div>
-        {!showFluxo3m && (
-          <div className="prumo-cap">{"Clique em Analisar pra comparar a sobra só com compromissos reais (fixas + parcelas) contra o cenário somando seu gasto variável médio dos últimos 3 meses."}</div>
-        )}
-        {showFluxo3m && (
-          <div>
-            <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Variável médio (últimos 3 meses fechados): " + fmt(fluxoEstVar) + "/mês · aplicado só nos meses futuros"}</div>
-            {fluxoMeses.map(function(fx2) {
-              var colR = fx2.real >= 0 ? "var(--pos)" : "var(--neg)";
-              var colM = fx2.comMedia >= 0 ? "var(--pos)" : "var(--neg)";
-              return (
-                <div key={fx2.mo0} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-                  <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 }}>{fx2.label + (fx2.isCur ? " · agora" : "")}</div>
-                  <div className="prumo-mini-stat-row cols-2">
-                    <div className="prumo-mini-stat" style={{ textAlign: "left" }}>
-                      <div className="lbl">{"Real · fixas + parcelas"}</div>
-                      <div className="val" style={{ color: colR, fontSize: 16 }}>{fmt(fx2.real)}</div>
+        <div className="prumo-cap" style={{ marginBottom: 6 }}>{"Regime caixa: fatura do cartão que vence no mês + fixas e variável fora do cartão. Toque num mês pra abrir o extrato completo."}</div>
+        {fluxoMeses.map(function(fx2) {
+          var colR = fx2.real >= 0 ? "var(--pos)" : "var(--neg)";
+          var usoPct = fx2.rec > 0 ? Math.min(fx2.out / fx2.rec, 1) : (fx2.out > 0 ? 1 : 0);
+          return (
+            <div key={fx2.mo0} onClick={function() { sFluxoSel(fx2.mo0); sFluxoView("caixa"); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 4px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}>
+              <span style={{ width: 38, flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: fx2.isCur ? 800 : 600, color: fx2.isCur ? "var(--ink)" : "var(--ink-3)", textTransform: "uppercase" }}>{fx2.label}</span>
+              {fx2.isCur && <span className="prumo-chip brand" style={{ fontSize: 9, flexShrink: 0 }}>{"agora"}</span>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: "var(--pos)", fontFamily: "var(--f-mono)" }}>{"entra " + fK(fx2.rec)}</span>
+                  <span style={{ color: "var(--neg)", fontFamily: "var(--f-mono)" }}>{"sai " + fK(fx2.out)}</span>
+                </div>
+                <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: "var(--surface-2)", marginTop: 4 }}>
+                  <div style={{ width: pct(usoPct), background: fx2.out > fx2.rec ? "var(--neg)" : "var(--accent)", borderRadius: 3 }} />
+                </div>
+              </div>
+              <div style={{ textAlign: "right", width: 92, flexShrink: 0 }}>
+                <div className="prumo-cap" style={{ fontSize: 9 }}>{"sobra"}</div>
+                <div className="prumo-num" style={{ fontSize: 14, color: colR }}>{fmt(fx2.real)}</div>
+              </div>
+              <span style={{ color: "var(--ink-3)", flexShrink: 0 }}>{"›"}</span>
+            </div>
+          );
+        })}
+        <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Sobra = entradas − saídas de caixa. Nos meses futuros o variável ainda não aconteceu — dentro do extrato tem o cenário ≈ com sua média dos últimos 3 meses."}</div>
+      </div>
+
+      {/* POPUP EXTRATO CAIXA DO MÊS */}
+      {fluxoSel !== null && fluxoDet && fluxoSelMes && (
+        <>
+          <div className="prumo-sheet-overlay" onClick={function() { sFluxoSel(null); }}></div>
+          <div className="prumo-sheet" style={{ maxWidth: 560, margin: "0 auto", left: 16, right: 16 }}>
+            <div className="prumo-sheet-handle"></div>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+              <div>
+                <div className="prumo-sheet-h">{MS[fluxoSel] + " · regime caixa"}</div>
+                <div className="prumo-sheet-sub">{fluxoSelMes.isCur ? "Mês atual — o que já entrou e o que sai da conta" : "Projeção — fatura, fixas e parcelas já conhecidas"}</div>
+              </div>
+              <button className="prumo-btn ghost" onClick={function() { sFluxoSel(null); }} style={{ padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>{"Fechar"}</button>
+            </div>
+
+            {fluxoView === "caixa" ? (
+              <div>
+                {/* ENTRADAS */}
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--pos)", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 4 }}>
+                    <span>{"Entradas"}</span><span className="prumo-num">{fmt(fluxoSelMes.rec)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
+                    <span>{"💼 Salário"}</span><span className="prumo-num">{fmt((cfg && cfg.salary) || 0)}</span>
+                  </div>
+                  {(((yrD && yrD[fluxoSel]) || {}).cr || []).map(function(c3, ci3) {
+                    return (
+                      <div key={ci3} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
+                        <span>{"➕ " + (c3.desc || c3.type || "Crédito")}</span><span className="prumo-num">{fmt(c3.amount || 0)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* SAÍDA: FATURA DO CARTÃO */}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--neg)", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 4 }}>
+                    <span>{"💳 Fatura do cartão" + (fluxoDet.realInvoice ? "" : " · estimada")}</span><span className="prumo-num">{fmt(fluxoDet.cartaoTot)}</span>
+                  </div>
+                  {fluxoDet.cartaoTot <= 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{"Nenhuma fatura vencendo neste mês."}</div>}
+                  {groupCashTx(fluxoDet.cardTx, function(t3) { return t3.amount || 0; }).map(function(g3) {
+                    return (
+                      <div key={g3.id} style={{ marginBottom: 2 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink)", fontWeight: 600, padding: "2px 0" }}>
+                          <span>{(g3.icon ? g3.icon + " " : "") + g3.name}</span><span className="prumo-num">{fmt(g3.total)}</span>
+                        </div>
+                        {g3.items.map(function(it3, ii3) {
+                          return (
+                            <div key={it3.id || ii3} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", padding: "1px 0 1px 16px" }}>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{"└ " + it3.desc + (it3.proj ? " · parcela" : "")}</span>
+                              <span className="prumo-num" style={{ flexShrink: 0 }}>{fmt(it3.val)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                  {fluxoDet.fxCartao.length > 0 && (
+                    <div style={{ marginTop: 4 }}>
+                      <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 2 }}>{"Fixas no cartão (fatura ainda sem lançamentos — entra a estimativa):"}</div>
+                      {fluxoDet.fxCartao.map(function(f3) {
+                        return (
+                          <div key={f3.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", padding: "1px 0 1px 16px" }}>
+                            <span>{"└ " + f3.name}</span><span className="prumo-num">{fmt(f3.hasSplit ? f3.amount - spt(f3) : f3.amount)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="prumo-mini-stat" style={{ textAlign: "left", opacity: fx2.isCur ? 0.55 : 0.9 }}>
-                      <div className="lbl">{fx2.isCur ? "Mês atual já é real" : "≈ c/ variável médio"}</div>
-                      <div className="val" style={{ color: fx2.isCur ? "var(--ink-3)" : colM, fontSize: 16 }}>{fx2.isCur ? "—" : "≈ " + fmt(fx2.comMedia)}</div>
-                    </div>
+                  )}
+                </div>
+
+                {/* SAÍDA: FIXAS FORA DO CARTÃO */}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--neg)", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 4 }}>
+                    <span>{"📌 Fixas · PIX / boleto / débito"}</span><span className="prumo-num">{fmt(fluxoDet.fixasTot)}</span>
+                  </div>
+                  {fluxoDet.fxCaixa.length === 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{"Nenhuma fixa fora do cartão neste mês."}</div>}
+                  {fluxoDet.fxCaixa.map(function(f3) {
+                    var catF = cats.find(function(c4) { return c4.id === f3.cat; });
+                    return (
+                      <div key={f3.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
+                        <span>{(catF && catF.icon ? catF.icon + " " : "") + f3.name + (f3.hasSplit ? " · sua parte" : "")}</span>
+                        <span className="prumo-num">{fmt(f3.hasSplit ? f3.amount - spt(f3) : f3.amount)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* SAÍDA: VARIÁVEL FORA DO CARTÃO */}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--neg)", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 4 }}>
+                    <span>{"🛒 Variável · PIX / débito / dinheiro"}</span><span className="prumo-num">{fmt(fluxoDet.varTot)}</span>
+                  </div>
+                  {fluxoDet.varTot <= 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{fluxoSelMes.isCur ? "Nenhum gasto variável fora do cartão até agora." : "Ainda sem lançamentos — veja o cenário ≈ abaixo."}</div>}
+                  {groupCashTx(fluxoDet.varCaixa, myP).map(function(g3) {
+                    return (
+                      <div key={g3.id} style={{ marginBottom: 2 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink)", fontWeight: 600, padding: "2px 0" }}>
+                          <span>{(g3.icon ? g3.icon + " " : "") + g3.name}</span><span className="prumo-num">{fmt(g3.total)}</span>
+                        </div>
+                        {g3.items.map(function(it3, ii3) {
+                          return (
+                            <div key={it3.id || ii3} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", padding: "1px 0 1px 16px" }}>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{"└ " + it3.desc + (it3.proj ? " · parcela" : "")}</span>
+                              <span className="prumo-num" style={{ flexShrink: 0 }}>{fmt(it3.val)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* SOBRA */}
+                <div style={{ borderTop: "2px solid var(--line-2)", marginTop: 14, paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{"Sobra do mês (caixa)"}</span>
+                  <span className="prumo-num" style={{ fontSize: 20, color: fluxoSelMes.real >= 0 ? "var(--pos)" : "var(--neg)" }}>{fmt(fluxoSelMes.real)}</span>
+                </div>
+
+                <button className="prumo-btn brand" style={{ width: "100%", marginTop: 12, padding: "10px 14px" }} onClick={function() { sFluxoView("cenario"); }}>
+                  {"📊 E se eu gastar como nos últimos 3 meses?"}
+                </button>
+              </div>
+            ) : (
+              <div style={{ marginTop: 4 }}>
+                <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Variável médio (últimos 3 meses fechados): " + fmt(fluxoEstVar) + "/mês · aplicado só em meses futuros"}</div>
+                <div className="prumo-mini-stat-row cols-2">
+                  <div className="prumo-mini-stat" style={{ textAlign: "left" }}>
+                    <div className="lbl">{"Real · fixas + parcelas"}</div>
+                    <div className="val" style={{ color: fluxoSelMes.real >= 0 ? "var(--pos)" : "var(--neg)", fontSize: 16 }}>{fmt(fluxoSelMes.real)}</div>
+                  </div>
+                  <div className="prumo-mini-stat" style={{ textAlign: "left", opacity: fluxoSelMes.isCur ? 0.55 : 0.9 }}>
+                    <div className="lbl">{fluxoSelMes.isCur ? "Mês atual já é real" : "≈ c/ variável médio"}</div>
+                    <div className="val" style={{ color: fluxoSelMes.isCur ? "var(--ink-3)" : (fluxoSelMes.comMedia >= 0 ? "var(--pos)" : "var(--neg)"), fontSize: 16 }}>{fluxoSelMes.isCur ? "—" : "≈ " + fmt(fluxoSelMes.comMedia)}</div>
                   </div>
                 </div>
-              );
-            })}
-            <div className="prumo-cap" style={{ marginTop: 10, fontSize: 11 }}>{"≈ cenário = real − variável médio. Se o ≈ fica negativo, seu padrão de gasto atual não cabe naquele mês — segura o variável ou remaneja parcela."}</div>
+                <div className="prumo-cap" style={{ marginTop: 12, fontSize: 11 }}>{"≈ cenário = sobra real − variável médio. Se o ≈ fica negativo, seu padrão de gasto atual não cabe naquele mês — segura o variável ou remaneja parcela."}</div>
+                <button className="prumo-btn ghost" style={{ width: "100%", marginTop: 12, padding: "10px 14px" }} onClick={function() { sFluxoView("caixa"); }}>
+                  {"← Voltar ao extrato"}
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* ⓪b INSIGHTS DO ANO — resumo executivo por regras locais */}
       {insights.length > 0 && (
@@ -3848,6 +4045,21 @@ function FixasPrumo(props) {
 
   var currentYM = tk(yr, mo);
 
+  // Fixas de cartão: lançamentos no crédito da mesma categoria (ou sub dela) preenchem a barra automaticamente
+  var fxCreditNames = ((cfg && cfg.payments) || DEFAULT_PAYMENTS).filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
+  var fxIsCredit = function(name) { return fxCreditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
+  var autoUsedFor = function(f) {
+    if ((f.mode || "budget") === "budget" || !f.cat) return 0;
+    return ((md && md.tx) || []).reduce(function(a, t) {
+      if (t.reimbursed || !fxIsCredit(t.payment)) return a;
+      if (t.cat !== f.cat) {
+        var cSub = cats.find(function(c6) { return c6.id === t.cat; });
+        if (!cSub || cSub.parent !== f.cat) return a;
+      }
+      return a + myP(t);
+    }, 0);
+  };
+
   var applyFxEdit = function() {
     if (!editFx) return;
     var fxdRaw = cfg.fixed || [];
@@ -3980,7 +4192,8 @@ function FixasPrumo(props) {
             var sp2 = gsp(f);
             var mode = f.mode || "budget";
             var parts = fs[f.id + "_p"] || [];
-            var pSum = parts.reduce(function(a, p) { return a + p.amount; }, 0);
+            var autoUsed = autoUsedFor(f);
+            var pSum = parts.reduce(function(a, p) { return a + p.amount; }, 0) + autoUsed;
             var isO = pO === f.id;
             var partPct = f.amount > 0 ? Math.min(pSum / f.amount, 1) : 0;
             var remainAmt = Math.max(0, f.amount - pSum);
@@ -4011,17 +4224,17 @@ function FixasPrumo(props) {
                         return <span key={j} className="prumo-chip warn" style={{ fontSize: 10 }}>{"÷ " + s.person + " " + String(s.pct) + "%"}</span>;
                       })}
                     </div>
-                    {!ip && mode === "budget" && (
+                    {!ip && (
                       <div style={{ marginTop: 8 }}>
                         <div className="prumo-meter" style={{ height: 6 }}>
                           <i style={{ width: pct(partPct), background: partPct >= 1 ? "var(--pos)" : "var(--brand)" }} />
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, flexWrap: "wrap", gap: 4 }}>
-                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmt(pSum) + " pago"}</span>
+                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmt(pSum) + (mode === "budget" ? " pago" : " usado")}</span>
                           {remainAmt > 0 ? (
                             <span className="prumo-num" style={{ fontSize: 11, color: "var(--accent-2)", whiteSpace: "nowrap" }}>{"falta " + fmt(remainAmt)}</span>
                           ) : (
-                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--pos)", whiteSpace: "nowrap" }}>{"✓ Quitada"}</span>
+                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--pos)", whiteSpace: "nowrap" }}>{mode === "budget" ? "✓ Quitada" : "✓ Orçamento usado"}</span>
                           )}
                         </div>
                       </div>
@@ -4032,10 +4245,10 @@ function FixasPrumo(props) {
                     {f.hasSplit && <div className="prumo-cap" style={{ fontSize: 10, color: "var(--brand)" }}>{"Você: " + fmt(myA)}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                    {!ip && mode === "budget" && (
+                    {!ip && (
                       <button onClick={function() { sPO(isO ? null : f.id); sPV(""); }}
                         style={{ background: isO ? "var(--brand)" : "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, color: isO ? "var(--surface)" : "var(--brand)", width: 32, height: 32, cursor: "pointer", fontSize: 16, fontWeight: 600, fontFamily: "var(--f-ui)" }}
-                        title="Registrar pagamento parcial">{isO ? "×" : "+"}</button>
+                        title={mode === "budget" ? "Registrar pagamento parcial" : "Registrar gasto parcial no cartão"}>{isO ? "×" : "+"}</button>
                     )}
                     <button onClick={function() {
                       var fxdRaw = cfg.fixed || [];
@@ -4059,8 +4272,13 @@ function FixasPrumo(props) {
                     <button className="prumo-btn brand" onClick={function() { addPart(f.id); }}>{"Registrar"}</button>
                   </div>
                 )}
-                {parts.length > 0 && (
+                {(parts.length > 0 || autoUsed > 0) && (
                   <div style={{ marginLeft: 56, marginTop: 8, paddingLeft: 12, borderLeft: "2px solid var(--line-2)" }}>
+                    {autoUsed > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", fontSize: 11 }}>
+                        <span className="prumo-cap" style={{ fontFamily: "var(--f-mono)" }}>{"🔗 Lançamentos no cartão (" + ((cat2 && cat2.name) || "categoria") + ") — " + fmt(autoUsed)}</span>
+                      </div>
+                    )}
                     {parts.map(function(p, pi3) {
                       return (
                         <div key={pi3} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", fontSize: 11 }}>
