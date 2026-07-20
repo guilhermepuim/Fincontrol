@@ -1482,6 +1482,10 @@ function DashboardPrumo(props) {
         var smk = t.settleMonth || tk(yr, bidx3);
         recvByMonth[smk] = (recvByMonth[smk] || 0) + spt(t);
       });
+      // Devedores manuais do mês: dinheiro que entra e não toca despesa nenhuma — sem risco de dupla contagem
+      (mb3.debts || []).forEach(function(d5) {
+        recvByMonth[tk(yr, bidx3)] = (recvByMonth[tk(yr, bidx3)] || 0) + (d5.amount || 0);
+      });
     });
   }
 
@@ -1735,12 +1739,15 @@ function DashboardPrumo(props) {
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{fmt(m.sobra)}</div>
                   <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{isCur ? "livre" : (cashView ? "livre · fixas + parcelas" : "livre · lançado no mês")}</div>
                   {m.recv > 0 && (
-                    <div className="prumo-cap" style={{ marginTop: 2, fontSize: 9, color: "var(--pos)", fontFamily: "var(--f-mono)" }}>{"inclui +" + fmt(m.recv) + " a receber"}</div>
+                    <div className="prumo-cap" style={{ marginTop: 2, fontSize: 9, color: "var(--pos)", fontFamily: "var(--f-mono)" }}>{"inclui +" + fmt(m.recv) + " a receber (cartão dividido + devedores)"}</div>
                   )}
                 </div>
               );
             })}
           </div>
+          {cashView && cashflowMonths.some(function(m) { return m.recv > 0; }) && (
+            <div className="prumo-cap" style={{ marginTop: 10, fontSize: 10 }}>{"A receber = divididas do cartão (a fatura sai cheia e o reembolso volta depois) + devedores manuais. Divididas no pix/débito e fixas divididas não aparecem aqui porque já entram descontadas na despesa."}</div>
+          )}
         </div>
       )}
 
