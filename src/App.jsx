@@ -328,7 +328,9 @@ function parseChatEntry(raw, cats, payments, maps, ctx) {
   // Parcelado: "10x de 300" (valor por parcela) | "em 10x" (valor total) | "2/6" (por parcela, padrão de fatura)
   var m1 = rest.match(/(\d{1,2})\s*x\s+de\s+(?:R\$\s*)?(\d+(?:[.,]\d{1,2})?)/i);
   var m2 = rest.match(/\bem\s+(\d{1,2})\s*x\b/i);
-  var m3 = rest.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+  // Não confundir parcela "2/6" com data: ignora se vier "dia" antes ou mais uma barra depois ("13/07/2026")
+  var m3 = rest.match(/(\d{1,2})\s*\/\s*(\d{1,2})(?!\s*\/)/);
+  if (m3 && /\bdia\s*$/i.test(rest.slice(0, m3.index))) m3 = null;
   var totalMode = false;
   if (m1 && parseInt(m1[1], 10) >= 2) {
     out.ic = "1"; out.it = m1[1]; out.valor = cnum(m1[2]);
@@ -341,14 +343,28 @@ function parseChatEntry(raw, cats, payments, maps, ctx) {
     if (pA >= 1 && pB > pA && pB <= 48) { out.ic = m3[1]; out.it = m3[2]; rest = rest.replace(m3[0], " "); }
   }
 
-  // Data: hoje (default) | ontem | anteontem | "dia 12" (do mês aberto)
+  // Data: hoje (default) | ontem | anteontem | "13 de julho [de 2026]" | "13/07[/2026]" | "dia 12" (do mês aberto)
   var today = new Date();
+  var CHAT_MESES = { janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
+  var mkYMD = function(y, mm, dd) {
+    if (!(mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31)) return "";
+    if (y < 100) y += 2000;
+    return String(y) + "-" + String(mm).padStart(2, "0") + "-" + String(dd).padStart(2, "0");
+  };
   if (/\bontem\b/i.test(rest)) { out.dateYMD = ymdLocal(new Date(today.getTime() - 86400000)); rest = rest.replace(/\bontem\b/i, " "); }
   else if (/\banteontem\b/i.test(rest)) { out.dateYMD = ymdLocal(new Date(today.getTime() - 2 * 86400000)); rest = rest.replace(/\banteontem\b/i, " "); }
   else if (/\bhoje\b/i.test(rest)) { out.dateYMD = ymdLocal(today); rest = rest.replace(/\bhoje\b/i, " "); }
   else {
+    var mMes = rest.match(/\b(?:dia\s+)?(\d{1,2})\s+de\s+(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\s+de\s+(\d{2,4}))?\b/i);
+    var mBar = rest.match(/\b(?:dia\s+)?(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*(\d{2,4}))?\b/);
     var mD = rest.match(/\bdia\s+(\d{1,2})\b/i);
-    if (mD && ctx) {
+    if (mMes) {
+      var dt1 = mkYMD(mMes[3] ? parseInt(mMes[3], 10) : today.getFullYear(), CHAT_MESES[chatNorm(mMes[2])] || 0, parseInt(mMes[1], 10));
+      if (dt1) { out.dateYMD = dt1; rest = rest.replace(mMes[0], " "); }
+    } else if (mBar) {
+      var dt2 = mkYMD(mBar[3] ? parseInt(mBar[3], 10) : today.getFullYear(), parseInt(mBar[2], 10), parseInt(mBar[1], 10));
+      if (dt2) { out.dateYMD = dt2; rest = rest.replace(mBar[0], " "); }
+    } else if (mD && ctx) {
       var dd = parseInt(mD[1], 10);
       if (dd >= 1 && dd <= 31) { out.dateYMD = tk(ctx.yr, ctx.mo) + "-" + String(dd).padStart(2, "0"); rest = rest.replace(mD[0], " "); }
     }
@@ -2170,7 +2186,11 @@ function AnalisePrumo(props) {
   if (yrD && cfg && chD.length === 12) {
     rvData = chD.map(function(d, i2) {
       var mTx2 = ((yrD[i2] || {}).tx) || [];
-      var fxSum2 = resolveFixedListForMonth(cfg.fixed || [], tk(yr, i2)).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+      var mFs3 = ((yrD[i2] || {}).fs) || {};
+      // Fixa checklist (cartão) paga: o gasto real dela já está nos lançamentos do cartão (variável) — sai do comprometido pra não contar em dobro
+      var fxSum2 = resolveFixedListForMonth(cfg.fixed || [], tk(yr, i2)).filter(function(f) {
+        return (f.mode || "budget") === "budget" || mFs3[f.id] !== "paid";
+      }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
       var parcSum = mTx2.filter(function(t) { return t.src === "proj" && !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
       var varSum2 = mTx2.filter(function(t) { return t.src !== "proj" && !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
       return { mes: MA[i2], comp: fxSum2 + parcSum, vari: varSum2, real: d.real };
@@ -6706,6 +6726,12 @@ export default function App() {
                       )}
                       {!isCred && !m.done && (
                         <div style={{ marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                            <span style={{ fontSize: 13 }}>{"📅"}</span>
+                            <input type="date" className="prumo-input" value={e2.dateYMD || ymdLocal(new Date())}
+                              onChange={function(ev) { if (ev.target.value) updateChatEntry(ci, { dateYMD: ev.target.value }); }}
+                              style={{ flex: 1, fontSize: 12, padding: "6px 10px" }} />
+                          </div>
                           <CatS prumo value={e2.cat} onChange={function(ev) { updateChatEntry(ci, { cat: ev.target.value }); }} cats={cats} pcts={cfg.pcts} sx={{ fontSize: 12, padding: "7px 10px" }} />
                           {!e2.cat && <div style={{ fontSize: 10, color: "var(--accent-2)", marginTop: 3 }}>{"Escolhe a categoria pra confirmar 👆"}</div>}
                         </div>
