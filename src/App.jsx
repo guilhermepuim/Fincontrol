@@ -1200,7 +1200,7 @@ function ChartTip(props) {
   var left = i < 6 ? 0 : "auto";
   var right = i >= 6 ? 0 : "auto";
   return (
-    <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "var(--surface)", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "var(--shadow-2)", zIndex: 20, minWidth: 220, whiteSpace: "nowrap" }}
+    <div style={{ position: "absolute", bottom: "100%", left: left, right: right, marginBottom: 8, background: "var(--surface)", border: "1px solid " + BR, borderRadius: 8, padding: "10px 12px", boxShadow: "var(--shadow-2)", zIndex: 20, minWidth: 220, whiteSpace: "nowrap", maxHeight: "70vh", overflowY: "auto" }}
       onClick={function(e) { e.stopPropagation(); }}>
       <div style={{ ...S.h2, fontSize: 12, marginBottom: 6, borderBottom: "1px solid var(--line)", paddingBottom: 4 }}>{MS[i] + (d.real ? "" : " (projeção)")}</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, ...S.cap }}>
@@ -1216,14 +1216,14 @@ function ChartTip(props) {
         return (
           <div key={g.id} style={{ marginBottom: 4 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: g.color, textTransform: "uppercase", marginBottom: 2 }}>{g.label + " " + fmt(gt)}</div>
-            {gi.slice(0, 5).map(function(it) {
+            {gi.map(function(it) {
               return (
                 <div key={it.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T3, padding: "1px 0 1px 8px" }}>
                     <span>{(it.icon ? it.icon + " " : "") + it.name}</span>
                     <span style={{ fontWeight: 600, color: TX }}>{fmt(it.total)}</span>
                   </div>
-                  {it.subs.length > 0 && it.subs.slice(0, 4).map(function(sub) {
+                  {it.subs.map(function(sub) {
                     return (
                       <div key={sub.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: TM, padding: "1px 0 1px 22px", fontWeight: 400 }}>
                         <span>{"└ " + (sub.icon ? sub.icon + " " : "") + sub.name}</span>
@@ -1234,12 +1234,6 @@ function ChartTip(props) {
                 </div>
               );
             })}
-            {gi.length > 5 && (
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: TM, padding: "1px 0 1px 8px", fontStyle: "italic" }}>
-                <span>{"+ " + String(gi.length - 5) + " outras"}</span>
-                <span>{fmt(gi.slice(5).reduce(function(a, x) { return a + x.total; }, 0))}</span>
-              </div>
-            )}
           </div>
         );
       })}
@@ -1648,6 +1642,9 @@ function DashboardPrumo(props) {
             <div className={"prumo-big " + (saldoSinal ? "pos" : "neg")} style={{ marginTop: 6 }}>
               {(saldoSinal ? "" : "−") + "R$ " + saldoIntStr}<sup>{"," + saldoCentsStr}</sup>
             </div>
+            <div className="prumo-cap" style={{ marginTop: 4, fontSize: 11, fontFamily: "var(--f-mono)" }} title={"Como o saldo é calculado: renda do mês − gastos (" + (cashView ? "caixa: o que sai da conta" : "competência: quando gastou") + ")" + (dRcv > 0 ? " + o que devedores já devolveram neste mês" : "")}>
+              {"Renda " + fmt(totalInc) + " − Gastos " + fmt(debitoMes) + (dRcv > 0 ? " + Recebidos " + fmt(dRcv) : "")}
+            </div>
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
               {saldoDelta !== null && (
                 <span className={"prumo-chip " + (saldoDelta >= 0 ? "pos" : "neg")}>
@@ -1724,9 +1721,9 @@ function DashboardPrumo(props) {
                 <div className="prumo-ring-val">{String(r.used) + "%"}</div>
                 <div className="prumo-cap" style={{ fontSize: 10, marginTop: 2 }}>{fmt(r.s) + " / " + fmt(r.b)}</div>
                 {isHover && agg.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", marginTop: 8, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 12px", boxShadow: "var(--shadow-2)", zIndex: 30, minWidth: 220, textAlign: "left" }} onClick={function(e) { e.stopPropagation(); }}>
+                  <div style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", marginTop: 8, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 12px", boxShadow: "var(--shadow-2)", zIndex: 30, minWidth: 220, textAlign: "left", maxHeight: "60vh", overflowY: "auto" }} onClick={function(e) { e.stopPropagation(); }}>
                     <div className="prumo-lbl" style={{ marginBottom: 6 }}>{r.label + " · " + fmt(r.s)}</div>
-                    {agg.slice(0, 6).map(function(item) {
+                    {agg.map(function(item) {
                       var subs = cats.filter(function(c) { return c.parent === item.cat.id && (spC[c.id] || 0) > 0; }).sort(function(a, b) { return (spC[b.id] || 0) - (spC[a.id] || 0); });
                       return (
                         <div key={item.cat.id}>
@@ -1737,7 +1734,7 @@ function DashboardPrumo(props) {
                             </span>
                             <span className="prumo-num" style={{ fontSize: 11 }}>{fmt(item.total)}</span>
                           </div>
-                          {subs.slice(0, 3).map(function(s) {
+                          {subs.map(function(s) {
                             return (
                               <div key={s.id} style={{ display: "flex", justifyContent: "space-between", padding: "1px 0 1px 22px", fontSize: 10, color: "var(--ink-3)" }}>
                                 <span>{"└ " + (s.icon ? s.icon + " " : "") + s.name}</span>
@@ -1748,12 +1745,6 @@ function DashboardPrumo(props) {
                         </div>
                       );
                     })}
-                    {agg.length > 6 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, color: "var(--ink-3)", fontStyle: "italic" }}>
-                        <span>{"+ " + String(agg.length - 6) + " outras"}</span>
-                        <span className="prumo-num">{fmt(agg.slice(6).reduce(function(a, x) { return a + x.total; }, 0))}</span>
-                      </div>
-                    )}
                     <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 6, display: "flex", justifyContent: "space-between", fontSize: 11 }}>
                       <span className="prumo-cap">{"Orçado"}</span>
                       <span className="prumo-num">{fmt(r.b)}</span>
@@ -2131,6 +2122,7 @@ function AnalisePrumo(props) {
   var [pieSel, sPieSel] = useState(null); // grupo expandido no card Real vs Meta
   var [paceSelMap, sPaceSelMap] = useState({}); // meses passados visíveis no Ritmo do mês (mi → true)
   var [rvSel, sRvSel] = useState(null); // mês expandido no card Recorrente vs Variável
+  var [catPieMo, sCatPieMo] = useState(null); // pizza "onde o dinheiro foi": null = mês aberto, -1 = ano, 0..11 = mês
 
   /* Fluxo de caixa: saldo caixa dos próximos meses (linhas clicáveis → popup extrato) + cenário média 3m */
   var fluxoEstVar = 0;
@@ -2276,7 +2268,6 @@ function AnalisePrumo(props) {
 
   /* ── ④/⑧ Total anual por categoria (só meses reais; subcategoria agrega na principal, igual ao ranking do Dashboard) ── */
   var CATP = ["var(--cat-0)", "var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)", "var(--cat-9)"];
-  var CAT_OUTROS_COLOR = "var(--cat-outros)";
   var catParentOf = {};
   cats.forEach(function(c) { if (c.parent && cats.some(function(p) { return p.id === c.parent; })) catParentOf[c.id] = c.parent; });
   var rollCats = function(obj) {
@@ -2295,22 +2286,25 @@ function AnalisePrumo(props) {
   }).filter(function(c) { return c.total > 0; }).sort(function(a, b) { return b.total - a.total; });
   var catYearTot = catYearList.reduce(function(a, c) { return a + c.total; }, 0);
   var topCats = catYearList.slice(0, CATP.length);
-  var topCatIds = topCats.map(function(c) { return c.id; });
 
-  /* ── ④ Categorias mês a mês (barras horizontais empilhadas; legenda clicável isola uma) ── */
-  var stackData = chD.map(function(d, i2) {
-    var rolled = rollCats(d.cats);
-    var segs = topCats.map(function(c, ti) { return { id: c.id, name: c.name, color: CATP[ti], val: rolled[c.id] || 0 }; });
-    var outros = 0;
-    Object.keys(rolled).forEach(function(cid) { if (topCatIds.indexOf(cid) < 0) outros += rolled[cid]; });
-    segs.push({ id: "_outros", name: "Outras", color: CAT_OUTROS_COLOR, val: outros });
-    var tot2 = segs.reduce(function(a, s2) { return a + s2.val; }, 0);
-    return { mes: MA[i2], idx: i2, segs: segs, tot: tot2, real: d.real };
+  /* ── ④ Pizza "onde o dinheiro foi": mês escolhido (padrão: o aberto) ou ano inteiro ── */
+  var pieScope = catPieMo === null ? mo : catPieMo; // -1 = ano
+  var pieScopeList = [];
+  if (pieScope === -1) {
+    pieScopeList = catYearList.map(function(c) { return { id: c.id, name: c.name, icon: c.icon, total: c.total }; });
+  } else if (chD.length === 12 && chD[pieScope]) {
+    var rolledM = rollCats(chD[pieScope].cats || {});
+    pieScopeList = Object.keys(rolledM).map(function(cid) {
+      var c = cats.find(function(cc) { return cc.id === cid; });
+      return { id: cid, name: c ? c.name : cid, icon: c ? c.icon : "🏷️", total: rolledM[cid] };
+    }).filter(function(c) { return c.total > 0; }).sort(function(a, b) { return b.total - a.total; });
+  }
+  var pieScopeTot = pieScopeList.reduce(function(a, c) { return a + c.total; }, 0);
+  var pieScopeParts = pieScopeList.map(function(c, ci4) {
+    return { id: c.id, name: c.name, icon: c.icon, val: c.total, color: CATP[ci4 % CATP.length], pct: pieScopeTot > 0 ? (c.total / pieScopeTot) * 100 : 0 };
   });
-  var stackMax = Math.max.apply(null, stackData.map(function(s) {
-    if (selCat) { var sg = s.segs.find(function(x) { return x.id === selCat; }); return sg ? sg.val : 0; }
-    return s.tot;
-  }).concat([1]));
+  var pieScopeBg = pieScopeParts.length > 0 ? conicOf(pieScopeParts) : "";
+  var pieMonthOpts = chD.map(function(d, i4) { return { idx: i4, mes: MA[i4], tot: d.td, real: d.real }; }).filter(function(o) { return o.tot > 0; });
 
   /* ── ⑤ Heatmap: semana do mês × dia da semana (ano, sem investimentos) ── */
   var hmRowLbl = ["1–7", "8–14", "15–21", "22–28", "29–31"];
@@ -2420,6 +2414,8 @@ function AnalisePrumo(props) {
   }
   var moverUps = movers.filter(function(m2) { return m2.delta > 0; }).sort(function(a, b) { return b.delta - a.delta; }).slice(0, 3);
   var moverDowns = movers.filter(function(m2) { return m2.delta < 0; }).sort(function(a, b) { return a.delta - b.delta; }).slice(0, 3);
+  // Guardar/investir mais é bom: em categorias do grupo investimentos a leitura inverte (subir = verde ▲, cair = vermelho ▼)
+  var moverIsGood = function(m2, isUp) { return invCat[m2.id] ? isUp : !isUp; };
 
   /* ── ⑩ Top 10 compras do ano (variável real, sem investimentos) ──
      Parcelado entra pelo VALOR CHEIO da compra (parcela × total), uma vez só,
@@ -2872,40 +2868,83 @@ function AnalisePrumo(props) {
               <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{selCat ? "Evolução de uma categoria" : "Onde o dinheiro foi, em cada mês"}</h2>
             </div>
           </div>
-          <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Toque numa categoria pra isolar a evolução dela · toque de novo pra voltar"}</div>
+          <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Escolha o mês (ou o ano todo) · toque numa fatia pra ver a evolução daquela categoria"}</div>
+
+          {/* Seletor de escopo: cada mês com gasto + o ano inteiro */}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-            {stackData.length > 0 && stackData[0].segs.map(function(sg) {
-              var active = selCat === sg.id;
-              var dim = selCat && !active;
+            {pieMonthOpts.map(function(o) {
+              var on = pieScope === o.idx;
               return (
-                <button key={sg.id} onClick={function() { sSelCat(active ? null : sg.id); }} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: dim ? "var(--ink-3)" : "var(--ink)", background: active ? "var(--surface-2)" : "transparent", border: active ? "1.5px solid " + sg.color : "1px solid var(--line)", borderRadius: 20, padding: "4px 10px", cursor: "pointer", fontFamily: "var(--f-ui)", fontWeight: active ? 700 : 500, opacity: dim ? 0.55 : 1 }}>
-                  <div style={{ width: 9, height: 9, borderRadius: 2, background: sg.color }} />
-                  <span>{sg.name}</span>
+                <button key={o.idx} onClick={function() { sCatPieMo(o.idx); sSelCat(null); }}
+                  style={{ fontSize: 11, fontFamily: "var(--f-mono)", textTransform: "uppercase", fontWeight: on ? 800 : 600, color: on ? "var(--on-accent, var(--surface))" : "var(--ink-2)", background: on ? "var(--accent)" : "transparent", border: "1px solid " + (on ? "var(--accent)" : "var(--line)"), borderRadius: 20, padding: "4px 11px", cursor: "pointer", opacity: o.real ? 1 : 0.65 }}>
+                  {o.mes + (o.real ? "" : " ·")}
                 </button>
               );
             })}
+            <button onClick={function() { sCatPieMo(-1); sSelCat(null); }}
+              style={{ fontSize: 11, fontFamily: "var(--f-mono)", textTransform: "uppercase", fontWeight: pieScope === -1 ? 800 : 600, color: pieScope === -1 ? "var(--on-accent, var(--surface))" : "var(--ink-2)", background: pieScope === -1 ? "var(--brand)" : "transparent", border: "1px solid " + (pieScope === -1 ? "var(--brand)" : "var(--line)"), borderRadius: 20, padding: "4px 11px", cursor: "pointer" }}>
+              {"Ano"}
+            </button>
           </div>
-          {stackData.map(function(s, idx) {
-            var rowTot = s.tot;
-            if (selCat) {
-              var sg2 = s.segs.find(function(x) { return x.id === selCat; });
-              rowTot = sg2 ? sg2.val : 0;
-            }
-            if (rowTot <= 0) return null;
-            return (
-              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                <span style={{ width: 34, fontSize: 10, color: idx === mo ? "var(--ink)" : "var(--ink-3)", fontWeight: idx === mo ? 800 : 600, fontFamily: "var(--f-mono)", textTransform: "uppercase", flexShrink: 0 }}>{s.mes}</span>
-                <div style={{ flex: 1, display: "flex", height: 18, borderRadius: 5, overflow: "hidden", background: "var(--surface-2)" }}>
-                  {s.segs.map(function(sg) {
-                    var v3 = selCat ? (sg.id === selCat ? sg.val : 0) : sg.val;
-                    if (v3 <= 0) return null;
-                    return <div key={sg.id} style={{ width: String((v3 / stackMax) * 100) + "%", background: sg.color, opacity: s.real ? 1 : 0.45 }} />;
-                  })}
+
+          {pieScopeTot <= 0 ? (
+            <div className="prumo-cap" style={{ padding: "10px 0" }}>{"Nenhum gasto registrado neste período."}</div>
+          ) : (
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+              {/* PIZZA */}
+              <div style={{ flexShrink: 0, margin: "0 auto" }}>
+                <div style={{ width: 208, height: 208, borderRadius: "50%", background: pieScopeBg, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                  <div style={{ width: 126, height: 126, borderRadius: "50%", background: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+                    <div className="prumo-cap" style={{ fontSize: 9 }}>{pieScope === -1 ? "Ano" : MS[pieScope]}</div>
+                    <div className="prumo-num" style={{ fontSize: 15, color: "var(--ink)" }}>{fK(pieScopeTot)}</div>
+                    <div className="prumo-cap" style={{ fontSize: 9 }}>{String(pieScopeParts.length) + " categorias"}</div>
+                  </div>
                 </div>
-                <span style={{ width: 52, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-2)", flexShrink: 0 }}>{fK(rowTot)}</span>
               </div>
-            );
-          })}
+
+              {/* LEGENDA COM % — todas as categorias, sem corte */}
+              <div style={{ flex: 1, minWidth: 240 }}>
+                {pieScopeParts.map(function(p4) {
+                  var active = selCat === p4.id;
+                  return (
+                    <div key={p4.id} onClick={function() { sSelCat(active ? null : p4.id); }}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer", borderRadius: 6, background: active ? "var(--surface-2)" : "transparent", opacity: selCat && !active ? 0.5 : 1 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 3, background: p4.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>{p4.icon}</span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: active ? 700 : 500, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p4.name}</span>
+                      <span className="prumo-num" style={{ fontSize: 12, color: "var(--ink-2)", flexShrink: 0 }}>{fmt(p4.val)}</span>
+                      <span className="prumo-num" style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", width: 52, textAlign: "right", flexShrink: 0 }}>{p4.pct.toFixed(1) + "%"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* EVOLUÇÃO DA CATEGORIA ESCOLHIDA — mês a mês */}
+          {selCat && (
+            <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Evolução mês a mês · " + ((pieScopeParts.find(function(p5) { return p5.id === selCat; }) || {}).name || "")}</div>
+              {(function() {
+                var evo = chD.map(function(d, i5) {
+                  var rolled5 = rollCats(d.cats || {});
+                  return { mes: MA[i5], idx: i5, val: rolled5[selCat] || 0, real: d.real };
+                });
+                var evoMax = Math.max.apply(null, evo.map(function(e5) { return e5.val; }).concat([1]));
+                return evo.filter(function(e5) { return e5.val > 0; }).map(function(e5) {
+                  return (
+                    <div key={e5.idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                      <span style={{ width: 34, fontSize: 10, color: e5.idx === mo ? "var(--ink)" : "var(--ink-3)", fontWeight: e5.idx === mo ? 800 : 600, fontFamily: "var(--f-mono)", textTransform: "uppercase", flexShrink: 0 }}>{e5.mes}</span>
+                      <div style={{ flex: 1, height: 14, borderRadius: 4, overflow: "hidden", background: "var(--surface-2)" }}>
+                        <div style={{ width: String((e5.val / evoMax) * 100) + "%", height: "100%", background: "var(--accent)", opacity: e5.real ? 1 : 0.45 }} />
+                      </div>
+                      <span style={{ width: 62, textAlign: "right", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-2)", flexShrink: 0 }}>{fmt(e5.val)}</span>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
         </div>
       )}
 
@@ -3053,14 +3092,16 @@ function AnalisePrumo(props) {
           </div>
           {moverUps.length > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <div className="prumo-lbl" style={{ marginBottom: 6, color: "var(--neg)" }}>{"▲ Subiram"}</div>
+              <div className="prumo-lbl" style={{ marginBottom: 6, color: "var(--ink-2)" }}>{"▲ Subiram"}</div>
               {moverUps.map(function(m2) {
+                var good = moverIsGood(m2, true);
+                var col = good ? "var(--pos)" : "var(--neg)";
                 return (
                   <div key={m2.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 14 }}>{m2.icon}</span>
                     <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{m2.name}</span>
                     <span className="prumo-cap" style={{ fontSize: 9 }}>{fK(m2.avg) + " → " + fK(m2.cur)}</span>
-                    <span className="prumo-num" style={{ fontSize: 12, color: "var(--neg)" }}>{"+" + fmt(m2.delta)}</span>
+                    <span className="prumo-num" style={{ fontSize: 12, color: col }}>{"▲ +" + fmt(m2.delta)}</span>
                   </div>
                 );
               })}
@@ -3068,20 +3109,22 @@ function AnalisePrumo(props) {
           )}
           {moverDowns.length > 0 && (
             <div>
-              <div className="prumo-lbl" style={{ marginBottom: 6, color: "var(--pos)" }}>{"▼ Caíram"}</div>
+              <div className="prumo-lbl" style={{ marginBottom: 6, color: "var(--ink-2)" }}>{"▼ Caíram"}</div>
               {moverDowns.map(function(m2) {
+                var good2 = moverIsGood(m2, false);
+                var col2 = good2 ? "var(--pos)" : "var(--neg)";
                 return (
                   <div key={m2.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 14 }}>{m2.icon}</span>
                     <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{m2.name}</span>
                     <span className="prumo-cap" style={{ fontSize: 9 }}>{fK(m2.avg) + " → " + fK(m2.cur)}</span>
-                    <span className="prumo-num" style={{ fontSize: 12, color: "var(--pos)" }}>{fmt(m2.delta)}</span>
+                    <span className="prumo-num" style={{ fontSize: 12, color: col2 }}>{"▼ " + fmt(m2.delta)}</span>
                   </div>
                 );
               })}
             </div>
           )}
-          <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Inclui o efeito das fixas pagas · vermelho = gastou mais que o normal"}</div>
+          <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Inclui o efeito das fixas pagas · verde = bom (gastou menos, ou investiu/guardou mais) · vermelho = atenção"}</div>
         </div>
       )}
 
