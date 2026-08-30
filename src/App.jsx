@@ -120,6 +120,8 @@ function nextMonthOfKey(key) {
 }
 function sd(d) { try { return new Date(d).toLocaleDateString("pt-BR"); } catch (e) { return String(d || ""); } }
 function fK(v) { var a = Math.abs(v || 0); if (a >= 1000) return (v < 0 ? "-" : "") + (a / 1000).toFixed(1) + "k"; return String(Math.round(v || 0)); }
+// Como fK, mas com "mi" acima de 1 milhão — escalas de longo prazo (Ciclo de Vida)
+function fKmi(v) { var a = Math.abs(v || 0); if (a >= 1000000) return (v < 0 ? "-" : "") + (a / 1000000).toFixed(a >= 10000000 ? 0 : 1) + " mi"; return fK(v); }
 
 /* ══ INPUT SANITIZATION ══
    Defense-in-depth helpers. React already escapes output, mas estes garantem que
@@ -591,6 +593,149 @@ function calcEstVarFuturo(yrD, cfg, yr, mo) {
   if (histResiduos.length === 0) return 0;
   var med = histResiduos.reduce(function(a, v) { return a + v; }, 0) / histResiduos.length;
   return med < 0 ? 0 : med;
+}
+
+/* ══ CICLO DE VIDA — motor de projeção patrimonial de longo prazo ══
+   Tudo em valores REAIS (líquidos de inflação), capitalização MENSAL.
+   Ordem dentro do mês: rende → aporta (ou saca) → aplica eventos do mês.
+   Fases de aporte: a partir do mês `fromM` (offset a partir de hoje) vale aquele aporte/mês —
+   é o que permite "zerei o aporte em 2028 pro financiamento e volto a investir em 2038".
+   Eventos: impacto único no mês `atM` (entrada +, saída −), tipo a entrada do apartamento.
+   Referência de modelo: relatório Ciclo de Vida (Suno) — mesmas fórmulas de renda/capital. */
+var CV_DEFAULT = {
+  idadeAtual: 33, idadeApos: 60, expectativa: 95,
+  retornoReal: 7, yieldPct: 6,
+  plInicial: "", // vazio = usa os ativos financeiros do PL
+  aporteFases: [], eventos: [],
+  rendaDesejada: 20000, rendaResidual: 0,
+  estrategia: "preservacao", legadoValor: 0,
+};
+function cvMonthlyRate(annualPct) { return Math.pow(1 + (annualPct || 0) / 100, 1 / 12) - 1; }
+// Offset em meses de uma chave "YYYY-MM" em relação ao mês de referência (hoje)
+function cvOffsetOf(ym, refY, refM) {
+  var s = String(ym || "");
+  var p = s.split("-");
+  if (p.length < 2) return null;
+  var y = parseInt(p[0], 10); var m = parseInt(p[1], 10) - 1;
+  if (isNaN(y) || isNaN(m)) return null;
+  return (y - refY) * 12 + (m - refM);
+}
+function calcCicloVida(p, refY, refM) {
+  var cv = { ...CV_DEFAULT, ...(p || {}) };
+  var idade0 = Math.max(0, cvNum(cv.idadeAtual));
+  var idadeApos = Math.max(idade0, cvNum(cv.idadeApos));
+  var idadeFim = Math.max(idadeApos + 1, cvNum(cv.expectativa));
+  var ir = cvMonthlyRate(cvNum(cv.retornoReal));
+  var iy = cvMonthlyRate(cvNum(cv.yieldPct));
+  var mApos = Math.round((idadeApos - idade0) * 12);
+  var mFim = Math.round((idadeFim - idade0) * 12);
+  var aporteBase = cvNum(cv.aporteBase);
+  var saqueMes = Math.max(0, cvNum(cv.rendaDesejada) - cvNum(cv.rendaResidual));
+
+  // Fases ordenadas por mês de início; antes da 1ª fase vale o aporte base
+  var fases = (cv.aporteFases || []).map(function(f) {
+    return { m: cvOffsetOf(f.ym, refY, refM), valor: cvNum(f.valor) };
+  }).filter(function(f) { return f.m !== null; }).sort(function(a, b) { return a.m - b.m; });
+  var aporteEmM = function(m) {
+    var v = aporteBase;
+    for (var i = 0; i < fases.length; i++) { if (fases[i].m <= m) v = fases[i].valor; else break; }
+    return v;
+  };
+  // Eventos por mês
+  var evPorM = {};
+  var evList = (cv.eventos || []).map(function(e) {
+    var m = cvOffsetOf(e.ym, refY, refM);
+    var sinal = e.tipo === "entrada" ? 1 : -1;
+    return { id: e.id, nome: e.nome, tipo: e.tipo, valor: cvNum(e.valor), m: m, sinal: sinal, idade: m === null ? null : idade0 + m / 12 };
+  }).filter(function(e) { return e.m !== null && e.m >= 0 && e.m <= mFim; });
+  evList.forEach(function(e) { evPorM[e.m] = (evPorM[e.m] || 0) + e.sinal * e.valor; });
+
+  // Simulação (usada também pelas buscas de aporte/retorno necessários)
+  var simular = function(pl0, aporteExtra, taxaMensal) {
+    var saldo = pl0;
+    var serie = [];
+    var totalAp = 0; var totalRend = 0;
+    var plNoApos = null; var idadeZera = null;
+    var anoAp = 0; var anoEv = 0;
+    for (var m = 1; m <= mFim; m++) {
+      var rend = saldo * taxaMensal;
+      saldo += rend; totalRend += rend;
+      if (m <= mApos) {
+        var ap = Math.max(0, aporteEmM(m) + aporteExtra);
+        saldo += ap; totalAp += ap; anoAp += ap;
+      } else {
+        // Não dá pra sacar o que não existe: o saldo para no zero em vez de virar dívida imaginária
+        saldo -= Math.min(Math.max(saldo, 0), saqueMes);
+      }
+      if (evPorM[m]) { saldo += evPorM[m]; anoEv += evPorM[m]; }
+      if (saldo <= 0 && idadeZera === null && m > mApos) idadeZera = idade0 + m / 12;
+      if (m === mApos) plNoApos = saldo;
+      if (m % 12 === 0 || m === mFim) {
+        serie.push({ m: m, idade: idade0 + m / 12, ano: refY + Math.floor((refM + m) / 12), saldo: saldo, aportes: anoAp, eventos: anoEv });
+        anoAp = 0; anoEv = 0;
+      }
+    }
+    if (plNoApos === null) plNoApos = saldo;
+    return { serie: serie, plApos: plNoApos, capitalFinal: saldo, totalAportes: totalAp, totalRend: totalRend, idadeZera: idadeZera };
+  };
+
+  var pl0 = cvNum(cv.plInicialResolvido);
+  var base = simular(pl0, 0, ir);
+
+  // Capital necessário na aposentadoria, conforme a estratégia de herança
+  var nApos = mFim - mApos;
+  var capitalNec;
+  if (cv.estrategia === "consumir") {
+    capitalNec = ir > 0 ? saqueMes * (1 - Math.pow(1 + ir, -nApos)) / ir : saqueMes * nApos;
+  } else if (cv.estrategia === "legado") {
+    var pvRenda = ir > 0 ? saqueMes * (1 - Math.pow(1 + ir, -nApos)) / ir : saqueMes * nApos;
+    capitalNec = pvRenda + cvNum(cv.legadoValor) / Math.pow(1 + ir, nApos);
+  } else {
+    // preservação: vive só do rendimento (perpetuidade sobre o yield) — capital intacto pra herança
+    capitalNec = iy > 0 ? saqueMes / iy : 0;
+  }
+  var rendaSustentavel = base.plApos * iy;
+
+  // Aporte extra (constante, na fase de acumulação) que fecha a conta — busca binária
+  var aporteExtra = null;
+  if (mApos > 0) {
+    var lo = -100000; var hi = 500000;
+    for (var it = 0; it < 60; it++) {
+      var mid = (lo + hi) / 2;
+      if (simular(pl0, mid, ir).plApos < capitalNec) lo = mid; else hi = mid;
+    }
+    aporteExtra = (lo + hi) / 2;
+  }
+  // Retorno real que fecharia a conta mantendo o aporte atual
+  var retornoNec = null;
+  if (mApos > 0) {
+    var rlo = 0; var rhi = 0.40;
+    for (var it2 = 0; it2 < 60; it2++) {
+      var rmid = (rlo + rhi) / 2;
+      if (simular(pl0, 0, cvMonthlyRate(rmid * 100)).plApos < capitalNec) rlo = rmid; else rhi = rmid;
+    }
+    retornoNec = (rlo + rhi) / 2;
+  }
+
+  // Trajetória "no alvo": mesmo plano com o aporte extra que faz bater o capital necessário
+  var serieIdeal = (aporteExtra !== null) ? simular(pl0, aporteExtra, ir).serie : [];
+
+  return {
+    idade0: idade0, idadeApos: idadeApos, idadeFim: idadeFim,
+    serie: base.serie, serieIdeal: serieIdeal, plInicial: pl0, plApos: base.plApos, capitalFinal: base.capitalFinal,
+    totalAportes: base.totalAportes, totalRend: base.totalRend, idadeZera: base.idadeZera,
+    capitalNec: capitalNec, distancia: base.plApos - capitalNec,
+    metaPct: capitalNec > 0 ? base.plApos / capitalNec : 0,
+    rendaSustentavel: rendaSustentavel, saqueMes: saqueMes,
+    aporteExtra: aporteExtra, retornoNec: retornoNec,
+    eventos: evList.sort(function(a, b) { return a.m - b.m; }),
+    aporteEmM: aporteEmM, mApos: mApos, mFim: mFim,
+  };
+}
+function cvNum(v) {
+  if (typeof v === "number") return isNaN(v) ? 0 : v;
+  var n = parseFloat(String(v == null ? "" : v).replace(/\./g, "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
 }
 
 /* ══ PRUMO DESIGN SYSTEM — TOKENS + CLASSES ══ */
@@ -3252,28 +3397,6 @@ function AnalisePrumo(props) {
 }
 
 /* ══ PROJEÇÃO PRUMO ══ */
-function calcSimAportes(nwBalance, simAporte, simTaxa, simTempo) {
-  var simA = parseFloat(String(simAporte).replace(",", ".")) || 0;
-  var simR = (parseFloat(String(simTaxa).replace(",", ".")) || 0) / 100;
-  var simN = parseInt(simTempo) || 0;
-  var simFV = simN > 0 ? (nwBalance * Math.pow(1 + simR, simN) + (simR > 0 ? simA * (Math.pow(1 + simR, simN) - 1) / simR : simA * simN)) : nwBalance;
-  var simTotalAport = simA * simN;
-  var simJuros = simFV - nwBalance - simTotalAport;
-  var simAnos = simN > 0 ? (simN / 12).toFixed(1) : "0";
-  var numBars = Math.min(simN, 12);
-  var step = numBars > 0 ? Math.ceil(simN / numBars) : 1;
-  var simBars = [];
-  for (var bi = 0; bi < numBars; bi++) {
-    var mn = Math.min((bi + 1) * step, simN);
-    var bv = mn > 0 ? (nwBalance * Math.pow(1 + simR, mn) + (simR > 0 ? simA * (Math.pow(1 + simR, mn) - 1) / simR : simA * mn)) : nwBalance;
-    var bp = nwBalance + simA * mn;
-    simBars.push({ m: mn, fv: bv, principal: bp, juros: bv - bp });
-  }
-  var barMax = simFV > 0 ? simFV : 1;
-  var jurosRatio = simFV > 0 ? simJuros / simFV : 0;
-  return { simA: simA, simR: simR, simN: simN, simFV: simFV, simTotalAport: simTotalAport, simJuros: simJuros, simAnos: simAnos, simBars: simBars, barMax: barMax, jurosRatio: jurosRatio };
-}
-
 function calcRendaPassiva(pBase, fxd, spt) {
   var rpTaxa = 0.007;
   var rpMensal = pBase * rpTaxa;
@@ -3353,7 +3476,6 @@ function ProjecaoPrumo(props) {
   var sSimTp = props.sSimTp;
   var saveCfg = props.saveCfg;
 
-  var sim = calcSimAportes(nwBalance, simAporte, simTaxa, simTempo);
   var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
   var pBase = pat.invVariable || 0;
   var rp = calcRendaPassiva(pBase, fxd, spt);
@@ -3381,7 +3503,7 @@ function ProjecaoPrumo(props) {
   var range = maxV - minV || 1;
 
   return (
-    <div className="prumo-form-grid">
+    <>
 
       {/* TAXA DE POUPANÇA */}
       <div className="prumo-card l-brand">
@@ -3399,75 +3521,6 @@ function ProjecaoPrumo(props) {
           <span className="prumo-num">{fmt(invSp)}</span>
           <span className="prumo-cap">{"Meta 25%: " + fmt(totalInc * 0.25)}</span>
         </div>
-      </div>
-
-      {/* PATRIMÔNIO LÍQUIDO + EDIÇÃO */}
-      <div className="prumo-card l-pos">
-        <div className="prumo-card-hd">
-          <div>
-            <div className="prumo-lbl">{"Patrimônio líquido"}</div>
-            <div className="prumo-big pos" style={{ marginTop: 4 }}>{fmt(nwBalance)}</div>
-          </div>
-          <button className="prumo-btn ghost" onClick={function() { sShowNw(!showNw); }}>{showNw ? "✕" : "✏️ Atualizar"}</button>
-        </div>
-        {showNw && (
-          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-            <input className="prumo-input mono right" placeholder="Saldo atual (R$)" value={nwInput} inputMode="decimal" onChange={function(e) { sNwI(e.target.value); }} />
-            <button className="prumo-btn brand" onClick={updateNW}>{"OK"}</button>
-          </div>
-        )}
-        <div className="prumo-mini-stat-row cols-2" style={{ marginTop: 10 }}>
-          <div className="prumo-mini-stat"><div className="lbl">{"Investido este mês"}</div><div className="val brand">{fmt(invSp)}</div></div>
-          <div className="prumo-mini-stat"><div className="lbl">{"Renda passiva (RV · 0,7%)"}</div><div className="val pos">{fmt(pBase * 0.007) + "/m"}</div></div>
-        </div>
-        {nwHistory.length > 1 && (
-          <div style={{ marginTop: 14 }}>
-            <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Evolução do patrimônio"}</div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 70 }}>
-              {hist.map(function(h, idx) {
-                var barH = ((h.balance - minV) / range) * 60 + 10;
-                var isLast = idx === hist.length - 1;
-                var isUp = idx > 0 && h.balance >= hist[idx - 1].balance;
-                return (
-                  <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div style={{ width: "100%", height: barH, background: isLast ? "var(--brand)" : (isUp ? "color-mix(in oklch, var(--pos) 55%, transparent)" : "color-mix(in oklch, var(--neg) 45%, transparent)"), borderRadius: "3px 3px 0 0", transition: "height 0.4s" }} />
-                    <div style={{ fontSize: 8, color: isLast ? "var(--ink)" : "var(--ink-3)", marginTop: 3, fontWeight: isLast ? 700 : 500, fontFamily: "var(--f-mono)" }}>{sd(h.date).slice(0, 5)}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11 }}>
-              <span className="prumo-cap">{"Mín: " + fmt(minV)}</span>
-              <span className="prumo-num" style={{ color: "var(--brand)" }}>{"Atual: " + fmt(nwBalance)}</span>
-              <span className="prumo-cap">{"Máx: " + fmt(maxV)}</span>
-            </div>
-            {hist.length >= 2 && (
-              <div className={"prumo-chip " + (nwBalance > hist[0].balance ? "pos" : "neg")} style={{ marginTop: 10 }}>
-                {(nwBalance > hist[0].balance ? "▲ +" : "▼ ") + fmt(Math.abs(nwBalance - hist[0].balance)) + " desde " + sd(hist[0].date).slice(0, 5) + " (" + pct(Math.abs((nwBalance - hist[0].balance) / hist[0].balance)) + ")"}
-              </div>
-            )}
-            <div style={{ marginTop: 14 }}>
-              <div className="prumo-lbl" style={{ marginBottom: 4 }}>{"Histórico"}</div>
-              <div style={{ maxHeight: 160, overflowY: "auto" }}>
-                {nwHistory.slice().reverse().map(function(h2, idx2) {
-                  return (
-                    <div key={idx2} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-                      <div>
-                        <span className="prumo-num" style={{ fontSize: 12 }}>{fmt(h2.balance)}</span>
-                        <span className="prumo-cap" style={{ marginLeft: 10, fontFamily: "var(--f-mono)", fontSize: 10 }}>{sd(h2.date)}</span>
-                      </div>
-                      <button className="prumo-icon-x" onClick={function() {
-                        var newHist = nwHistory.filter(function(x) { return x.date !== h2.date; });
-                        var newBal = newHist.length > 0 ? newHist[newHist.length - 1].balance : 0;
-                        saveCfg({ ...cfg, netWorth: { balance: newBal, history: newHist } });
-                      }} title="Remover entrada">{"×"}</button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* TERMÔMETRO IF */}
@@ -3573,81 +3626,6 @@ function ProjecaoPrumo(props) {
           )}
         </div>
       )}
-
-      {/* SIMULADOR DE APORTES */}
-      <div className="prumo-card l-brand full">
-        <div className="prumo-card-hd">
-          <div>
-            <div className="prumo-lbl">{"Simulador de aportes"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Juros compostos sobre o PL"}</h2>
-          </div>
-          <span style={{ fontSize: 22 }}>{"📈"}</span>
-        </div>
-        <div className="prumo-mini-stat-row" style={{ marginBottom: 14 }}>
-          <div>
-            <div className="prumo-lbl">{"Aporte/mês"}</div>
-            <div className="prumo-input-affix">
-              <span className="prefix">{"R$"}</span>
-              <input className="prumo-input mono right with-prefix" value={simAporte} inputMode="decimal" onChange={function(e) { sSimA(e.target.value); }} />
-            </div>
-          </div>
-          <div>
-            <div className="prumo-lbl">{"Taxa mês"}</div>
-            <div className="prumo-input-affix">
-              <input className="prumo-input mono right with-suffix" value={simTaxa} inputMode="decimal" onChange={function(e) { sSimT(e.target.value); }} />
-              <span className="suffix">{"%"}</span>
-            </div>
-          </div>
-          <div>
-            <div className="prumo-lbl">{"Tempo (m)"}</div>
-            <input className="prumo-input mono right" value={simTempo} inputMode="numeric" onChange={function(e) { sSimTp(e.target.value); }} />
-          </div>
-        </div>
-        <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 14, marginBottom: 12, border: "1px solid var(--line)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-            <div className="prumo-cap">{"Patrimônio em " + String(sim.simAnos) + " anos"}</div>
-            <div className="prumo-big brand" style={{ fontSize: 30 }}>{fmt(sim.simFV)}</div>
-          </div>
-          <div className="prumo-mini-stat-row">
-            <div className="prumo-mini-stat"><div className="lbl">{"PL hoje"}</div><div className="val">{fmt(nwBalance)}</div></div>
-            <div className="prumo-mini-stat"><div className="lbl">{"Aportado"}</div><div className="val brand">{fmt(sim.simTotalAport)}</div></div>
-            <div className="prumo-mini-stat"><div className="lbl">{"Juros"}</div><div className="val pos">{fmt(sim.simJuros > 0 ? sim.simJuros : 0)}</div></div>
-          </div>
-          <div className="prumo-lbl" style={{ marginTop: 14, marginBottom: 6 }}>{"Composição do PL final"}</div>
-          <div style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex" }}>
-            <div style={{ width: String(sim.simFV > 0 ? (nwBalance / sim.simFV) * 100 : 0) + "%", background: "var(--ink)", transition: "width 0.4s" }} />
-            <div style={{ width: String(sim.simFV > 0 ? (sim.simTotalAport / sim.simFV) * 100 : 0) + "%", background: "var(--brand)", transition: "width 0.4s" }} />
-            <div style={{ flex: 1, background: "var(--pos)", transition: "width 0.4s" }} />
-          </div>
-          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 2, background: "var(--ink)" }} /><span className="prumo-cap" style={{ fontSize: 10 }}>{"PL atual"}</span></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 2, background: "var(--brand)" }} /><span className="prumo-cap" style={{ fontSize: 10 }}>{"Aportes"}</span></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}><div style={{ width: 9, height: 9, borderRadius: 2, background: "var(--pos)" }} /><span className="prumo-cap" style={{ fontSize: 10 }}>{"Juros (" + pct(sim.jurosRatio) + ")"}</span></div>
-          </div>
-        </div>
-        {sim.simBars.length > 0 && (
-          <div>
-            <div className="prumo-lbl" style={{ marginBottom: 8 }}>{"Evolução do PL"}</div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
-              {sim.simBars.map(function(bar, idx) {
-                var totalH = sim.barMax > 0 ? (bar.fv / sim.barMax) * 90 : 0;
-                var principalH = bar.fv > 0 ? (bar.principal / bar.fv) * totalH : 0;
-                var jurosH = totalH - principalH;
-                var lbl = bar.m >= 12 ? String(Math.round(bar.m / 12)) + "a" : String(bar.m) + "m";
-                return (
-                  <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div style={{ width: "100%", display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", height: totalH, minHeight: 2 }}>
-                      <i style={{ flex: String(bar.principal) + " 0 0", background: "var(--brand)", display: "block", minHeight: 1 }} />
-                      <i style={{ flex: String(bar.juros > 0 ? bar.juros : 0) + " 0 0", background: "var(--pos)", display: "block", minHeight: 1 }} />
-                    </div>
-                    <div style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 3, fontFamily: "var(--f-mono)", fontWeight: 600 }}>{lbl}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* RENDA PASSIVA + GAMIFICATION */}
       <div className="prumo-card l-pos full">
@@ -3830,7 +3808,316 @@ function ProjecaoPrumo(props) {
           </div>
         </div>
       )}
-    </div>
+    </>
+  );
+}
+
+/* ══ CICLO DE VIDA — premissas, trajetória e diagnóstico de longo prazo ══ */
+function CicloVidaPrumo(props) {
+  var cfg = props.cfg;
+  var saveCfg = props.saveCfg;
+  var plFinanceiro = props.plFinanceiro || 0;
+  var aporteSugerido = props.aporteSugerido || 0;
+  var yr = props.yr;
+  var mo = props.mo;
+
+  var stored = (cfg && cfg.cicloVida) || {};
+  var cv = { ...CV_DEFAULT, ...stored };
+  var [novoEv, sNovoEv] = useState({ nome: "", valor: "", ym: "", tipo: "saida" });
+  var [novaFase, sNovaFase] = useState({ valor: "", ym: "" });
+  var [showPrem, sShowPrem] = useState(false);
+
+  var save = function(patch) { saveCfg({ ...cfg, cicloVida: { ...cv, ...patch } }); };
+  var aporteBase = cv.aporteBase === undefined || cv.aporteBase === "" ? aporteSugerido : cvNum(cv.aporteBase);
+  var plIni = cv.plInicial === "" || cv.plInicial === undefined ? plFinanceiro : cvNum(cv.plInicial);
+  var hojeY = new Date().getFullYear();
+  var hojeM = new Date().getMonth();
+
+  var r = calcCicloVida({ ...cv, aporteBase: aporteBase, plInicialResolvido: plIni }, hojeY, hojeM);
+  var noAlvo = r.distancia >= 0;
+
+  // ── Gráfico: trajetória projetada (área) × trajetória no alvo (tracejada) ──
+  var W = 820; var H = 300; var padL = 62; var padR = 16; var padT = 14; var padB = 34;
+  // A trajetória "no alvo" só interessa até a aposentadoria — depois ela dispara e achataria a curva real
+  var idealAte = r.serieIdeal.filter(function(s) { return s.idade <= r.idadeApos + 0.01; });
+  var allVals = r.serie.map(function(s) { return s.saldo; }).concat(idealAte.map(function(s) { return s.saldo; })).concat([0, r.capitalNec]);
+  var vMax = Math.max.apply(null, allVals);
+  var vMin = Math.min.apply(null, allVals);
+  if (vMax === vMin) vMax = vMin + 1;
+  var xOf = function(idade) { return padL + ((idade - r.idade0) / Math.max(r.idadeFim - r.idade0, 1)) * (W - padL - padR); };
+  var yOf = function(v) { return padT + (1 - (v - vMin) / (vMax - vMin)) * (H - padT - padB); };
+  var lineOf = function(serie) {
+    return serie.map(function(s, i) { return (i === 0 ? "M" : "L") + String(xOf(s.idade).toFixed(1)) + " " + String(yOf(s.saldo).toFixed(1)); }).join(" ");
+  };
+  var areaPath = r.serie.length > 0
+    ? "M" + String(xOf(r.idade0).toFixed(1)) + " " + String(yOf(r.plInicial).toFixed(1)) + " " + lineOf(r.serie).slice(1) +
+      " L" + String(xOf(r.serie[r.serie.length - 1].idade).toFixed(1)) + " " + String(yOf(Math.max(vMin, 0)).toFixed(1)) +
+      " L" + String(xOf(r.idade0).toFixed(1)) + " " + String(yOf(Math.max(vMin, 0)).toFixed(1)) + " Z"
+    : "";
+  var ticksY = [vMin, vMin + (vMax - vMin) / 2, vMax];
+  var ticksX = [];
+  for (var tx = Math.ceil(r.idade0 / 10) * 10; tx <= r.idadeFim; tx += 10) ticksX.push(tx);
+
+  var estLabel = { preservacao: "Preservação (vive do rendimento)", consumir: "Consumir tudo até o fim", legado: "Deixar um legado definido" };
+  var inputCell = function(label, key, suffix, placeholder) {
+    return (
+      <div>
+        <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{label}</div>
+        <div className="prumo-input-affix">
+          <input className={"prumo-input mono right" + (suffix ? " with-suffix" : "")} inputMode="decimal"
+            placeholder={placeholder || ""}
+            defaultValue={cv[key] === "" || cv[key] === undefined ? "" : String(cv[key])}
+            onBlur={function(e) { var patch = {}; patch[key] = e.target.value; save(patch); }}
+            onKeyDown={function(e) { if (e.key === "Enter") e.target.blur(); }}
+            style={{ fontSize: 12, padding: "8px 10px" }} />
+          {suffix && <span className="suffix">{suffix}</span>}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {/* ── CICLO DE VIDA: situação + indicadores + trajetória ── */}
+      <div className="prumo-card l-brand full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Ciclo de vida"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Do patrimônio de hoje até a aposentadoria"}</h2>
+          </div>
+          <button className={"prumo-btn " + (showPrem ? "brand" : "ghost")} onClick={function() { sShowPrem(!showPrem); }}>{showPrem ? "Fechar premissas" : "⚙ Premissas"}</button>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Valores reais (já descontada a inflação) · capitalização mensal · o gráfico considera seus aportes por fase e os eventos planejados"}</div>
+
+        {/* BANNER DE SITUAÇÃO */}
+        <div style={{ background: "var(--ink)", borderRadius: "var(--r-l)", padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: noAlvo ? "var(--pos)" : "var(--accent)" }}>{"Situação na aposentadoria"}</div>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 22, fontWeight: 700, color: "var(--surface)", marginTop: 2 }}>{noAlvo ? "Plano no alvo" : "Plano abaixo da meta"}</div>
+            <div style={{ fontSize: 11, color: "var(--surface)", opacity: 0.7, marginTop: 2 }}>{"Aos " + String(r.idadeApos) + " anos, com aportes, eventos e a estratégia de herança escolhida."}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, color: "var(--surface)", opacity: 0.6, textTransform: "uppercase", letterSpacing: ".06em" }}>{"Distância para o capital necessário"}</div>
+            <div className="prumo-num" style={{ fontSize: 26, color: noAlvo ? "var(--pos)" : "var(--accent)" }}>{(r.distancia >= 0 ? "+" : "− ") + fmt(Math.abs(r.distancia))}</div>
+          </div>
+        </div>
+
+        {/* INDICADORES */}
+        <div className="prumo-mini-stat-row cols-2" style={{ marginBottom: 6 }}>
+          <div className="prumo-mini-stat"><div className="lbl">{"Patrimônio hoje"}</div><div className="val">{fmt(r.plInicial)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Na aposentadoria"}</div><div className="val brand">{fmt(r.plApos)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Capital necessário"}</div><div className="val" style={{ color: "var(--accent-2)" }}>{fmt(r.capitalNec)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Renda que ele paga"}</div><div className="val pos">{fmt(r.rendaSustentavel) + "/m"}</div></div>
+        </div>
+        <div className="prumo-mini-stat-row cols-2" style={{ marginBottom: 14 }}>
+          <div className="prumo-mini-stat"><div className="lbl">{"Total de aportes"}</div><div className="val">{fmt(r.totalAportes)}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Meta atingida"}</div><div className="val" style={{ color: noAlvo ? "var(--pos)" : "var(--accent-2)" }}>{pct(Math.min(r.metaPct, 9.99))}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Aporte pra fechar"}</div><div className="val">{r.aporteExtra === null ? "—" : (r.aporteExtra > 0 ? "+" + fmt(r.aporteExtra) + "/m" : "já fecha")}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Sobra aos " + String(r.idadeFim)}</div><div className="val" style={{ color: r.capitalFinal >= 0 ? "var(--ink)" : "var(--neg)" }}>{fmt(r.capitalFinal)}</div></div>
+        </div>
+
+        {/* GRÁFICO */}
+        <div style={{ width: "100%", overflowX: "auto" }}>
+          <svg viewBox={"0 0 " + String(W) + " " + String(H)} style={{ width: "100%", minWidth: 520, height: "auto", display: "block" }}>
+            {ticksY.map(function(tv, i) {
+              return (
+                <g key={i}>
+                  <line x1={padL} y1={yOf(tv)} x2={W - padR} y2={yOf(tv)} stroke="var(--line)" strokeWidth="1" />
+                  <text x={padL - 8} y={yOf(tv) + 3} textAnchor="end" fontSize="10" fill="var(--ink-3)" fontFamily="var(--f-mono)">{fKmi(tv)}</text>
+                </g>
+              );
+            })}
+            {vMin < 0 && <line x1={padL} y1={yOf(0)} x2={W - padR} y2={yOf(0)} stroke="var(--ink-3)" strokeWidth="1" />}
+            {ticksX.map(function(tv, i) {
+              return <text key={i} x={xOf(tv)} y={H - 14} textAnchor="middle" fontSize="10" fill="var(--ink-3)" fontFamily="var(--f-mono)">{String(tv)}</text>;
+            })}
+            <text x={(padL + W - padR) / 2} y={H - 2} textAnchor="middle" fontSize="9" fill="var(--ink-3)">{"Idade"}</text>
+            {areaPath && <path d={areaPath} fill="var(--brand)" opacity="0.14" />}
+            {idealAte.length > 0 && <path d={lineOf(idealAte)} fill="none" stroke="var(--ink-3)" strokeWidth="1.6" strokeDasharray="6 4" />}
+            {r.serie.length > 0 && <path d={lineOf(r.serie)} fill="none" stroke="var(--brand)" strokeWidth="2.4" />}
+            <line x1={xOf(r.idadeApos)} y1={padT} x2={xOf(r.idadeApos)} y2={H - padB} stroke="var(--accent-2)" strokeWidth="1.5" strokeDasharray="4 3" />
+            <text x={xOf(r.idadeApos)} y={padT + 10} textAnchor="middle" fontSize="9" fill="var(--accent-2)" fontWeight="700">{"Aposentadoria · " + String(r.idadeApos)}</text>
+            {r.eventos.map(function(ev, i) {
+              var s = r.serie.find(function(x) { return x.idade >= ev.idade; }) || r.serie[r.serie.length - 1];
+              if (!s) return null;
+              var cx = xOf(ev.idade); var cy = yOf(s.saldo);
+              return (
+                <g key={ev.id || i}>
+                  <polygon points={String(cx) + "," + String(cy - 6) + " " + String(cx + 6) + "," + String(cy) + " " + String(cx) + "," + String(cy + 6) + " " + String(cx - 6) + "," + String(cy)}
+                    fill={ev.tipo === "entrada" ? "var(--pos)" : "var(--neg)"} stroke="var(--surface)" strokeWidth="1.5" />
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><span style={{ width: 14, height: 3, background: "var(--brand)", borderRadius: 2 }} />{"Seu patrimônio projetado"}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><span style={{ width: 14, height: 0, borderTop: "2px dashed var(--ink-3)" }} />{"Trajetória que fecha a meta"}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><span style={{ width: 9, height: 9, background: "var(--neg)", transform: "rotate(45deg)" }} />{"Eventos planejados"}</span>
+        </div>
+
+        {/* DIAGNÓSTICO */}
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <div className="prumo-lbl" style={{ marginBottom: 6 }}>{"Diagnóstico"}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6 }}>
+            {"Mantendo o plano atual, aos " + String(r.idadeApos) + " anos você chega a " + fmt(r.plApos) + " — " +
+              (noAlvo ? fmt(r.distancia) + " acima" : fmt(Math.abs(r.distancia)) + " abaixo") + " do capital necessário de " + fmt(r.capitalNec) + "."}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, marginTop: 4 }}>
+            {r.aporteExtra !== null && r.aporteExtra > 0
+              ? "Aportes: faltam " + fmt(r.aporteExtra) + "/mês a mais (total de " + fmt(aporteBase + r.aporteExtra) + "/mês) — ou um retorno real de " + (r.retornoNec * 100).toFixed(1) + "% a.a. em vez de " + String(cvNum(cv.retornoReal)) + "%."
+              : "Aportes: o plano atual já cobre a meta. Com esse patrimônio, a renda sustentável é de " + fmt(r.rendaSustentavel) + "/mês."}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, marginTop: 4 }}>
+            {r.idadeZera !== null
+              ? "⚠️ Duração: nesse ritmo o dinheiro acaba aos " + String(Math.floor(r.idadeZera)) + " anos, antes dos " + String(r.idadeFim) + " do horizonte."
+              : "Duração: o patrimônio dura até os " + String(r.idadeFim) + " anos, com " + fmt(r.capitalFinal) + " no fim."}
+          </div>
+        </div>
+
+        {/* PREMISSAS (editor) */}
+        {showPrem && (
+          <div style={{ marginTop: 14, background: "var(--surface-2)", borderRadius: 14, padding: 14, border: "1px solid var(--line)" }}>
+            <div className="prumo-lbl" style={{ marginBottom: 10 }}>{"Premissas do plano"}</div>
+            <div className="prumo-grid-2" style={{ gap: 10 }}>
+              {inputCell("Idade atual", "idadeAtual", "anos")}
+              {inputCell("Aposentadoria aos", "idadeApos", "anos")}
+              {inputCell("Expectativa de vida", "expectativa", "anos")}
+              {inputCell("Retorno real esperado", "retornoReal", "% a.a.")}
+              {inputCell("Yield na aposentadoria", "yieldPct", "% a.a.")}
+              {inputCell("Renda mensal desejada", "rendaDesejada", "R$/m")}
+              {inputCell("Renda residual (aluguel, INSS…)", "rendaResidual", "R$/m")}
+              {inputCell("Aporte mensal atual", "aporteBase", "R$/m", String(Math.round(aporteSugerido)))}
+              {inputCell("Patrimônio inicial (vazio = PL financeiro)", "plInicial", "R$", String(Math.round(plFinanceiro)))}
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 4 }}>{"Estratégia de herança"}</div>
+              <select className="prumo-input" value={cv.estrategia} onChange={function(e) { save({ estrategia: e.target.value }); }} style={{ fontSize: 12 }}>
+                <option value="preservacao">{estLabel.preservacao}</option>
+                <option value="consumir">{estLabel.consumir}</option>
+                <option value="legado">{estLabel.legado}</option>
+              </select>
+              {cv.estrategia === "legado" && (
+                <div style={{ marginTop: 8 }}>{inputCell("Legado a deixar (valor de hoje)", "legadoValor", "R$")}</div>
+              )}
+              <div className="prumo-cap" style={{ fontSize: 10, marginTop: 6 }}>
+                {cv.estrategia === "preservacao"
+                  ? "Preservação: você vive só do rendimento e o patrimônio fica de pé pros herdeiros — exige mais capital."
+                  : cv.estrategia === "consumir"
+                    ? "Consumir tudo: o dinheiro pode acabar exatamente no fim do horizonte — exige menos capital."
+                    : "Legado: consome o patrimônio, mas garante o valor definido no fim do horizonte."}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── FASES DE APORTE ── */}
+      <div className="prumo-card l-pos full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Aportes por fase"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Quanto você investe em cada etapa da vida"}</h2>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Ex.: zerar o aporte quando começar a pagar o financiamento e voltar a investir dez anos depois. Cada fase vale do mês informado até a fase seguinte."}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--line)" }}>
+          <span className="prumo-chip brand" style={{ fontSize: 10, flexShrink: 0 }}>{"hoje"}</span>
+          <span style={{ flex: 1, fontSize: 12, color: "var(--ink)", fontWeight: 600 }}>{"Aporte atual"}</span>
+          <span className="prumo-num" style={{ fontSize: 13 }}>{fmt(aporteBase) + "/m"}</span>
+        </div>
+        {(cv.aporteFases || []).slice().sort(function(a, b) { return String(a.ym).localeCompare(String(b.ym)); }).map(function(f) {
+          var off = cvOffsetOf(f.ym, hojeY, hojeM);
+          var idadeF = off === null ? null : r.idade0 + off / 12;
+          return (
+            <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--line)" }}>
+              <span className="prumo-chip" style={{ fontSize: 10, flexShrink: 0, fontFamily: "var(--f-mono)" }}>{String(f.ym)}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--ink-2)" }}>
+                {(idadeF !== null ? "aos " + String(Math.floor(idadeF)) + " anos" : "—") + (cvNum(f.valor) === 0 ? " · pausa os aportes" : "")}
+              </span>
+              <span className="prumo-num" style={{ fontSize: 13, color: cvNum(f.valor) === 0 ? "var(--neg)" : "var(--ink)" }}>{fmt(cvNum(f.valor)) + "/m"}</span>
+              <button className="prumo-icon-x" title="Remover fase" style={{ width: 26, height: 26, fontSize: 14 }}
+                onClick={function() { save({ aporteFases: (cv.aporteFases || []).filter(function(x) { return x.id !== f.id; }) }); }}>{"×"}</button>
+            </div>
+          );
+        })}
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 130px" }}>
+            <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"A partir de"}</div>
+            <input className="prumo-input" type="month" value={novaFase.ym} onChange={function(e) { sNovaFase({ ...novaFase, ym: e.target.value }); }} style={{ fontSize: 12 }} />
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"Aporte/mês (0 = pausa)"}</div>
+            <div className="prumo-input-affix">
+              <span className="prefix">{"R$"}</span>
+              <input className="prumo-input mono right with-prefix" placeholder="0,00" inputMode="decimal" value={novaFase.valor} onChange={function(e) { sNovaFase({ ...novaFase, valor: e.target.value }); }} style={{ fontSize: 12 }} />
+            </div>
+          </div>
+          <button className="prumo-btn brand" style={{ padding: "9px 16px", fontSize: 12 }}
+            onClick={function() {
+              if (!novaFase.ym) return;
+              save({ aporteFases: (cv.aporteFases || []).concat([{ id: uid(), ym: novaFase.ym, valor: cvNum(novaFase.valor) }]) });
+              sNovaFase({ valor: "", ym: "" });
+            }}>{"+ Adicionar fase"}</button>
+        </div>
+      </div>
+
+      {/* ── EVENTOS ── */}
+      <div className="prumo-card l-warn full">
+        <div className="prumo-card-hd">
+          <div>
+            <div className="prumo-lbl">{"Eventos planejados"}</div>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Entradas e saídas grandes no meio do caminho"}</h2>
+          </div>
+        </div>
+        <div className="prumo-cap" style={{ marginBottom: 10 }}>{"Ex.: a entrada do apartamento. O patrimônio cai naquele mês e volta a subir com os aportes seguintes."}</div>
+        {(cv.eventos || []).length === 0 && <div className="prumo-cap" style={{ padding: "8px 0" }}>{"Nenhum evento cadastrado ainda."}</div>}
+        {r.eventos.map(function(ev) {
+          return (
+            <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--line)" }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>{ev.tipo === "entrada" ? "🟢" : "🔻"}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{ev.nome || "Evento"}</span>
+                <span className="prumo-cap" style={{ fontSize: 10 }}>{(ev.tipo === "entrada" ? "Entrada" : "Saída") + " · aos " + String(Math.floor(ev.idade)) + " anos"}</span>
+              </span>
+              <span className="prumo-num" style={{ fontSize: 13, color: ev.tipo === "entrada" ? "var(--pos)" : "var(--neg)" }}>{(ev.tipo === "entrada" ? "+" : "− ") + fmt(ev.valor)}</span>
+              <button className="prumo-icon-x" title="Remover evento" style={{ width: 26, height: 26, fontSize: 14 }}
+                onClick={function() { save({ eventos: (cv.eventos || []).filter(function(x) { return x.id !== ev.id; }) }); }}>{"×"}</button>
+            </div>
+          );
+        })}
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "2 1 140px" }}>
+            <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"O que é"}</div>
+            <input className="prumo-input" placeholder="Ex: entrada do apê" value={novoEv.nome} onChange={function(e) { sNovoEv({ ...novoEv, nome: e.target.value }); }} style={{ fontSize: 12 }} />
+          </div>
+          <div style={{ flex: "1 1 110px" }}>
+            <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"Quando"}</div>
+            <input className="prumo-input" type="month" value={novoEv.ym} onChange={function(e) { sNovoEv({ ...novoEv, ym: e.target.value }); }} style={{ fontSize: 12 }} />
+          </div>
+          <div style={{ flex: "1 1 110px" }}>
+            <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"Tipo"}</div>
+            <select className="prumo-input" value={novoEv.tipo} onChange={function(e) { sNovoEv({ ...novoEv, tipo: e.target.value }); }} style={{ fontSize: 12 }}>
+              <option value="saida">{"Saída (−)"}</option>
+              <option value="entrada">{"Entrada (+)"}</option>
+            </select>
+          </div>
+          <div style={{ flex: "1 1 120px" }}>
+            <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{"Valor"}</div>
+            <div className="prumo-input-affix">
+              <span className="prefix">{"R$"}</span>
+              <input className="prumo-input mono right with-prefix" placeholder="0,00" inputMode="decimal" value={novoEv.valor} onChange={function(e) { sNovoEv({ ...novoEv, valor: e.target.value }); }} style={{ fontSize: 12 }} />
+            </div>
+          </div>
+          <button className="prumo-btn brand" style={{ padding: "9px 16px", fontSize: 12 }}
+            onClick={function() {
+              if (!novoEv.ym || cvNum(novoEv.valor) <= 0) return;
+              save({ eventos: (cv.eventos || []).concat([{ id: uid(), nome: cln(novoEv.nome, 80) || "Evento", ym: novoEv.ym, tipo: novoEv.tipo, valor: cvNum(novoEv.valor) }]) });
+              sNovoEv({ nome: "", valor: "", ym: "", tipo: "saida" });
+            }}>{"+ Adicionar evento"}</button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -3930,7 +4217,7 @@ function VidaPrumo(props) {
   };
 
   return (
-    <div className="prumo-form-grid">
+    <>
 
       {/* HERO PL */}
       <div className="prumo-card l-brand full">
@@ -4074,7 +4361,7 @@ function VidaPrumo(props) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -5698,6 +5985,9 @@ export default function App() {
   /* Net worth projection */
   var nwBalance = nw.balance || 0;
   var nwHistory = nw.history || [];
+  // Base do Ciclo de Vida: só o que rende (reserva + investimentos), sem imóveis/veículos
+  var patCV = (cfg && cfg.patrimonio) || {};
+  var plFinanceiro = (patCV.reserva || 0) + (patCV.invFixed || 0) + (patCV.invVariable || 0) + (patCV.invOther || 0);
 
   /* Annual chart */
   var chD = [];
@@ -5770,6 +6060,9 @@ export default function App() {
     chMx = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
     chMs = Math.max.apply(null, chD.map(function(d) { return Math.abs(d.s); }).concat([1]));
   }
+  // Aporte médio dos meses reais com investimento — sugestão de aporte pro Ciclo de Vida
+  var apMeses = chD.filter(function(d) { return d.real && d.i > 0; });
+  var aporteMedioAno = apMeses.length > 0 ? apMeses.reduce(function(a, d) { return a + d.i; }, 0) / apMeses.length : 0;
 
   /* ── Navigation ── */
   var goPrev = function() {
@@ -6303,11 +6596,10 @@ export default function App() {
   var tabs = [
     { id: "dash", l: "Dashboard", ico: "◐", grp: "Visão" },
     { id: "analise", l: "Análise", ico: "◇", grp: "Visão" },
-    { id: "proj", l: "Projeção", ico: "↗", grp: "Visão" },
     { id: "input", l: "Lançamentos", ico: "≡", grp: "Operação" },
     { id: "fixas", l: "Fixas", ico: "⌶", grp: "Operação" },
     { id: "deve", l: "A receber", ico: "⊕", grp: "Operação" },
-    { id: "vida", l: "Vida (PL)", ico: "○", grp: "Patrimônio" },
+    { id: "vida", l: "Vida & Projeção", ico: "○", grp: "Patrimônio" },
     { id: "metas", l: "Metas", ico: "◯", grp: "Patrimônio" },
     { id: "monthly", l: "Mensal", ico: "▦", grp: "Patrimônio" },
     { id: "cfg", l: "Configurações", ico: "⚙", grp: "Sistema" },
@@ -6452,25 +6744,24 @@ export default function App() {
           />
         )}
 
-        {/* ═══ VIDA (PL) — placeholder ═══ */}
+        {/* ═══ VIDA & PROJEÇÃO — PL, ciclo de vida e liberdade financeira numa aba só ═══ */}
         {tab === "vida" && (
-          <VidaPrumo cfg={cfg} saveCfg={saveCfg} nwHistory={nwHistory} />
-        )}
-
-
-        {/* ═══ PROJEÇÃO ═══ */}
-        {tab === "proj" && (
-          <ProjecaoPrumo
-            cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp}
-            nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
-            totDb={totDb} dRcv={dRcv} ifTarget={ifTarget} sIfTarget={sIfTarget}
-            showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
-            prevSp={prevSp} spent={spent} mo={mo} yr={yr}
-            chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
-            showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
-            simAporte={simAporte} sSimA={sSimA} simTaxa={simTaxa} sSimT={sSimT} simTempo={simTempo} sSimTp={sSimTp}
-            saveCfg={saveCfg}
-          />
+          <div className="prumo-form-grid">
+            <VidaPrumo cfg={cfg} saveCfg={saveCfg} nwHistory={nwHistory} embedded />
+            <CicloVidaPrumo cfg={cfg} saveCfg={saveCfg} yr={yr} mo={mo}
+              plFinanceiro={plFinanceiro} aporteSugerido={aporteMedioAno} />
+            <ProjecaoPrumo
+              cfg={cfg} savR={savR} totalInc={totalInc} invSp={invSp}
+              nwBalance={nwBalance} nwHistory={nwHistory} fxd={fxd} spt={spt} cats={cats}
+              totDb={totDb} dRcv={dRcv} ifTarget={ifTarget} sIfTarget={sIfTarget}
+              showIfEdit={showIfEdit} sShowIfEdit={sShowIfEdit}
+              prevSp={prevSp} spent={spent} mo={mo} yr={yr}
+              chD={chD} chMx={chMx} chMs={chMs} hovM={hovM} sHM={sHM}
+              showNw={showNw} sShowNw={sShowNw} nwInput={nwInput} sNwI={sNwI} updateNW={updateNW}
+              simAporte={simAporte} sSimA={sSimA} simTaxa={simTaxa} sSimT={sSimT} simTempo={simTempo} sSimTp={sSimTp}
+              saveCfg={saveCfg} embedded
+            />
+          </div>
         )}
 
         {/* ═══ ANÁLISE ═══ */}
@@ -6920,7 +7211,7 @@ export default function App() {
           <span className="ico">{"◇"}</span>
           <span className="lbl-t">{"Análise"}</span>
         </button>
-        <button className={"prumo-tab" + (["vida","metas","monthly","proj","fixas","deve","cfg"].indexOf(tab) >= 0 ? " active" : "")} onClick={function() { sShowMore(true); }}>
+        <button className={"prumo-tab" + (["vida","metas","monthly","fixas","deve","cfg"].indexOf(tab) >= 0 ? " active" : "")} onClick={function() { sShowMore(true); }}>
           <span className="ico">{"○"}</span>
           <span className="lbl-t">{"Mais"}</span>
         </button>
