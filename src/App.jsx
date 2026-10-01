@@ -630,6 +630,114 @@ function calcEstVarFuturo(yrD, cfg, yr, mo) {
   return med < 0 ? 0 : med;
 }
 
+/* ══ A CONTA DO MÊS — fonte ÚNICA do "pode gastar" (decidido 2026-10-01) ══
+   Antes havia 3 respostas pra "quanto sobra" (saldo livre, fluxo do Dashboard, fluxo da Análise), cada uma
+   com uma régua. Agora: COMPETÊNCIA (o gasto conta no dia em que aconteceu, cartão inclusive) e só a minha parte.
+     Renda − fixas do mês (todas, pagas ou não) − parcelas − variável já lançado = PODE GASTAR
+   As fixas de investimento (poupança da casa) estão dentro das fixas: o "pode gastar" nunca come o aporte.
+   O regime de caixa (calcCaixaMes) não concorre com esse número — vira só o alerta "sua conta aguenta?". */
+function calcMes(yrD, cfg, yr, mo, hoje) {
+  var cats = (cfg && cfg.categories) ? cfg.categories : DC;
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
+  var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
+  var mb = (yrD && yrD[mo]) || { tx: [], cr: [], fs: {} };
+  var txs = mb.tx || [];
+  var fs = mb.fs || {};
+  var sal = (cfg && cfg.salary) || 0;
+  var extra = (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
+  var renda = sal + extra;
+
+  // Uso de uma fixa de cartão (checklist) pelas compras da categoria no cartão — o gasto real já está no variável
+  var usoCartao = function(f) {
+    return txs.reduce(function(a, t) {
+      if (t.reimbursed || !isCredit(t.payment)) return a;
+      if (t.cat !== f.cat) {
+        var cSub = cats.find(function(c6) { return c6.id === t.cat; });
+        if (!cSub || cSub.parent !== f.cat) return a;
+      }
+      return a + myP(t);
+    }, 0);
+  };
+  var fixas = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, mo)).map(function(f) {
+    var resta;
+    if (f.teto) resta = fxRestante(f, txs, cats);
+    else if ((f.mode || "budget") === "checklist" && f.cat) resta = fs[f.id] === "paid" ? 0 : Math.max(0, fxMine(f) - usoCartao(f));
+    else resta = fxMine(f);
+    var c = cats.find(function(c2) { return c2.id === f.cat; });
+    return { f: f, resta: resta, invest: !!(c && c.group === "investimentos") };
+  });
+  var fixasTot = fixas.reduce(function(a, x) { return a + x.resta; }, 0);
+  var poupanca = fixas.filter(function(x) { return x.invest; }).reduce(function(a, x) { return a + x.resta; }, 0);
+  var parcelas = txs.filter(function(t) { return t.src === "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
+  var variavel = txs.filter(function(t) { return t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
+  var livreVar = renda - fixasTot - parcelas; // o que o mês deixa pro variável
+  var podeGastar = livreVar - variavel;
+
+  // Tempo: mês aberto (hoje), já fechado ou ainda por vir
+  var h = hoje || new Date();
+  var diasMes = new Date(yr, mo + 1, 0).getDate();
+  var hojeIdx = h.getFullYear() * 12 + h.getMonth();
+  var mesIdx = yr * 12 + mo;
+  var estado = mesIdx === hojeIdx ? "atual" : (mesIdx < hojeIdx ? "fechado" : "futuro");
+  var dia = estado === "atual" ? h.getDate() : (estado === "fechado" ? diasMes : 0);
+  var diasRest = estado === "atual" ? diasMes - dia + 1 : (estado === "futuro" ? diasMes : 0);
+  var porDia = diasRest > 0 ? Math.max(0, podeGastar) / diasRest : 0;
+  // Ritmo: quanto do variável "caberia" até hoje se o mês fosse gasto por igual.
+  // Gasto coberto por fixa teto (iFood até R$600) tem orçamento próprio — fica fora dos dois lados, senão
+  // um iFood no dia 1 acusaria "acima do ritmo" mesmo dentro do teto.
+  var tetoCoberto = fixas.filter(function(x) { return x.f.teto; }).reduce(function(a, x) { return a + Math.min(fxMine(x.f), fxTetoUsado(x.f, txs, cats)); }, 0);
+  var idealAteHoje = Math.max(0, livreVar - tetoCoberto) * (dia / diasMes);
+  var ritmo = (variavel - tetoCoberto) - idealAteHoje; // > 0 = acima do ritmo
+
+  return {
+    renda: renda, salario: sal, extra: extra, fixas: fixas, fixasTot: fixasTot, poupanca: poupanca,
+    parcelas: parcelas, variavel: variavel, livreVar: livreVar, podeGastar: podeGastar,
+    estado: estado, dia: dia, diasMes: diasMes, diasRest: diasRest, porDia: porDia, idealAteHoje: idealAteHoje, ritmo: ritmo,
+  };
+}
+
+// Variável lançado (sem parcelas) até o dia N do mês — pra comparar períodos iguais, não 1 dia × mês fechado
+function calcVarAteDia(mData, dia) {
+  return ((mData && mData.tx) || []).reduce(function(a, t) {
+    if (t.src === "proj") return a;
+    if (dia !== null && t.date) {
+      var d = parseInt(String(t.date).slice(8, 10), 10);
+      if (!isNaN(d) && d > dia) return a;
+    }
+    return a + myP(t);
+  }, 0);
+}
+
+/* A receber por mês (caixa): partes divididas de compras no CARTÃO, no mês do settleMonth, + devedores manuais.
+   Só cartão: a fatura sai CHEIA (gross) da conta e o reembolso entra depois. Não-cartão e fixas divididas já entram
+   netados (myP / amount−spt) na despesa, então somar recebível deles duplicaria. */
+function calcRecvByMonth(yrD, cfg, yr) {
+  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var recv = {};
+  (yrD || []).forEach(function(mb3, bidx3) {
+    ((mb3 && mb3.tx) || []).forEach(function(t) {
+      if (creditClosingFor(t.payment, paysList) === null) return;
+      if (gsp(t).length === 0) return;
+      var smk = t.settleMonth || tk(yr, bidx3);
+      recv[smk] = (recv[smk] || 0) + spt(t);
+    });
+    ((mb3 && mb3.debts) || []).forEach(function(d5) {
+      recv[tk(yr, bidx3)] = (recv[tk(yr, bidx3)] || 0) + (d5.amount || 0);
+    });
+  });
+  return recv;
+}
+
+// Caixa do mês (o que entra e sai da CONTA) — fonte única do fluxo de caixa no Dashboard e na Análise
+function calcCaixaMes(yrD, cfg, yr, mi, recvMap) {
+  var mb = (yrD && yrD[mi]) || { tx: [], cr: [] };
+  var rec = ((cfg && cfg.salary) || 0) + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
+  var recv = (recvMap || {})[tk(yr, mi)] || 0;
+  var out = calcCashOutMonth(yrD, cfg, yr, mi);
+  return { rec: rec, recv: recv, out: out, saldo: rec + recv - out };
+}
+
 /* ══ CICLO DE VIDA — motor de projeção patrimonial de longo prazo ══
    Tudo em valores REAIS (líquidos de inflação), capitalização MENSAL.
    Ordem dentro do mês: rende → aporta (ou saca) → aplica eventos do mês.
@@ -1653,56 +1761,29 @@ function DashboardPrumo(props) {
   var saveCfg = props.saveCfg;
   var yrD = props.yrD;
   var myP = props.myP;
-  var cashView = props.cashView;
-  var onToggleCashView = props.onToggleCashView;
+  var pvMd = props.pvMd;
 
-  /* ─── Regime de caixa: quanto SAI da conta em cada mês (com anti-duplicação fixa/cartão) ─── */
   var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
   var hasAnyCard = paysList.some(function(p) { return p && p.type === "credito"; });
   var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
   var isCreditPay = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
   var invByMonth = calcInvoices(yrD, yr, paysList);
-  // Meses que já têm fatura REAL (compras de cartão não-projetadas): nesses, a fixa-cartão é ignorada (já está na compra real)
-  var realInvoiceMonths = {};
-  (yrD || []).forEach(function(mb2, bidx) {
-    (mb2.tx || []).forEach(function(t) {
-      if (t.src === "proj" || !isCreditPay(t.payment)) return;
-      var yy, mm, dd;
-      if (t.date) { var dt = new Date(t.date); if (!isNaN(dt.getTime())) { yy = dt.getFullYear(); mm = dt.getMonth(); dd = dt.getDate(); } }
-      if (yy === undefined) { yy = yr; mm = bidx; dd = 15; }
-      realInvoiceMonths[invoiceKeyForYMD(yy, mm, dd, creditClosingFor(t.payment, paysList) || 1)] = true;
-    });
-  });
-  var calcCashOut = function(monthIdx) {
-    var key = tk(yr, monthIdx);
-    var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
-    var cartao = (invByMonth[key] || { net: 0 }).net; // fatura que vence neste mês — SÓ A MINHA PARTE (net, splits/reembolsos fora), mesma régua da aba Análise
-    var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
-    if (!realInvoiceMonths[key]) {
-      // mês ainda sem fatura importada → usa a fixa-cartão como estimativa do que vai cair
-      cartao += fxList.filter(function(f) { return isCreditPay(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-    }
-    var fixasNaoCartao = fxList.filter(function(f) { return !isCreditPay(f.payment); }).reduce(function(a, f) { return a + fxRestante(f, mb.tx, cats); }, 0);
-    var varNaoCartao = (mb.tx || []).filter(function(t) { return !isCreditPay(t.payment); }).reduce(function(a, t) { return a + myP(t); }, 0);
-    return cartao + fixasNaoCartao + varNaoCartao;
-  };
 
-  /* ─── Hero numbers ─── */
-  var debitoMes = cashView ? calcCashOut(mo) : totDb;
-  // Saldo = renda − MEUS gastos. Régua única "só a minha parte" nas duas visões (caixa usa a fatura líquida .net,
-  // igual à aba Análise). A diferença entre caixa e competência é só de TIMING (quando sai da conta × quando gastei),
-  // nunca de reembolso. Reembolsos (dRcv) NÃO entram no saldo — vivem no card "A receber" — pra um mês com reembolso
-  // grande (ex.: divisão com a Duda) não parecer mais folgado/disciplinado do que foi de fato.
-  var saldoLivre = totalInc - debitoMes;
-  var saldoSinal = saldoLivre >= 0;
-  var saldoCents = Math.round((Math.abs(saldoLivre) % 1) * 100);
-  var saldoIntStr = Math.floor(Math.abs(saldoLivre)).toLocaleString("pt-BR");
-  var saldoCentsStr = (saldoCents < 10 ? "0" : "") + String(saldoCents);
-  // Comparação FIEL com o mês anterior: Gastos-vs-Gastos (competência, só a minha parte via totDb/prevTotDb).
-  // Imune a reembolsos (dRcv não entra) e a variação de renda/bônus (sem termo de renda). Mede só disciplina de gasto.
-  // gastoDelta < 0 = gastei menos que o mês passado (bom); > 0 = gastei mais (ruim).
-  var prevTotDb = prevSp ? (prevSp.essenciais || 0) + (prevSp.investimentos || 0) + (prevSp.desejos || 0) : null;
-  var gastoDelta = prevTotDb !== null ? totDb - prevTotDb : null;
+  /* ─── Hero: UM número — "pode gastar" (calcMes, competência). O antigo seletor caixa/competência saiu:
+     duas réguas no mesmo lugar davam respostas diferentes pra mesma pergunta. ─── */
+  var cm = yrD ? calcMes(yrD, cfg, yr, mo) : null;
+  var pode = cm ? cm.podeGastar : totalInc - totDb;
+  var podeSinal = pode >= 0;
+  var podeCents = Math.round((Math.abs(pode) % 1) * 100);
+  var podeIntStr = Math.floor(Math.abs(pode)).toLocaleString("pt-BR");
+  var podeCentsStr = (podeCents < 10 ? "0" : "") + String(podeCents);
+  var MES_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  var prevMo = mo === 0 ? 11 : mo - 1;
+  // Comparação JUSTA: variável do mesmo período (dia 1..N) nos dois meses — 1 dia × mês fechado enganava.
+  // Mês fechado compara mês inteiro com mês inteiro.
+  var cmpDia = cm && cm.estado === "atual" ? cm.dia : null;
+  var gastoDelta = (cm && pvMd && cm.estado !== "futuro") ? calcVarAteDia({ tx: txs }, cmpDia) - calcVarAteDia(pvMd, cmpDia) : null;
+  var gastoDeltaLbl = cmpDia !== null ? " vs. mesmo período de " + MES_ABBR[prevMo] : " vs. " + MES_ABBR[prevMo];
 
   /* ─── Reserva: configurável (atual / média 6m / média 12m / manual) ─── */
   var pat = (cfg && cfg.patrimonio) ? cfg.patrimonio : {};
@@ -1863,58 +1944,33 @@ function DashboardPrumo(props) {
      ficam artificialmente piores que a realidade. Não-cartão e fixas divididas já entram netados
      (myP / amount−spt) na despesa, então somar recebível deles duplicaria. Parcelas projetadas
      divididas (src proj) contam: são compromisso real de quem dividiu. ─── */
-  var recvByMonth = {};
-  if (yrD) {
-    yrD.forEach(function(mb3, bidx3) {
-      (mb3.tx || []).forEach(function(t) {
-        if (!isCreditPay(t.payment)) return;
-        if (gsp(t).length === 0) return;
-        var smk = t.settleMonth || tk(yr, bidx3);
-        recvByMonth[smk] = (recvByMonth[smk] || 0) + spt(t);
-      });
-      // Devedores manuais do mês: dinheiro que entra e não toca despesa nenhuma — sem risco de dupla contagem
-      (mb3.debts || []).forEach(function(d5) {
-        recvByMonth[tk(yr, bidx3)] = (recvByMonth[tk(yr, bidx3)] || 0) + (d5.amount || 0);
-      });
-    });
-  }
-
-  /* ─── Fluxo de caixa projetado · próximos 4 meses ───
-     Só compromisso REAL (fatura + fixas + parcelas projetadas + divididas a receber). A comparação
-     com a média de variável dos últimos 3 meses mora na aba Análise (calcEstVarFuturo). */
-  var cashflowMonths = [];
+  /* ─── Caixa: deixou de ser um segundo "quanto sobra" no Dashboard. Só aparece como ALERTA quando algum dos
+     próximos meses fecha negativo na conta (mesma conta da Análise: calcCaixaMes), explicando por que difere
+     do "pode gastar" — normalmente é a fatura do mês anterior, que já foi contada lá. ─── */
+  var caixaAlerta = null;
   if (yrD && cfg) {
-    var fxRaw = cfg.fixed || [];
-    for (var cfi = 0; cfi < 4; cfi++) {
+    var recvMap = calcRecvByMonth(yrD, cfg, yr);
+    for (var cfi = 0; cfi < 4 && !caixaAlerta; cfi++) {
       var tgtMo = mo + cfi;
       if (tgtMo > 11) break; // não cruza o ano (limitação de cross-year já combinada)
-      var mb = yrD[tgtMo] || { tx: [], cr: [] };
-      var rec = sal + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
-      var recvMes = cashView ? (recvByMonth[tk(yr, tgtMo)] || 0) : 0; // caixa: divididas do cartão entram no mês do settleMonth
-      rec += recvMes;
-      var desp;
-      if (cashView) {
-        desp = calcCashOut(tgtMo); // regime de caixa: fatura + fixas + parcelas — compromisso real, sem estimativa
-      } else {
-        var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
-        var fxSum = fxList.reduce(function(a, f) { return a + fxRestante(f, mb.tx, cats); }, 0);
-        var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
-        desp = fxSum + varSum; // competência: tudo que foi lançado no mês
+      var cx = calcCaixaMes(yrD, cfg, yr, tgtMo, recvMap);
+      if (cx.saldo < 0) {
+        var tgtKey = tk(yr, tgtMo);
+        var det = calcCashDetailMonth(yrD, cfg, yr, tgtMo);
+        // Fatura que vence no mês, só a parte de compras de meses anteriores (as do próprio mês antes do fechamento ficam fora)
+        var faturaAntes = det.cardTx.filter(function(t) { return !t.date || String(t.date).slice(0, 7) < tgtKey; }).reduce(function(a, t) { return a + myP(t); }, 0);
+        // Compras no cartão deste mês que caem numa fatura posterior (depois do fechamento)
+        var cartaoDepois = ((yrD[tgtMo] || {}).tx || []).filter(function(t) {
+          var cl = creditClosingFor(t.payment, paysList);
+          if (cl === null || !t.date) return false;
+          var dt = new Date(t.date);
+          if (isNaN(dt.getTime())) return false;
+          return invoiceKeyForYMD(dt.getFullYear(), dt.getMonth(), dt.getDate(), cl) !== tgtKey;
+        }).reduce(function(a, t) { return a + myP(t); }, 0);
+        caixaAlerta = { mo0: tgtMo, label: MS[tgtMo], saldo: cx.saldo, fatura: faturaAntes, cartaoDoMes: cartaoDepois };
       }
-      cashflowMonths.push({ mo0: tgtMo, label: MA[tgtMo], sobra: rec - desp, recv: recvMes });
     }
   }
-  // Semáforo por piso fixo: verde ≥ 3000, amarelo 0–3000, vermelho ≤ 0
-  var cashflowColor = function(s) {
-    if (s <= 0) return "var(--neg)";
-    if (s < 3000) return "var(--accent)";
-    return "var(--pos)";
-  };
-  var bestMonth = null; var tightMonth = null;
-  cashflowMonths.forEach(function(m) {
-    if (!bestMonth || m.sobra > bestMonth.sobra) bestMonth = m;
-    if (!tightMonth || m.sobra < tightMonth.sobra) tightMonth = m;
-  });
 
   /* ─── Ranking de maiores gastos do mês (subs agregam na principal) ─── */
   var rankColor = function(grp) {
@@ -1973,21 +2029,37 @@ function DashboardPrumo(props) {
       <div className="prumo-card l-brand span2">
         <div className="prumo-card-hd">
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="prumo-lbl">{"Saldo livre do mês"}</div>
-            <div style={{ display: "inline-flex", marginTop: 5, border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }} title="Caixa: quando o dinheiro sai da conta (fatura). Competência: quando a despesa aconteceu.">
-              <span onClick={function() { if (!cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: cashView ? "var(--brand)" : "transparent", color: cashView ? "var(--surface)" : "var(--ink-3)" }}>{"Caixa"}</span>
-              <span onClick={function() { if (cashView && onToggleCashView) onToggleCashView(); }} style={{ padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: "var(--f-mono)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.03em", background: !cashView ? "var(--brand)" : "transparent", color: !cashView ? "var(--surface)" : "var(--ink-3)" }}>{"Competência"}</span>
+            <div className="prumo-lbl">{!cm || cm.estado === "atual" ? "Pode gastar até o fim do mês" : cm.estado === "fechado" ? "Sobrou no mês" : "Pode gastar no mês"}</div>
+            <div className={"prumo-big " + (podeSinal ? "pos" : "neg")} style={{ marginTop: 6 }}>
+              {(podeSinal ? "" : "−") + "R$ " + podeIntStr}<sup>{"," + podeCentsStr}</sup>
             </div>
-            <div className={"prumo-big " + (saldoSinal ? "pos" : "neg")} style={{ marginTop: 6 }}>
-              {(saldoSinal ? "" : "−") + "R$ " + saldoIntStr}<sup>{"," + saldoCentsStr}</sup>
-            </div>
-            <div className="prumo-cap" style={{ marginTop: 4, fontSize: 11, fontFamily: "var(--f-mono)" }} title={"Como o saldo é calculado: renda do mês − meus gastos (" + (cashView ? "caixa: quando sai da conta" : "competência: quando gastou") + "). Só a sua parte; reembolsos ficam no card A receber e não entram aqui."}>
-              {"Renda " + fmt(totalInc) + " − Gastos " + fmt(debitoMes)}
-            </div>
+            {cm && cm.diasRest > 0 && (
+              <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 4 }}>
+                {podeSinal
+                  ? <span>{"≈ "}<b className="prumo-num" style={{ color: "var(--ink)" }}>{fmt(cm.porDia)}</b>{" por dia · " + String(cm.diasRest) + (cm.diasRest === 1 ? " dia" : " dias") + (cm.estado === "atual" ? " até o fim do mês (contando hoje)" : " no mês")}</span>
+                  : <span style={{ color: "var(--neg)" }}>{"O mês já passou do limite — cada gasto agora sai da poupança ou da reserva."}</span>}
+              </div>
+            )}
+            {/* A conta inteira, à vista: é ela que dá confiança no número de cima */}
+            {cm && (
+              <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 14, rowGap: 2, fontSize: 11, fontFamily: "var(--f-mono)", color: "var(--ink-3)", maxWidth: 360 }}>
+                <span>{"Renda"}</span><span style={{ textAlign: "right", color: "var(--ink-2)" }}>{fmt(cm.renda)}</span>
+                <span title="Todas as fixas do mês, pagas ou não. Fixa teto entra só pelo que ainda falta gastar.">{"− Fixas" + (cm.poupanca > 0 ? " (inclui " + fmt(cm.poupanca) + " de poupança)" : "")}</span><span style={{ textAlign: "right", color: "var(--ink-2)" }}>{fmt(cm.fixasTot)}</span>
+                {cm.parcelas > 0 && <><span>{"− Parcelas"}</span><span style={{ textAlign: "right", color: "var(--ink-2)" }}>{fmt(cm.parcelas)}</span></>}
+                <span>{cm.estado === "fechado" ? "− Gasto no mês" : "− Já gasto no mês"}</span><span style={{ textAlign: "right", color: "var(--ink-2)" }}>{fmt(cm.variavel)}</span>
+                <span style={{ borderTop: "1px solid var(--line)", paddingTop: 2, color: "var(--ink-2)", fontWeight: 700 }}>{"= " + (cm.estado === "fechado" ? "Sobrou" : "Pode gastar")}</span>
+                <span style={{ borderTop: "1px solid var(--line)", paddingTop: 2, textAlign: "right", fontWeight: 700, color: podeSinal ? "var(--pos)" : "var(--neg)" }}>{fmt(pode)}</span>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {cm && cm.estado === "atual" && cm.livreVar > 0 && (
+                cm.ritmo > 1
+                  ? <span className="prumo-chip neg" title={"Se o mês fosse gasto por igual, até hoje caberiam " + fmt(cm.idealAteHoje) + "."}>{"▲ " + fmt(cm.ritmo) + " acima do ritmo"}</span>
+                  : <span className="prumo-chip pos" title={"Se o mês fosse gasto por igual, até hoje caberiam " + fmt(cm.idealAteHoje) + "."}>{"✓ No ritmo · " + fmt(-cm.ritmo) + " de folga"}</span>
+              )}
               {gastoDelta !== null && (
-                <span className={"prumo-chip " + (gastoDelta <= 0 ? "pos" : "neg")} title="Comparação de gastos (sua parte, competência) — não conta reembolsos nem bônus de renda.">
-                  {(gastoDelta > 0 ? "▲ " : "▼ ") + fmt(Math.abs(gastoDelta)) + " de gasto vs. mês ant."}
+                <span className={"prumo-chip " + (gastoDelta <= 0 ? "pos" : "neg")} title="Variável lançado (sua parte, sem parcelas) no mesmo intervalo de dias dos dois meses.">
+                  {(gastoDelta > 0 ? "▲ " : "▼ ") + fmt(Math.abs(gastoDelta)) + gastoDeltaLbl}
                 </span>
               )}
               <span className="prumo-cap" onClick={function() { sSI(String(sal)); sES(true); }} style={{ cursor: "pointer" }}>
@@ -2096,45 +2168,29 @@ function DashboardPrumo(props) {
         </div>
       </div>
 
-      {/* ═══ FLUXO DE CAIXA · PRÓXIMOS 4 MESES ═══ */}
-      {cashflowMonths.length > 0 && (
-        <div className="prumo-card span2">
+      {/* ═══ CAIXA · SÓ COMO ALERTA — aparece quando algum dos próximos meses fecha negativo na conta ═══ */}
+      {caixaAlerta && (
+        <div className="prumo-card l-neg span2">
           <div className="prumo-card-hd">
             <div>
-              <div className="prumo-lbl">{"Fluxo de caixa · próximos meses"}</div>
-              <div className="prumo-cap">{cashView ? "Sobra projetada depois do que sai da conta (caixa)" : "Sobra projetada por competência (quando gastou)"}</div>
+              <div className="prumo-lbl">{"Sua conta aguenta?"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 17, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>
+                {"Em " + caixaAlerta.label + " sai mais do que entra: " + fmt(caixaAlerta.saldo)}
+              </h2>
             </div>
+            <span style={{ fontSize: 22 }}>{"⚠️"}</span>
           </div>
-          {bestMonth && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              <span className="prumo-chip pos">{"Melhor pra compra grande: " + bestMonth.label + " · " + fmt(bestMonth.sobra)}</span>
-              {tightMonth && tightMonth.mo0 !== bestMonth.mo0 && (
-                <span className="prumo-chip neg">{"Mais apertado: " + tightMonth.label + " · " + fmt(tightMonth.sobra)}</span>
-              )}
-            </div>
-          )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))", gap: 10 }}>
-            {cashflowMonths.map(function(m, idx) {
-              var col = cashflowColor(m.sobra);
-              var isCur = idx === 0;
-              return (
-                <div key={m.mo0} style={{ borderRadius: 14, padding: "14px 12px", background: "color-mix(in oklch, " + col + " 8%, var(--surface))", border: "1.5px solid color-mix(in oklch, " + col + " 32%, transparent)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em" }}>{m.label + (isCur ? " · agora" : "")}</span>
-                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: col, display: "inline-block" }} />
-                  </div>
-                  <div style={{ fontFamily: "var(--f-display)", fontSize: 21, fontWeight: 700, color: col, marginTop: 8, fontVariantNumeric: "tabular-nums" }}>{fmt(m.sobra)}</div>
-                  <div className="prumo-cap" style={{ marginTop: 2, fontSize: 10 }}>{isCur ? "livre" : (cashView ? "livre · fixas + parcelas" : "livre · lançado no mês")}</div>
-                  {m.recv > 0 && (
-                    <div className="prumo-cap" style={{ marginTop: 2, fontSize: 9, color: "var(--pos)", fontFamily: "var(--f-mono)" }}>{"inclui +" + fmt(m.recv) + " a receber (cartão dividido + devedores)"}</div>
-                  )}
-                </div>
-              );
-            })}
+          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6 }}>
+            {"Isso é o dinheiro saindo da conta, não o seu orçamento. A diferença pro \"pode gastar\" é o cartão: "}
+            {caixaAlerta.fatura > 0 && <span>{"a fatura que vence em " + caixaAlerta.label + " traz " + fmt(caixaAlerta.fatura) + " de compras de meses anteriores — já contadas no mês em que aconteceram"}</span>}
+            {caixaAlerta.fatura > 0 && caixaAlerta.cartaoDoMes > 0 && <span>{"; "}</span>}
+            {caixaAlerta.cartaoDoMes > 0 && <span>{"já " + fmt(caixaAlerta.cartaoDoMes) + " do cartão deste mês só sai da conta na próxima fatura"}</span>}
+            {"."}
           </div>
-          {cashView && cashflowMonths.some(function(m) { return m.recv > 0; }) && (
-            <div className="prumo-cap" style={{ marginTop: 10, fontSize: 10 }}>{"A receber = divididas do cartão (a fatura sai cheia e o reembolso volta depois) + devedores manuais. Divididas no pix/débito e fixas divididas não aparecem aqui porque já entram descontadas na despesa."}</div>
-          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+            <span className="prumo-cap" style={{ fontSize: 11 }}>{"Garanta saldo em conta pra cobrir esse mês — sem mexer no aporte."}</span>
+            <button className="prumo-btn ghost" style={{ fontSize: 11, padding: "6px 10px" }} onClick={function() { if (sTab) sTab("analise"); }}>{"Ver fluxo de caixa →"}</button>
+          </div>
         </div>
       )}
 
@@ -2468,13 +2524,12 @@ function AnalisePrumo(props) {
   var fluxoMeses = [];
   if (yrD && cfg) {
     fluxoEstVar = calcEstVarFuturo(yrD, cfg, yr, mo);
-    var fluxoSal = (cfg && cfg.salary) || 0;
+    // Mesma conta do alerta do Dashboard (calcCaixaMes) — inclui o "a receber" do cartão dividido, que antes só o Dashboard somava
+    var fluxoRecv = calcRecvByMonth(yrD, cfg, yr);
     for (var fmi = mo; fmi <= 11 && fluxoMeses.length < 4; fmi++) {
-      var fmb = yrD[fmi] || { tx: [], cr: [] };
-      var fRec = fluxoSal + (fmb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
-      var fOut = calcCashOutMonth(yrD, cfg, yr, fmi);
+      var fcx = calcCaixaMes(yrD, cfg, yr, fmi, fluxoRecv);
       var fIsCur = fmi === mo;
-      fluxoMeses.push({ mo0: fmi, label: MA[fmi], rec: fRec, out: fOut, real: fRec - fOut, comMedia: fIsCur ? fRec - fOut : fRec - fOut - fluxoEstVar, isCur: fIsCur });
+      fluxoMeses.push({ mo0: fmi, label: MA[fmi], rec: fcx.rec + fcx.recv, recv: fcx.recv, out: fcx.out, real: fcx.saldo, comMedia: fIsCur ? fcx.saldo : fcx.saldo - fluxoEstVar, isCur: fIsCur });
     }
   }
   var fluxoDet = (fluxoSel !== null && yrD && cfg) ? calcCashDetailMonth(yrD, cfg, yr, fluxoSel) : null;
@@ -2829,10 +2884,10 @@ function AnalisePrumo(props) {
         <div className="prumo-card-hd">
           <div>
             <div className="prumo-lbl">{"Fluxo de caixa · próximos meses"}</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"O que entra e o que sai da conta"}</h2>
+            <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Sua conta aguenta?"}</h2>
           </div>
         </div>
-        <div className="prumo-cap" style={{ marginBottom: 6 }}>{"Regime caixa e só a sua parte: fatura do cartão que vence no mês + fixas e variável fora do cartão, sem o que é de terceiros. Toque num mês pra abrir o extrato completo."}</div>
+        <div className="prumo-cap" style={{ marginBottom: 6 }}>{"O dinheiro entrando e saindo da conta (fatura no mês em que vence). Não é o seu orçamento — quanto você pode gastar está no Dashboard. Toque num mês pra abrir o extrato."}</div>
         {fluxoMeses.map(function(fx2) {
           var colR = fx2.real >= 0 ? "var(--pos)" : "var(--neg)";
           var usoPct = fx2.rec > 0 ? Math.min(fx2.out / fx2.rec, 1) : (fx2.out > 0 ? 1 : 0);
@@ -2851,14 +2906,14 @@ function AnalisePrumo(props) {
                 </div>
               </div>
               <div style={{ textAlign: "right", width: 92, flexShrink: 0 }}>
-                <div className="prumo-cap" style={{ fontSize: 9 }}>{"sobra"}</div>
+                <div className="prumo-cap" style={{ fontSize: 9 }}>{"saldo na conta"}</div>
                 <div className="prumo-num" style={{ fontSize: 14, color: colR }}>{fmt(fx2.real)}</div>
               </div>
               <span style={{ color: "var(--ink-3)", flexShrink: 0 }}>{"›"}</span>
             </div>
           );
         })}
-        <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Sobra = entradas − saídas de caixa. Nos meses futuros o variável ainda não aconteceu — dentro do extrato tem o cenário ≈ com sua média dos últimos 3 meses."}</div>
+        <div className="prumo-cap" style={{ marginTop: 8, fontSize: 10 }}>{"Saldo na conta = entradas (+ a receber) − saídas de caixa. Difere do \"pode gastar\" por causa do cartão: a fatura que vence no mês é de compras de antes. Nos meses futuros o variável ainda não aconteceu — no extrato tem o cenário ≈ com sua média dos últimos 3 meses."}</div>
       </div>
 
       {/* POPUP EXTRATO CAIXA DO MÊS */}
@@ -2892,6 +2947,11 @@ function AnalisePrumo(props) {
                       </div>
                     );
                   })}
+                  {fluxoSelMes.recv > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
+                      <span>{"🤝 A receber (cartão dividido + devedores)"}</span><span className="prumo-num">{fmt(fluxoSelMes.recv)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* SAÍDA: FATURA DO CARTÃO */}
@@ -2985,7 +3045,7 @@ function AnalisePrumo(props) {
 
                 {/* SOBRA */}
                 <div style={{ borderTop: "2px solid var(--line-2)", marginTop: 14, paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{"Sobra do mês (caixa · sua parte)"}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{"Saldo na conta no mês (caixa · sua parte)"}</span>
                   <span className="prumo-num" style={{ fontSize: 20, color: fluxoSelMes.real >= 0 ? "var(--pos)" : "var(--neg)" }}>{fmt(fluxoSelMes.real)}</span>
                 </div>
                 {fluxoDet.terceirosTot > 0 && (
@@ -5886,7 +5946,6 @@ export default function App() {
   var [md, sMd] = useState({ tx: [], cr: [], fs: {}, debts: [] });
   var [maps, sMp] = useState({});
   var [splitMaps, sSpMp] = useState({});
-  var [cashView, sCashView] = useState(true); // true = visão de caixa (quando pago); false = competência (quando gastei)
   var [yrD, sYrD] = useState(null);
   var [pvMd, sPv] = useState(null);
   var [loading, sLd] = useState(true);
@@ -6038,7 +6097,7 @@ export default function App() {
         c = { ...c, categories: existingCats };
         sv("fc2-cfg", c); // persiste a migração no Firebase
       }
-      sCfg(c); sMp(mp); sSpMp(smp || {}); sSI(String(c.salary)); setRollover(rv); sCashView(c.cashView !== false); sCfgLoaded(true);
+      sCfg(c); sMp(mp); sSpMp(smp || {}); sSI(String(c.salary)); setRollover(rv); sCfgLoaded(true);
     })();
     return function() { active = false; };
   }, [user && user.uid]);
@@ -6088,12 +6147,6 @@ export default function App() {
   var saveMaps = useCallback(function(m) { sMp(m); sv("fc2-maps", m); }, []);
   var saveSplitMaps = useCallback(function(m) { sSpMp(m); sv("fc2-splitmaps", m); }, []);
 
-  // TOGGLE VISÃO DE CAIXA ↔ COMPETÊNCIA — persiste a preferência no cfg
-  var toggleCashView = useCallback(function() {
-    var nv = !cashView;
-    sCashView(nv);
-    if (cfgLoaded && cfg) saveCfg({ ...cfg, cashView: nv });
-  }, [cashView, cfgLoaded, cfg]);
 
   // RESET DE DADOS OPERACIONAIS — apaga meses 2023-2027 + rollover, preserva cfg/maps/splitmaps
   var onResetData = useCallback(function() {
@@ -6223,6 +6276,8 @@ export default function App() {
   var invSp = spent.investimentos;
   var savR = totalInc > 0 ? invSp / totalInc : 0;
   var prevSp = pvMd ? calcSpent(pvMd, cats, fxd).spent : null;
+  // yrD vem do banco e não acompanha os lançamentos do mês aberto — o "pode gastar" e o fluxo precisam reagir na hora
+  var yrDLive = (yrD && !loading) ? yrD.map(function(mDt, i) { return i === mo ? md : mDt; }) : yrD;
 
   /* Active installments — projeções a partir do mês visualizado. "Restantes" vem da NUMERAÇÃO
      da parcela (total − menor nº visível + 1), não da contagem de meses no yrD — que só cobre
@@ -7033,7 +7088,7 @@ export default function App() {
             savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd}
             catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
             sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg}
-            yrD={yrD} myP={myP} cashView={cashView} onToggleCashView={toggleCashView}
+            yrD={yrDLive} myP={myP} pvMd={pvMd}
           />
         )}
 
@@ -7063,7 +7118,7 @@ export default function App() {
 
         {/* ═══ ANÁLISE ═══ */}
         {tab === "analise" && (
-          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrD} cats={cats} myP={myP} cfg={cfg} activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst} />
+          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrDLive} cats={cats} myP={myP} cfg={cfg} activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst} />
         )}
 
         {/* ═══ LANÇAMENTOS (INPUT) ═══ */}
