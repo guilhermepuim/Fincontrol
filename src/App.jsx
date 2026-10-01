@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase";
@@ -103,6 +104,28 @@ function resolveFixedListForMonth(fxdList, yyyymm) {
     if (v === null) return null;
     return { ...fx, amount: v };
   }).filter(function(x) { return x !== null; });
+}
+/* ══ FIXA "TETO" ══
+   Ex.: "iFood ou comer fora — R$600/mês". Não é uma conta a pagar, é um limite de gasto da categoria:
+   os lançamentos do mês nessa categoria (ou subs, qualquer forma de pagamento) consomem o valor, e nas
+   projeções só entra o que AINDA falta gastar. Sem isso o gasto real e a fixa contavam em dobro. */
+function fxMine(f) { return f.hasSplit ? f.amount - spt(f) : f.amount; }
+function fxTetoUsado(f, mTx, cats) {
+  if (!f || !f.teto || !f.cat) return 0;
+  return (mTx || []).reduce(function(a, t) {
+    if (t.reimbursed) return a;
+    if (t.cat !== f.cat) {
+      var c = (cats || []).find(function(c2) { return c2.id === t.cat; });
+      if (!c || c.parent !== f.cat) return a;
+    }
+    return a + myP(t);
+  }, 0);
+}
+// Quanto a fixa ainda pesa no mês (minha parte): valor cheio, ou o saldo do teto
+function fxRestante(f, mTx, cats) {
+  var my = fxMine(f);
+  if (!f.teto) return my;
+  return Math.max(0, my - fxTetoUsado(f, mTx, cats));
 }
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function pct(v) { return String(((v || 0) * 100).toFixed(1)) + "%"; }
@@ -529,7 +552,8 @@ function calcCashOutMonth(yrD, cfg, yr, monthIdx) {
   if (!realInvoiceMonths[key]) {
     cartao += fxList.filter(function(f) { return isCredit(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
   }
-  var fixasNaoCartao = fxList.filter(function(f) { return !isCredit(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+  var catsL = (cfg && cfg.categories) ? cfg.categories : DC;
+  var fixasNaoCartao = fxList.filter(function(f) { return !isCredit(f.payment); }).reduce(function(a, f) { return a + fxRestante(f, mb.tx, catsL); }, 0);
   var varNaoCartao = (mb.tx || []).filter(function(t) { return !isCredit(t.payment); }).reduce(function(a, t) { return a + myP(t); }, 0);
   return cartao + fixasNaoCartao + varNaoCartao;
 }
@@ -559,13 +583,17 @@ function calcCashDetailMonth(yrD, cfg, yr, monthIdx) {
   });
   var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
   var fxCartao = realInvoice ? [] : fxList.filter(function(f) { return isCredit(f.payment); });
-  var fxCaixa = fxList.filter(function(f) { return !isCredit(f.payment); });
   var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
+  var catsL = (cfg && cfg.categories) ? cfg.categories : DC;
+  // Fixa teto: leva junto quanto já foi gasto e quanto ainda entra (o popup mostra o saldo, não o valor cheio)
+  var fxCaixa = fxList.filter(function(f) { return !isCredit(f.payment); }).map(function(f) {
+    return f.teto ? { ...f, tetoUsado: fxTetoUsado(f, mb.tx, catsL), resta: fxRestante(f, mb.tx, catsL) } : { ...f, resta: myFx(f) };
+  });
   var varCaixa = (mb.tx || []).filter(function(t) { return !isCredit(t.payment); });
   // Totais = só a minha parte (myP); "terceiros" = o que eu adianto de splits/reembolsos e volta em A receber
   var cartaoTot = cardTx.reduce(function(a, t) { return a + myP(t); }, 0) + fxCartao.reduce(function(a, f) { return a + myFx(f); }, 0);
   var cartaoTerceiros = cardTx.reduce(function(a, t) { return a + ((t.amount || 0) - myP(t)); }, 0);
-  var fixasTot = fxCaixa.reduce(function(a, f) { return a + myFx(f); }, 0);
+  var fixasTot = fxCaixa.reduce(function(a, f) { return a + f.resta; }, 0);
   var fixasTerceiros = fxCaixa.reduce(function(a, f) { return a + (f.hasSplit ? spt(f) : 0); }, 0);
   var varTot = varCaixa.reduce(function(a, t) { return a + myP(t); }, 0);
   var varTerceiros = varCaixa.reduce(function(a, t) { return a + ((t.amount || 0) - myP(t)); }, 0);
@@ -584,10 +612,17 @@ function calcEstVarFuturo(yrD, cfg, yr, mo) {
       var hmb = yrD[hmi];
       if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
       var hVar = (hmb.tx || []).filter(function(t) { return t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
-      var hFxCartao = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, hmi))
+      var hFxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, hmi));
+      var hFxCartao = hFxList
         .filter(function(f) { return isCredit(f.payment); })
         .reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-      histResiduos.push(hVar - hFxCartao);
+      // Gasto que já foi coberto por fixa teto fora do cartão (ex.: iFood até R$600): a fixa entra cheia nos
+      // meses futuros, então a média do variável não pode trazer esse gasto de novo
+      var hCatsL = (cfg && cfg.categories) ? cfg.categories : DC;
+      var hTeto = hFxList
+        .filter(function(f) { return f.teto && !isCredit(f.payment); })
+        .reduce(function(a, f) { return a + Math.min(fxMine(f), fxTetoUsado(f, hmb.tx, hCatsL)); }, 0);
+      histResiduos.push(hVar - hFxCartao - hTeto);
     }
   }
   if (histResiduos.length === 0) return 0;
@@ -610,6 +645,14 @@ var CV_DEFAULT = {
   rendaDesejada: 20000, rendaResidual: 0,
   estrategia: "preservacao", legadoValor: 0,
 };
+// Perfis de investidor do Ciclo de Vida da Suno (retorno real e yield, % a.a.). Conferidos em 2026-10-01
+// reproduzindo os 4 exemplos do guia (Ana/Carlos/Regina/João) com este motor — batem na casa do milhar.
+var CV_PERFIS = [
+  { id: "conservador", nome: "Conservador", ret: 4, yld: 4 },
+  { id: "moderado", nome: "Moderado", ret: 5, yld: 4.5 },
+  { id: "arrojado", nome: "Arrojado", ret: 6.5, yld: 5.5 },
+  { id: "sofisticado", nome: "Sofisticado", ret: 7, yld: 6 },
+];
 function cvMonthlyRate(annualPct) { return Math.pow(1 + (annualPct || 0) / 100, 1 / 12) - 1; }
 // Offset em meses de uma chave "YYYY-MM" em relação ao mês de referência (hoje)
 function cvOffsetOf(ym, refY, refM) {
@@ -651,38 +694,6 @@ function calcCicloVida(p, refY, refM) {
   }).filter(function(e) { return e.m !== null && e.m >= 0 && e.m <= mFim; });
   evList.forEach(function(e) { evPorM[e.m] = (evPorM[e.m] || 0) + e.sinal * e.valor; });
 
-  // Simulação (usada também pelas buscas de aporte/retorno necessários)
-  var simular = function(pl0, aporteExtra, taxaMensal) {
-    var saldo = pl0;
-    var serie = [];
-    var totalAp = 0; var totalRend = 0;
-    var plNoApos = null; var idadeZera = null;
-    var anoAp = 0; var anoEv = 0;
-    for (var m = 1; m <= mFim; m++) {
-      var rend = saldo * taxaMensal;
-      saldo += rend; totalRend += rend;
-      if (m <= mApos) {
-        var ap = Math.max(0, aporteEmM(m) + aporteExtra);
-        saldo += ap; totalAp += ap; anoAp += ap;
-      } else {
-        // Não dá pra sacar o que não existe: o saldo para no zero em vez de virar dívida imaginária
-        saldo -= Math.min(Math.max(saldo, 0), saqueMes);
-      }
-      if (evPorM[m]) { saldo += evPorM[m]; anoEv += evPorM[m]; }
-      if (saldo <= 0 && idadeZera === null && m > mApos) idadeZera = idade0 + m / 12;
-      if (m === mApos) plNoApos = saldo;
-      if (m % 12 === 0 || m === mFim) {
-        serie.push({ m: m, idade: idade0 + m / 12, ano: refY + Math.floor((refM + m) / 12), saldo: saldo, aportes: anoAp, eventos: anoEv });
-        anoAp = 0; anoEv = 0;
-      }
-    }
-    if (plNoApos === null) plNoApos = saldo;
-    return { serie: serie, plApos: plNoApos, capitalFinal: saldo, totalAportes: totalAp, totalRend: totalRend, idadeZera: idadeZera };
-  };
-
-  var pl0 = cvNum(cv.plInicialResolvido);
-  var base = simular(pl0, 0, ir);
-
   // Capital necessário na aposentadoria, conforme a estratégia de herança
   var nApos = mFim - mApos;
   var capitalNec;
@@ -695,6 +706,43 @@ function calcCicloVida(p, refY, refM) {
     // preservação: vive só do rendimento (perpetuidade sobre o yield) — capital intacto pra herança
     capitalNec = iy > 0 ? saqueMes / iy : 0;
   }
+
+  // Simulação (usada também pelas buscas de aporte/retorno necessários)
+  var simular = function(pl0, aporteExtra, taxaMensal) {
+    var saldo = pl0;
+    var serie = [];
+    var totalAp = 0; var totalRend = 0;
+    // Já aposentado (mApos = 0): o loop começa em m = 1 e nunca passaria pelo mês da aposentadoria —
+    // o patrimônio "na aposentadoria" é o de hoje, não o saldo do fim do horizonte
+    var plNoApos = mApos <= 0 ? pl0 : null; var idadeZera = null;
+    // "Idade p/ meta" (Suno): quando o patrimônio alcança o capital necessário, até a aposentadoria
+    var idadeMeta = (capitalNec > 0 && pl0 >= capitalNec) ? idade0 : null;
+    var anoAp = 0; var anoEv = 0;
+    for (var m = 1; m <= mFim; m++) {
+      var rend = saldo * taxaMensal;
+      saldo += rend; totalRend += rend;
+      if (m <= mApos) {
+        var ap = Math.max(0, aporteEmM(m) + aporteExtra);
+        saldo += ap; totalAp += ap; anoAp += ap;
+      } else {
+        // Não dá pra sacar o que não existe: o saldo para no zero em vez de virar dívida imaginária
+        saldo -= Math.min(Math.max(saldo, 0), saqueMes);
+      }
+      if (evPorM[m]) { saldo += evPorM[m]; anoEv += evPorM[m]; }
+      if (idadeMeta === null && m <= mApos && capitalNec > 0 && saldo >= capitalNec) idadeMeta = idade0 + m / 12;
+      if (saldo <= 0 && idadeZera === null && m > mApos) idadeZera = idade0 + m / 12;
+      if (m === mApos) plNoApos = saldo;
+      if (m % 12 === 0 || m === mFim) {
+        serie.push({ m: m, idade: idade0 + m / 12, ano: refY + Math.floor((refM + m) / 12), saldo: saldo, aportes: anoAp, eventos: anoEv });
+        anoAp = 0; anoEv = 0;
+      }
+    }
+    if (plNoApos === null) plNoApos = saldo;
+    return { serie: serie, plApos: plNoApos, capitalFinal: saldo, totalAportes: totalAp, totalRend: totalRend, idadeZera: idadeZera, idadeMeta: idadeMeta };
+  };
+
+  var pl0 = cvNum(cv.plInicialResolvido);
+  var base = simular(pl0, 0, ir);
   var rendaSustentavel = base.plApos * iy;
 
   // Aporte extra (constante, na fase de acumulação) que fecha a conta — busca binária
@@ -724,7 +772,7 @@ function calcCicloVida(p, refY, refM) {
   return {
     idade0: idade0, idadeApos: idadeApos, idadeFim: idadeFim,
     serie: base.serie, serieIdeal: serieIdeal, plInicial: pl0, plApos: base.plApos, capitalFinal: base.capitalFinal,
-    totalAportes: base.totalAportes, totalRend: base.totalRend, idadeZera: base.idadeZera,
+    totalAportes: base.totalAportes, totalRend: base.totalRend, idadeZera: base.idadeZera, idadeMeta: base.idadeMeta,
     capitalNec: capitalNec, distancia: base.plApos - capitalNec,
     metaPct: capitalNec > 0 ? base.plApos / capitalNec : 0,
     rendaSustentavel: rendaSustentavel, saqueMes: saqueMes,
@@ -1010,6 +1058,16 @@ html { background: var(--bg, #F5F0E8); }
 .prumo-input.mono { font-family: var(--f-mono); font-feature-settings: 'tnum'; font-variant-numeric: tabular-nums; }
 .prumo-input.right { text-align: right; }
 select.prumo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2362728a' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 32px; cursor: pointer; }
+/* Combobox de categoria: digita pra filtrar em vez de rolar o select nativo */
+.prumo-combo-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2362728a' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 32px; text-overflow: ellipsis; }
+.prumo-combo-list { position: fixed; z-index: 200; background: var(--surface); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow-3); overflow-y: auto; padding: 4px; font-family: var(--f-ui); }
+.prumo-combo-grp { font-family: var(--f-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); padding: 8px 10px 4px; font-weight: 600; }
+.prumo-combo-opt { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.prumo-combo-opt.sub { padding-left: 26px; color: var(--ink-2); }
+.prumo-combo-opt.main { font-weight: 600; }
+.prumo-combo-opt.active { background: var(--brand-tint); color: var(--brand); }
+.prumo-combo-opt.sel { box-shadow: inset 3px 0 0 var(--brand); }
+.prumo-combo-empty { padding: 12px 10px; font-size: 12px; color: var(--ink-3); }
 
 .prumo-form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .prumo-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -1168,7 +1226,8 @@ function calcSpent(mData, cats, fxd) {
     if (!cat) return;
     var parts = fs2[f.id + "_p"] || [];
     var pS = parts.reduce(function(a, p) { return a + p.amount; }, 0);
-    if (fs2[f.id] === "paid") {
+    // Fixa teto: o gasto real já está nos lançamentos — marcar "paga" não soma o valor cheio de novo
+    if (fs2[f.id] === "paid" && !f.teto) {
       var v = f.hasSplit ? f.amount - spt(f) : f.amount;
       sp[cat.group] += v; sc[cat.id] += v;
     } else if (pS > 0) {
@@ -1264,6 +1323,150 @@ function SE(props) {
   );
 }
 
+/* Seletor de categoria com busca: clica, digita ("ifo", "mercado"…) e escolhe — sem rolar a lista inteira.
+   Mantém a API do <select> (onChange recebe { target: { value } }) pra não mexer em quem usa o CatS.
+   A lista vai pra um portal no body (position: fixed) pra não ser cortada por sheets/tabelas com overflow. */
+function CatCombo(props) {
+  var allCats = props.cats || [];
+  var groupDot = { essenciais: "🔵", desejos: "🔴", investimentos: "🟢" };
+  var [open, sOpen] = useState(false);
+  var [q, sQ] = useState("");
+  var [act, sAct] = useState(0);
+  var [pos, sPos] = useState(null);
+  var inpRef = useRef(null);
+  var listRef = useRef(null);
+
+  var byId = {};
+  allCats.forEach(function(c) { byId[c.id] = c; });
+  var labelOf = function(c) {
+    if (!c) return "";
+    var par = c.parent ? byId[c.parent] : null;
+    return (c.icon ? c.icon + " " : "") + (par ? par.name + " › " : "") + c.name;
+  };
+  var selCat = byId[props.value];
+
+  // Lista plana na ordem de exibição (grupo → principal → subs), já filtrada pela busca
+  var qn = chatNorm(q).trim();
+  var hit = function(c) { return !qn || chatNorm(c.name).indexOf(qn) >= 0; };
+  var rows = [];
+  var flat = [];
+  GR.forEach(function(g) {
+    var grpRows = [];
+    allCats.filter(function(c) { return c.group === g.id && !c.parent; }).forEach(function(p) {
+      var subs = allCats.filter(function(c) { return c.parent === p.id; });
+      var pHit = hit(p);
+      // Busca pelo nome da principal também mostra as subs dela (ex.: "comer" → Comer fora e subs)
+      var subsHit = subs.filter(function(s) { return pHit || hit(s); });
+      if (!pHit && subsHit.length === 0) return;
+      grpRows.push({ cat: p, sub: false });
+      subsHit.forEach(function(s) { grpRows.push({ cat: s, sub: true }); });
+    });
+    if (grpRows.length === 0) return;
+    rows.push({ hdr: g, n: grpRows.length });
+    grpRows.forEach(function(r) { r.i = flat.length; flat.push(r); rows.push(r); });
+  });
+
+  var place = function() {
+    var el = inpRef.current;
+    if (!el) return;
+    var r = el.getBoundingClientRect();
+    var vh = window.innerHeight || 800;
+    var below = vh - r.bottom - 8;
+    var above = r.top - 8;
+    var up = below < 220 && above > below;
+    var maxH = Math.max(140, Math.min(320, up ? above : below));
+    sPos({ left: r.left, width: Math.max(r.width, 240), top: up ? null : r.bottom + 4, bottom: up ? vh - r.top + 4 : null, maxH: maxH });
+  };
+  var openList = function() {
+    if (open) return;
+    sQ(""); sAct(0); place(); sOpen(true);
+  };
+  var close = function() { sOpen(false); sQ(""); };
+  var pick = function(c) {
+    if (props.onChange) props.onChange({ target: { value: c.id } });
+    close();
+    if (inpRef.current) inpRef.current.blur();
+  };
+
+  useEffect(function() {
+    if (!open) return undefined;
+    var onDown = function(e) {
+      if (inpRef.current && inpRef.current.contains(e.target)) return;
+      if (listRef.current && listRef.current.contains(e.target)) return;
+      close();
+    };
+    var onMove = function(e) {
+      // rolar a própria lista não reposiciona; rolar a página/sheet acompanha o input
+      if (listRef.current && e && e.target && listRef.current.contains(e.target)) return;
+      place();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return function() {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open]);
+
+  // Mantém a opção ativa visível ao navegar com as setas
+  useEffect(function() {
+    if (!open || !listRef.current) return;
+    var el = listRef.current.querySelector("[data-i='" + String(act) + "']");
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+  }, [act, open]);
+
+  var onKey = function(e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (!open) { openList(); return; } sAct(Math.min(act + 1, flat.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); sAct(Math.max(act - 1, 0)); }
+    else if (e.key === "Enter") { if (open && flat[act]) { e.preventDefault(); pick(flat[act].cat); } }
+    else if (e.key === "Escape") { if (open) { e.preventDefault(); close(); } }
+    else if (e.key === "Tab") { close(); }
+  };
+
+  var list = open && pos ? createPortal(
+    <div ref={listRef} className="prumo-combo-list" role="listbox"
+      style={{ left: pos.left, width: pos.width, top: pos.top === null ? "auto" : pos.top, bottom: pos.bottom === null ? "auto" : pos.bottom, maxHeight: pos.maxH }}>
+      {flat.length === 0 && <div className="prumo-combo-empty">{"Nenhuma categoria com \"" + q + "\""}</div>}
+      {rows.map(function(r) {
+        if (r.hdr) {
+          var pc = props.pcts && props.pcts[r.hdr.id] !== undefined ? " (" + String(props.pcts[r.hdr.id]) + "%)" : "";
+          return <div key={"g-" + r.hdr.id} className="prumo-combo-grp">{(groupDot[r.hdr.id] ? groupDot[r.hdr.id] + " " : "") + r.hdr.label + pc}</div>;
+        }
+        var cls = "prumo-combo-opt " + (r.sub ? "sub" : "main") + (r.i === act ? " active" : "") + (r.cat.id === props.value ? " sel" : "");
+        return (
+          <div key={r.cat.id} data-i={r.i} role="option" aria-selected={r.cat.id === props.value} className={cls}
+            onMouseDown={function(e) { e.preventDefault(); }}
+            onMouseEnter={function() { sAct(r.i); }}
+            onClick={function() { pick(r.cat); }}>
+            {r.sub && <span style={{ color: "var(--ink-4)" }}>{"└"}</span>}
+            <span>{r.cat.icon || "🏷️"}</span>
+            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.cat.name}</span>
+          </div>
+        );
+      })}
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      <input ref={inpRef} className="prumo-input prumo-combo-input" style={props.sx || null}
+        role="combobox" aria-expanded={open} autoComplete="off" spellCheck={false}
+        value={open ? q : labelOf(selCat)}
+        placeholder={open ? (selCat ? labelOf(selCat) : "Buscar categoria…") : "Categoria"}
+        onFocus={openList}
+        onClick={openList}
+        onChange={function(e) { sQ(e.target.value); sAct(0); if (!open) { place(); sOpen(true); } }}
+        onKeyDown={onKey} />
+      {list}
+    </>
+  );
+}
+
 function CatS(props) {
   // Categorias sem parent são principais; com parent são subcategorias
   var allCats = props.cats || [];
@@ -1285,20 +1488,7 @@ function CatS(props) {
     return nodes;
   };
 
-  if (props.prumo) {
-    return (
-      <select className="prumo-input" value={props.value} onChange={props.onChange} style={props.sx || null}>
-        <option value="">{"Categoria"}</option>
-        {GR.map(function(g) {
-          return (
-            <optgroup key={g.id} label={(groupDot[g.id] ? groupDot[g.id] + " " : "") + g.label + " (" + String(props.pcts[g.id]) + "%)"}>
-              {renderOptions(g.id)}
-            </optgroup>
-          );
-        })}
-      </select>
-    );
-  }
+  if (props.prumo) return <CatCombo {...props} />;
   return (
     <select style={{ ...S.inp, ...props.sx }} value={props.value} onChange={props.onChange}>
       <option value="">{"Categoria"}</option>
@@ -1492,7 +1682,7 @@ function DashboardPrumo(props) {
       // mês ainda sem fatura importada → usa a fixa-cartão como estimativa do que vai cair
       cartao += fxList.filter(function(f) { return isCreditPay(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
     }
-    var fixasNaoCartao = fxList.filter(function(f) { return !isCreditPay(f.payment); }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+    var fixasNaoCartao = fxList.filter(function(f) { return !isCreditPay(f.payment); }).reduce(function(a, f) { return a + fxRestante(f, mb.tx, cats); }, 0);
     var varNaoCartao = (mb.tx || []).filter(function(t) { return !isCreditPay(t.payment); }).reduce(function(a, t) { return a + myP(t); }, 0);
     return cartao + fixasNaoCartao + varNaoCartao;
   };
@@ -1707,7 +1897,7 @@ function DashboardPrumo(props) {
         desp = calcCashOut(tgtMo); // regime de caixa: fatura + fixas + parcelas — compromisso real, sem estimativa
       } else {
         var fxList = resolveFixedListForMonth(fxRaw, tk(yr, tgtMo));
-        var fxSum = fxList.reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+        var fxSum = fxList.reduce(function(a, f) { return a + fxRestante(f, mb.tx, cats); }, 0);
         var varSum = (mb.tx || []).reduce(function(a, t) { return a + myP(t); }, 0);
         desp = fxSum + varSum; // competência: tudo que foi lançado no mês
       }
@@ -2403,7 +2593,7 @@ function AnalisePrumo(props) {
       // Fixa checklist (cartão) paga: o gasto real dela já está nos lançamentos do cartão (variável) — sai do comprometido pra não contar em dobro
       var fxSum2 = resolveFixedListForMonth(cfg.fixed || [], tk(yr, i2)).filter(function(f) {
         return (f.mode || "budget") === "budget" || mFs3[f.id] !== "paid";
-      }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+      }).reduce(function(a, f) { return a + fxRestante(f, mTx2, cats); }, 0); // teto: só o saldo — o gasto já está no variável
       var parcSum = mTx2.filter(function(t) { return t.src === "proj" && !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
       var varSum2 = mTx2.filter(function(t) { return t.src !== "proj" && !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
       return { mes: MA[i2], comp: fxSum2 + parcSum, vari: varSum2, real: d.real };
@@ -2753,9 +2943,16 @@ function AnalisePrumo(props) {
                   {fluxoDet.fxCaixa.map(function(f3) {
                     var catF = cats.find(function(c4) { return c4.id === f3.cat; });
                     return (
-                      <div key={f3.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
-                        <span>{(catF && catF.icon ? catF.icon + " " : "") + f3.name + (f3.hasSplit ? " · sua parte" : "")}</span>
-                        <span className="prumo-num">{fmt(f3.hasSplit ? f3.amount - spt(f3) : f3.amount)}</span>
+                      <div key={f3.id} style={{ padding: "2px 0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: f3.teto && f3.resta <= 0 ? "var(--ink-3)" : "var(--ink-2)" }}>
+                          <span>{(catF && catF.icon ? catF.icon + " " : "") + f3.name + (f3.hasSplit ? " · sua parte" : "")}</span>
+                          <span className="prumo-num">{fmt(f3.resta)}</span>
+                        </div>
+                        {f3.teto && f3.tetoUsado > 0 && (
+                          <div className="prumo-cap" style={{ fontSize: 10, paddingLeft: 16 }}>
+                            {"└ teto " + fmt(fxMine(f3)) + " · já gasto " + fmt(f3.tetoUsado) + " nos lançamentos" + (f3.resta <= 0 ? " — esgotado" : "")}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -3883,6 +4080,13 @@ function CicloVidaPrumo(props) {
     if (p.length !== 2) return "—";
     return CV_MESES[parseInt(p[1], 10) - 1] + "/" + p[0];
   };
+  // 61.67 → "61a 8m" (mesmo formato do "Idade p/ meta" da Suno)
+  var idadeTxt = function(idade) {
+    var totM = Math.round(idade * 12);
+    var a = Math.floor(totM / 12); var m = totM % 12;
+    return String(a) + "a" + (m > 0 ? " " + String(m) + "m" : "");
+  };
+  var jaAposentado = r.mApos <= 0;
 
   /* ── Gráfico: trajetória projetada (área) × trajetória no alvo (tracejada) ── */
   var W = 820; var H = 300; var padL = 62; var padR = 16; var padT = 14; var padB = 40;
@@ -3907,7 +4111,8 @@ function CicloVidaPrumo(props) {
 
   // Campo de premissa: a unidade vai no rótulo — sufixo dentro do input colidia com o número
   var campo = function(label, unidade, key, placeholder) {
-    var shown = draft[key] !== undefined ? draft[key] : (cv[key] === "" || cv[key] === undefined ? "" : String(cv[key]));
+    // número salvo (ex.: 6.5 vindo do perfil) aparece com vírgula — cvNum lê "." como milhar e 6.5 viraria 65
+    var shown = draft[key] !== undefined ? draft[key] : (cv[key] === "" || cv[key] === undefined ? "" : (typeof cv[key] === "number" ? String(cv[key]).replace(".", ",") : String(cv[key])));
     return (
       <div>
         <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 3 }}>{label + (unidade ? " · " + unidade : "")}</div>
@@ -3935,6 +4140,25 @@ function CicloVidaPrumo(props) {
           <span style={{ fontSize: 22 }}>{"⚙"}</span>
         </div>
         <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Tudo em valores reais (já sem inflação). Estes números alimentam o ciclo de vida, o termômetro de IF e a renda passiva — um lugar só."}</div>
+        {/* Perfil de investidor: atalho que preenche retorno + yield com as premissas da Suno */}
+        <div style={{ marginBottom: 12 }}>
+          <div className="prumo-cap" style={{ fontSize: 10, marginBottom: 4 }}>{"Perfil de investidor · define retorno e yield"}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {CV_PERFIS.map(function(p) {
+              var ativo = cvNum(cv.retornoReal) === p.ret && cvNum(cv.yieldPct) === p.yld;
+              return (
+                <button key={p.id} type="button" onClick={function() { save({ retornoReal: p.ret, yieldPct: p.yld }); }}
+                  style={{ padding: "7px 11px", borderRadius: 10, cursor: "pointer", fontFamily: "var(--f-ui)", textAlign: "left", border: ativo ? "2px solid var(--brand)" : "1px solid var(--line)", background: ativo ? "var(--brand-tint)" : "var(--surface)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: ativo ? "var(--brand)" : "var(--ink)" }}>{p.nome}</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>{String(p.ret).replace(".", ",") + "% · yield " + String(p.yld).replace(".", ",") + "%"}</div>
+                </button>
+              );
+            })}
+            {!CV_PERFIS.some(function(p) { return cvNum(cv.retornoReal) === p.ret && cvNum(cv.yieldPct) === p.yld; }) && (
+              <span className="prumo-chip" style={{ alignSelf: "center", fontSize: 10 }}>{"Personalizado"}</span>
+            )}
+          </div>
+        </div>
         <div className="prumo-grid-2" style={{ gap: 12 }}>
           {campo("Idade atual", "anos", "idadeAtual")}
           {campo("Quero me aposentar aos", "anos", "idadeApos")}
@@ -3994,6 +4218,10 @@ function CicloVidaPrumo(props) {
           <div className="prumo-mini-stat"><div className="lbl">{"Aporte pra fechar"}</div><div className="val">{r.aporteExtra === null ? "—" : (r.aporteExtra > 0 ? "+" + fmt(r.aporteExtra) + "/m" : "já fecha")}</div></div>
           <div className="prumo-mini-stat"><div className="lbl">{"Sobra aos " + String(r.idadeFim)}</div><div className="val" style={{ color: r.capitalFinal > 0 ? "var(--ink)" : "var(--neg)" }}>{fmt(r.capitalFinal)}</div></div>
         </div>
+        <div className="prumo-mini-stat-row cols-2" style={{ marginTop: -8, marginBottom: 14 }}>
+          <div className="prumo-mini-stat"><div className="lbl">{"Atinge a meta aos"}</div><div className="val" style={{ color: r.idadeMeta !== null ? "var(--pos)" : "var(--accent-2)" }}>{r.idadeMeta !== null ? idadeTxt(r.idadeMeta) : "não atinge"}</div></div>
+          <div className="prumo-mini-stat"><div className="lbl">{"Retorno necessário"}</div><div className="val">{r.retornoNec === null ? "—" : (r.retornoNec * 100).toFixed(1).replace(".", ",") + "% a.a."}</div></div>
+        </div>
 
         {/* GRÁFICO */}
         <div style={{ width: "100%", overflowX: "auto" }}>
@@ -4046,9 +4274,13 @@ function CicloVidaPrumo(props) {
               (noAlvo ? fmt(r.distancia) + " acima" : fmt(Math.abs(r.distancia)) + " abaixo") + " do capital necessário de " + fmt(r.capitalNec) + "."}
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, marginTop: 4 }}>
-            {r.aporteExtra !== null && r.aporteExtra > 0
+            {jaAposentado
+              ? "Já na fase de consumo: sem aportes pela frente, o que conta é o patrimônio de hoje" + (noAlvo ? " — e ele cobre a renda desejada." : " — " + fmt(Math.abs(r.distancia)) + " abaixo do necessário. Dá pra ajustar a renda desejada, a estratégia ou o retorno.")
+              : r.aporteExtra !== null && r.aporteExtra > 0
               ? "Aportes: faltam " + fmt(r.aporteExtra) + "/mês a mais (total de " + fmt(aporteBase + r.aporteExtra) + "/mês) — ou um retorno real de " + (r.retornoNec * 100).toFixed(1) + "% a.a. em vez de " + String(cvNum(cv.retornoReal)) + "%."
-              : "Aportes: o plano atual já cobre a meta. Com esse patrimônio, a renda sustentável é de " + fmt(r.rendaSustentavel) + "/mês."}
+              : "Aportes: o plano atual já cobre a meta" +
+                (r.aporteExtra !== null && aporteBase + r.aporteExtra > 0 ? " — bastaria " + fmt(aporteBase + r.aporteExtra) + "/mês (você aporta " + fmt(-r.aporteExtra) + " a mais)" : "") +
+                ". Com esse patrimônio, a renda sustentável é de " + fmt(r.rendaSustentavel) + "/mês."}
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, marginTop: 4 }}>
             {r.idadeZera !== null
@@ -4445,6 +4677,8 @@ function FixasPrumo(props) {
   var fxCreditNames = ((cfg && cfg.payments) || DEFAULT_PAYMENTS).filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
   var fxIsCredit = function(name) { return fxCreditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
   var autoUsedFor = function(f) {
+    // Teto: qualquer lançamento do mês na categoria consome (PIX, débito ou cartão)
+    if (f.teto) return fxTetoUsado(f, md && md.tx, cats);
     if ((f.mode || "budget") === "budget" || !f.cat) return 0;
     return ((md && md.tx) || []).reduce(function(a, t) {
       if (t.reimbursed || !fxIsCredit(t.payment)) return a;
@@ -4489,6 +4723,7 @@ function FixasPrumo(props) {
     else if (newStartDate) updatedFx.startDate = newStartDate;
     if (newEndDate === "") delete updatedFx.endDate;
     else if (newEndDate) updatedFx.endDate = newEndDate;
+    if (editFx.teto) updatedFx.teto = true; else delete updatedFx.teto;
     var newFxd = fxdRaw.slice();
     newFxd[fxIdx] = updatedFx;
     saveCfg({ ...cfg, fixed: newFxd });
@@ -4548,6 +4783,10 @@ function FixasPrumo(props) {
                 <input type="checkbox" checked={ff.hs} onChange={function(e) { sFf({ ...ff, hs: e.target.checked }); }} />{"Dividir com outra pessoa"}
               </label>
               {ff.hs && <SE prumo splits={ff.sp} onChange={function(s) { sFf({ ...ff, sp: s }); }} />}
+              <label className="prumo-check">
+                <input type="checkbox" checked={!!ff.teto} onChange={function(e) { sFf({ ...ff, teto: e.target.checked }); }} />{"É um teto de gastos (iFood, mercado…)"}
+              </label>
+              {ff.teto && <div className="prumo-cap" style={{ fontSize: 11, marginTop: -4 }}>{"Os lançamentos do mês nessa categoria abatem o valor — nas projeções só entra o que ainda falta gastar."}</div>}
               <div className="prumo-lbl" style={{ marginTop: 4 }}>{"Período (opcional)"}</div>
               <div className="prumo-grid-2">
                 <div>
@@ -4614,6 +4853,7 @@ function FixasPrumo(props) {
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 14, fontWeight: 600, textDecoration: ip ? "line-through" : "none", color: "var(--ink)" }}>{f.name}</span>
                       <span className={"prumo-chip " + (mode === "budget" ? "pos" : "brand")} style={{ fontSize: 10 }}>{mode === "budget" ? "Orçamento" : "Cartão"}</span>
+                      {f.teto && <span className="prumo-chip warn" style={{ fontSize: 10 }} title="Os lançamentos da categoria consomem este valor">{"teto"}</span>}
                       {hasOverrideThisMonth && <span className="prumo-chip warn" style={{ fontSize: 10 }}>{"ajuste do mês"}</span>}
                       {endDateLabel && <span className="prumo-chip" style={{ fontSize: 10 }}>{"até " + endDateLabel}</span>}
                       {sp2.map(function(s, j) {
@@ -4626,11 +4866,11 @@ function FixasPrumo(props) {
                           <i style={{ width: pct(partPct), background: partPct >= 1 ? "var(--pos)" : "var(--brand)" }} />
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, flexWrap: "wrap", gap: 4 }}>
-                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmt(pSum) + (mode === "budget" ? " pago" : " usado")}</span>
+                          <span className="prumo-num" style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{fmt(pSum) + (f.teto ? " gasto" : mode === "budget" ? " pago" : " usado")}</span>
                           {remainAmt > 0 ? (
-                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--accent-2)", whiteSpace: "nowrap" }}>{"falta " + fmt(remainAmt)}</span>
+                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--accent-2)", whiteSpace: "nowrap" }}>{(f.teto ? "ainda pode " : "falta ") + fmt(remainAmt)}</span>
                           ) : (
-                            <span className="prumo-num" style={{ fontSize: 11, color: "var(--pos)", whiteSpace: "nowrap" }}>{mode === "budget" ? "✓ Quitada" : "✓ Orçamento usado"}</span>
+                            <span className="prumo-num" style={{ fontSize: 11, color: f.teto && pSum > f.amount ? "var(--neg)" : "var(--pos)", whiteSpace: "nowrap" }}>{f.teto ? (pSum > f.amount ? "estourou " + fmt(pSum - f.amount) : "✓ Teto usado") : mode === "budget" ? "✓ Quitada" : "✓ Orçamento usado"}</span>
                           )}
                         </div>
                       </div>
@@ -4649,7 +4889,7 @@ function FixasPrumo(props) {
                     <button onClick={function() {
                       var fxdRaw = cfg.fixed || [];
                       var orig = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
-                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "month", origName: f.name });
+                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "month", origName: f.name, teto: !!orig.teto, hasCat: !!orig.cat });
                     }}
                       style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, color: "var(--ink-3)", width: 32, height: 32, cursor: "pointer", fontSize: 14, fontFamily: "var(--f-ui)" }}
                       title="Editar valor / prazo">{"✎"}</button>
@@ -4753,6 +4993,16 @@ function FixasPrumo(props) {
                       <button className="prumo-btn ghost" style={{ marginTop: 4, fontSize: 10, padding: "4px 8px" }} onClick={function() { sEditFx({ ...editFx, endDate: "" }); }}>{"Limpar"}</button>
                     )}
                   </div>
+                </div>
+              </div>
+              <div>
+                <label className="prumo-check">
+                  <input type="checkbox" checked={!!editFx.teto} disabled={!editFx.hasCat} onChange={function(e) { sEditFx({ ...editFx, teto: e.target.checked }); }} />{"É um teto de gastos (iFood, mercado…)"}
+                </label>
+                <div className="prumo-cap" style={{ fontSize: 11, marginTop: 4 }}>
+                  {editFx.hasCat
+                    ? "Os lançamentos do mês na categoria desta fixa abatem o valor — nas projeções só entra o que ainda falta gastar, sem contar o iFood duas vezes."
+                    : "Precisa de uma categoria na fixa pra saber quais lançamentos abatem."}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
@@ -5670,7 +5920,7 @@ export default function App() {
   var emFm = { desc: "", valor: "", cat: "", pay: "Cartão Nubank", hs: false, sp: [{ person: "", pct: 0 }], date: "", reimb: false, ic: "", it: "", note: "", settle: "" };
   var [fm, sFm] = useState(emFm);
   var [cf, sCf] = useState({ desc: "", valor: "", type: "Bônus" });
-  var [ff, sFf] = useState({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "" });
+  var [ff, sFf] = useState({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "", teto: false });
   var [df, sDf] = useState({ desc: "", amount: "", person: "" });
   var [gf, sGf] = useState({ name: "", target: "", deadline: "", saved: "0" });
   var [simAporte, sSimA] = useState("1000");
@@ -5913,8 +6163,8 @@ export default function App() {
   var spent = cur.spent;
   var spC = cur.spentByCat;
   var totDbTx = txs.filter(function(t) { return !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
-  var totDbFx = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] === "paid"; }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-  var totDbP = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] !== "paid"; })
+  var totDbFx = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && fs[f.id] === "paid" && !f.teto; }).reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
+  var totDbP = fxd.filter(function(f) { return (f.mode || "budget") === "budget" && (fs[f.id] !== "paid" || f.teto); })
     .reduce(function(a, f) { return a + (fs[f.id + "_p"] || []).reduce(function(a2, p) { return a2 + p.amount; }, 0); }, 0);
   var totDb = totDbTx + totDbFx + totDbP;
 
@@ -6070,7 +6320,7 @@ export default function App() {
           var parts = mFs[f2.id + "_p"] || [];
           var pS = parts.reduce(function(a3, p3) { return a3 + p3.amount; }, 0);
           var v2 = 0;
-          if (mFs[f2.id] === "paid") {
+          if (mFs[f2.id] === "paid" && !f2.teto) { // teto: o gasto real já veio dos lançamentos (mesma regra do calcSpent)
             v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
           } else if (pS > 0) {
             // pagamento parcial: mesma regra do ranking (calcSpent), senão gráfico e ranking divergem
@@ -6214,8 +6464,9 @@ export default function App() {
     var sp = ff.hs ? ff.sp.filter(function(s) { return s.person && s.pct > 0; }).map(function(s) { return { person: cln(s.person, 100), pct: cnum(s.pct, 100) }; }) : [];
     var newFx = { id: uid(), name: cln(ff.name, 100), amount: a, cat: ff.cat, payment: cln(ff.pay, 100), splits: sp, hasSplit: sp.length > 0, mode: ff.mode, startDate: ff.startDate || tk(yr, mo) };
     if (ff.endDate) newFx.endDate = ff.endDate;
+    if (ff.teto) newFx.teto = true;
     saveCfg({ ...cfg, fixed: fxdRaw.concat([newFx]) });
-    sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "" });
+    sFf({ name: "", amount: "", cat: "", pay: "PIX", hs: false, sp: [{ person: "", pct: 0 }], mode: "budget", startDate: "", endDate: "", teto: false });
     sSFx(false);
   };
 
