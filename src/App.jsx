@@ -738,6 +738,165 @@ function calcCaixaMes(yrD, cfg, yr, mi, recvMap) {
   return { rec: rec, recv: recv, out: out, saldo: rec + recv - out };
 }
 
+/* ══ ASSISTENTE (Claude) — ferramentas que rodam no NAVEGADOR ══
+   O servidor (api/assistente.js) só repassa a conversa; quando o Claude pede uma ferramenta, ela roda aqui,
+   com o mesmo motor da tela (calcMes / calcCaixaMes / calcCicloVida). Assim a resposta nunca diverge do app.
+   Tudo devolve objetos pequenos e arredondados — vão como texto pro modelo. */
+function r2(v) { return Math.round((v || 0) * 100) / 100; }
+function assistCatInfo(cats, id) {
+  var c = (cats || []).find(function(x) { return x.id === id; });
+  var p = c && c.parent ? (cats || []).find(function(x) { return x.id === c.parent; }) : null;
+  return { nome: c ? (p ? p.name + " › " : "") + c.name : "Sem categoria", grupo: c ? c.group : "", pai: p ? p.id : (c ? c.id : "") };
+}
+function assistContaMes(yrD, cfg, yr, mi, recvMap) {
+  var cats = (cfg && cfg.categories) ? cfg.categories : DC;
+  var cm = calcMes(yrD, cfg, yr, mi);
+  var cx = calcCaixaMes(yrD, cfg, yr, mi, recvMap);
+  var porCat = {};
+  (((yrD[mi] || {}).tx) || []).forEach(function(t) {
+    var info = assistCatInfo(cats, t.cat);
+    var pc = (cats.find(function(x) { return x.id === info.pai; }) || {}).name || info.nome;
+    porCat[pc] = (porCat[pc] || 0) + myP(t);
+  });
+  return {
+    mes: tk(yr, mi), situacao: cm.estado === "atual" ? "mês em andamento" : cm.estado === "fechado" ? "mês fechado" : "mês futuro",
+    renda: r2(cm.renda), fixas: r2(cm.fixasTot), poupanca_dentro_das_fixas: r2(cm.poupanca), parcelas: r2(cm.parcelas),
+    variavel_lancado: r2(cm.variavel), pode_gastar: r2(cm.podeGastar),
+    por_dia: cm.diasRest > 0 ? r2(cm.porDia) : null, dias_restantes: cm.diasRest,
+    ritmo: cm.estado === "atual" ? (cm.ritmo > 1 ? "acima do ritmo em " + fmt(cm.ritmo) : "no ritmo, folga de " + fmt(-cm.ritmo)) : null,
+    caixa: { entra: r2(cx.rec), a_receber: r2(cx.recv), sai: r2(cx.out), saldo_na_conta: r2(cx.saldo) },
+    gasto_por_categoria: Object.keys(porCat).map(function(k) { return { categoria: k, valor: r2(porCat[k]) }; })
+      .filter(function(x) { return x.valor > 0; }).sort(function(a, b) { return b.valor - a.valor; }).slice(0, 15),
+    fixas_detalhe: cm.fixas.map(function(x) {
+      return { nome: x.f.name, valor_no_mes: r2(x.resta), valor_cheio: r2(fxMine(x.f)), teto: !!x.f.teto, investimento: x.invest };
+    }),
+  };
+}
+function assistLancamentos(mData, cfg, categoria, busca) {
+  var cats = (cfg && cfg.categories) ? cfg.categories : DC;
+  var cq = categoria ? chatNorm(categoria).trim() : "";
+  var bq = busca ? chatNorm(busca).trim() : "";
+  var lista = ((mData && mData.tx) || []).filter(function(t) {
+    if (cq) {
+      var c = cats.find(function(x) { return x.id === t.cat; });
+      var p = c && c.parent ? cats.find(function(x) { return x.id === c.parent; }) : null;
+      var alvo = [t.cat, c && c.name, p && p.id, p && p.name].filter(Boolean).map(function(s) { return chatNorm(s); });
+      if (!alvo.some(function(s) { return s === cq || s.indexOf(cq) >= 0; })) return false;
+    }
+    if (bq && chatNorm(t.desc).indexOf(bq) < 0) return false;
+    return true;
+  });
+  var total = lista.reduce(function(a, t) { return a + myP(t); }, 0);
+  var itens = lista.slice().sort(function(a, b) { return myP(b) - myP(a); }).slice(0, 60).map(function(t) {
+    return { data: t.date ? String(t.date).slice(0, 10) : null, descricao: t.desc, valor_sua_parte: r2(myP(t)), valor_total: r2(t.amount),
+      categoria: assistCatInfo(cats, t.cat).nome, pagamento: t.payment || "", parcela_projetada: t.src === "proj", reembolsado: !!t.reimbursed };
+  });
+  return { quantidade: lista.length, total_sua_parte: r2(total), lancamentos: itens, observacao: lista.length > 60 ? "Mostrando os 60 maiores." : null };
+}
+function assistResumoCiclo(r, cv) {
+  var serie5 = r.serie.filter(function(s, i) { return i === r.serie.length - 1 || Math.round(s.idade) % 5 === 0; })
+    .map(function(s) { return { idade: Math.floor(s.idade), patrimonio: Math.round(s.saldo) }; });
+  return {
+    premissas: { idade_atual: r.idade0, idade_aposentadoria: r.idadeApos, expectativa_de_vida: r.idadeFim, retorno_real_aa: cvNum(cv.retornoReal), yield_aa: cvNum(cv.yieldPct),
+      renda_desejada_mes: cvNum(cv.rendaDesejada), renda_residual_mes: cvNum(cv.rendaResidual), aporte_mensal_hoje: r2(cvNum(cv.aporteBase)), patrimonio_inicial: r2(r.plInicial),
+      estrategia: cv.estrategia, fases_de_aporte: (cv.aporteFases || []).length, eventos_programados: (cv.eventos || []).length },
+    patrimonio_na_aposentadoria: Math.round(r.plApos), capital_necessario: Math.round(r.capitalNec), distancia_do_necessario: Math.round(r.distancia),
+    meta_atingida_pct: Math.round(r.metaPct * 1000) / 10,
+    idade_em_que_atinge_a_meta: r.idadeMeta === null ? null : Math.round(r.idadeMeta * 10) / 10,
+    idade_em_que_o_dinheiro_acaba: r.idadeZera === null ? null : Math.round(r.idadeZera * 10) / 10,
+    aporte_mensal_necessario: r.aporteExtra === null ? null : Math.round(Math.max(0, cvNum(cv.aporteBase) + r.aporteExtra)),
+    retorno_real_necessario_aa: r.retornoNec === null ? null : Math.round(r.retornoNec * 1000) / 10,
+    renda_sustentavel_mes: Math.round(r.rendaSustentavel), patrimonio_no_fim: Math.round(r.capitalFinal), total_aportado: Math.round(r.totalAportes),
+    trajetoria: serie5,
+  };
+}
+function assistCicloVida(cvBase, ov, refY, refM) {
+  var base = calcCicloVida(cvBase, refY, refM);
+  if (!ov) return assistResumoCiclo(base, cvBase);
+  var cv2 = { ...cvBase };
+  if (ov.idade_aposentadoria != null) cv2.idadeApos = ov.idade_aposentadoria;
+  if (ov.renda_desejada != null) cv2.rendaDesejada = ov.renda_desejada;
+  if (ov.aporte_mensal != null) cv2.aporteBase = ov.aporte_mensal;
+  if (ov.retorno_real != null) cv2.retornoReal = ov.retorno_real;
+  if (ov.yield != null) cv2.yieldPct = ov.yield;
+  if (ov.patrimonio_inicial != null) cv2.plInicialResolvido = ov.patrimonio_inicial;
+  if (ov.estrategia) cv2.estrategia = ov.estrategia;
+  var sim = calcCicloVida(cv2, refY, refM);
+  return {
+    atual: assistResumoCiclo(base, cvBase), simulado: assistResumoCiclo(sim, { ...cv2, aporteBase: cv2.aporteBase }),
+    observacao: (cvBase.aporteFases || []).length > 0 ? "As fases de aporte cadastradas continuam valendo a partir das datas delas." : null,
+  };
+}
+function assistSimularCompra(yrD, cfg, yr, mo, inp) {
+  var valor = Number(inp.valor_total); var n = Math.round(Number(inp.parcelas));
+  if (!(valor > 0)) throw new Error("valor_total precisa ser maior que zero");
+  if (!(n >= 1 && n <= 48)) throw new Error("parcelas precisa estar entre 1 e 48");
+  var m = /^(\d{4})-(\d{2})$/.exec(String(inp.ano_mes_inicio || ""));
+  if (!m || parseInt(m[1], 10) !== yr) throw new Error("ano_mes_inicio precisa ser um mês de " + yr + " (o app só projeta o ano corrente)");
+  var ini = parseInt(m[2], 10) - 1;
+  if (ini < mo) throw new Error("o mês da compra não pode ser anterior ao mês aberto (" + tk(yr, mo) + ")");
+  var pays = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  var cartao = pays.find(function(p) { return p && p.type === "credito"; });
+  var usaCartao = inp.forma === "cartao" && !!cartao;
+  var hoje = new Date();
+  var dia = (ini === hoje.getMonth() && yr === hoje.getFullYear()) ? hoje.getDate() : 10;
+  var parcela = valor / n;
+  var simD = yrD.map(function(mb, i) {
+    var k = i - ini;
+    if (k < 0 || k >= n) return mb;
+    var t = { id: "sim-" + String(k), desc: "Simulação de compra", amount: parcela, cat: "compras", payment: usaCartao ? cartao.name : "PIX",
+      date: tk(yr, i) + "-" + String(dia).padStart(2, "0") };
+    if (k > 0) t.src = "proj";
+    return { ...(mb || { cr: [], fs: {} }), tx: ((mb && mb.tx) || []).concat([t]) };
+  });
+  var recvMap = calcRecvByMonth(yrD, cfg, yr);
+  var meses = [];
+  for (var i = mo; i <= 11; i++) {
+    var a = calcMes(yrD, cfg, yr, i); var b = calcMes(simD, cfg, yr, i);
+    var ca = calcCaixaMes(yrD, cfg, yr, i, recvMap); var cb = calcCaixaMes(simD, cfg, yr, i, recvMap);
+    meses.push({ mes: tk(yr, i), pode_gastar_antes: r2(a.podeGastar), pode_gastar_depois: r2(b.podeGastar),
+      saldo_na_conta_antes: r2(ca.saldo), saldo_na_conta_depois: r2(cb.saldo) });
+  }
+  var pior = meses.reduce(function(p, x) { return !p || x.saldo_na_conta_depois < p.saldo_na_conta_depois ? x : p; }, null);
+  var fora = Math.max(0, ini + n - 12);
+  return {
+    compra: { valor_total: r2(valor), parcelas: n, valor_parcela: r2(parcela), forma: usaCartao ? "cartão (" + cartao.name + ")" : "pix/débito" },
+    meses: meses, mes_mais_apertado_na_conta: pior,
+    observacao: [fora > 0 ? String(fora) + " parcela(s) caem no ano seguinte e não entram na projeção." : null,
+      inp.forma === "cartao" && !cartao ? "Não há cartão de crédito cadastrado — simulei como pix." : null,
+      "Os meses futuros ainda não têm gasto variável lançado; o pode gastar deles é o teto antes do dia a dia."].filter(Boolean).join(" "),
+  };
+}
+// Fallback por recusa no meio da resposta: o que veio antes do último bloco "fallback" (pensamento e chamadas
+// de ferramenta do modelo que recusou) não volta no histórico, conforme a regra da API
+function assistLimparFallback(content) {
+  var ult = -1;
+  (content || []).forEach(function(b, i) { if (b && b.type === "fallback") ult = i; });
+  if (ult < 0) return content || [];
+  return content.filter(function(b, i) {
+    return i > ult || !(b.type === "thinking" || b.type === "redacted_thinking" || b.type === "tool_use" || b.type === "server_tool_use");
+  });
+}
+// Markdown mínimo da resposta (parágrafos, "- " em lista, **negrito**) montado como elementos React — sem innerHTML
+function MdLite(props) {
+  var inline = function(s, k) {
+    return String(s).split(/(\*\*[^*]+\*\*)/g).map(function(part, j) {
+      return /^\*\*[^*]+\*\*$/.test(part) ? <b key={k + "-" + j}>{part.slice(2, -2)}</b> : part;
+    });
+  };
+  var out = []; var itens = [];
+  var fecha = function(k) { if (itens.length) { out.push(<ul key={"u" + k} style={{ margin: "2px 0", paddingLeft: 18 }}>{itens}</ul>); itens = []; } };
+  String(props.text || "").split("\n").forEach(function(l, i) {
+    var b = /^\s*[-•]\s+(.*)$/.exec(l);
+    if (b) { itens.push(<li key={i}>{inline(b[1], i)}</li>); return; }
+    fecha(i);
+    if (!l.trim()) { out.push(<div key={i} style={{ height: 6 }} />); return; }
+    out.push(<div key={i}>{inline(l.replace(/^#+\s*/, ""), i)}</div>);
+  });
+  fecha("fim");
+  return <>{out}</>;
+}
+
 /* ══ CICLO DE VIDA — motor de projeção patrimonial de longo prazo ══
    Tudo em valores REAIS (líquidos de inflação), capitalização MENSAL.
    Ordem dentro do mês: rende → aporta (ou saca) → aplica eventos do mês.
@@ -1304,18 +1463,53 @@ function applyTheme(pref) {
 applyTheme(getThemePref());
 
 var _uid = null;
+// ld devolve `fb` SÓ quando o documento não existe (usuário novo / mês vazio). Falha de leitura (rede instável,
+// "client is offline", App Check, permissão, JSON corrompido) tenta 3x e depois LANÇA. Antes devolvia `fb` também
+// na falha — e o app gravava os defaults por cima dos dados reais (incidente 2026-10-16: fixas/projeção zeradas).
 async function ld(k, fb) {
-  try {
-    var key = (_uid ? _uid + "__" : "") + k;
-    var snap = await getDoc(doc(db, "userdata", key));
-    return snap.exists() ? JSON.parse(snap.data().value) : fb;
-  } catch (e) { return fb; }
+  var key = (_uid ? _uid + "__" : "") + k;
+  var lastErr;
+  for (var at = 0; at < 3; at++) {
+    try {
+      var snap = await getDoc(doc(db, "userdata", key));
+      return snap.exists() ? JSON.parse(snap.data().value) : fb;
+    } catch (e) {
+      lastErr = e;
+      if (at < 2) await new Promise(function(r) { setTimeout(r, 800 * (at + 1)); });
+    }
+  }
+  console.error("[ld] falha ao ler " + k, lastErr);
+  throw lastErr;
 }
+// Para os ld(...).then(sv) de outros meses: se a leitura falhou, nada foi gravado — avisa uma vez só.
+var _ldFailAt = 0;
+function avisaFalhaLeitura(e) {
+  console.error("[ld]", e);
+  if (Date.now() - _ldFailAt < 5000) return;
+  _ldFailAt = Date.now();
+  alert("⚠️ Não consegui falar com o servidor agora, então os outros meses não foram atualizados. Confira a internet e tente de novo.");
+}
+// Backups: 7 slots rotativos por dia da semana no Firestore ("<chave>-bkp-0..6") + 1 cópia do cfg no aparelho.
+var CFG_BKP_LOCAL = "prumo-cfg-bkp-";
+function bkpKey(k, dow) { return k + "-bkp-" + String(dow); }
+function cfgBkpKey(dow) { return bkpKey("fc2-cfg", dow); }
 async function sv(k, d) {
   try {
     var key = (_uid ? _uid + "__" : "") + k;
     await setDoc(doc(db, "userdata", key), { value: JSON.stringify(d) });
-  } catch (e) { console.error(e); }
+    return true;
+  } catch (e) { console.error(e); return false; }
+}
+// Grava o backup do dia UMA vez por dia por documento (marca no aparelho). A 1ª cópia do dia fica: se algo
+// zerar os dados à tarde, o backup da manhã e os dos 6 dias anteriores continuam intactos.
+// Só chamar com dado que veio de verdade do servidor.
+function bkpDiario(k, payload) {
+  var flag = "prumo-bkp-dia-" + _uid + "-" + k;
+  var hoje = ymdLocal(new Date());
+  try { if (localStorage.getItem(flag) === hoje) return; } catch (e) {}
+  sv(bkpKey(k, new Date().getDay()), payload).then(function(ok) {
+    if (ok) { try { localStorage.setItem(flag, hoje); } catch (e) {} }
+  });
 }
 
 function calcSpent(mData, cats, fxd) {
@@ -5871,6 +6065,10 @@ function ConfigPrumo(props) {
         </div>
       </div>
 
+      <CfgBackups saveCfg={saveCfg} />
+      <BackupsMes />
+      <ExportarTudo />
+
       {/* ═══ ZONA DE PERIGO ═══ */}
       <div className="prumo-card full" style={{ border: "1.5px solid var(--neg)", background: "color-mix(in oklch, var(--neg) 6%, var(--surface))" }}>
         <div className="prumo-card-hd">
@@ -5903,6 +6101,191 @@ function ConfigPrumo(props) {
         </button>
       </div>
 
+    </div>
+  );
+}
+
+/* ══ BACKUPS DAS CONFIGURAÇÕES ══ */
+// Lista os 7 backups rotativos do Firestore (um por dia da semana) + a cópia local do aparelho,
+// e restaura o escolhido por cima do cfg atual (fixas, categorias, pagamentos, patrimônio, ciclo de vida...).
+function CfgBackups({ saveCfg }) {
+  var [list, sList] = useState(null);
+  var [busy, sBusy] = useState(false);
+  var carregar = function() {
+    sBusy(true);
+    var proms = [];
+    for (var d = 0; d < 7; d++) proms.push(ld(cfgBkpKey(d), null).catch(function() { return null; }));
+    Promise.all(proms).then(function(r) {
+      var out = r.filter(function(b) { return b && b.cfg; }).map(function(b) { return { ...b, origem: "Nuvem" }; });
+      try {
+        var loc = JSON.parse(localStorage.getItem(CFG_BKP_LOCAL + _uid) || "null");
+        if (loc && loc.cfg) out.push({ ...loc, origem: "Este aparelho" });
+      } catch (e) {}
+      out.sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+      sList(out); sBusy(false);
+    });
+  };
+  var restaurar = function(b) {
+    var nF = (b.cfg.fixed || []).length;
+    var quando = new Date(b.savedAt).toLocaleString("pt-BR");
+    if (!window.confirm("Restaurar as configurações de " + quando + " (" + String(nF) + " contas fixas)?\n\nIsso substitui fixas, categorias, formas de pagamento, patrimônio e projeções atuais por essa versão. Lançamentos dos meses não mudam.")) return;
+    saveCfg(b.cfg);
+    alert("✅ Configurações restauradas.");
+  };
+  return (
+    <div className="prumo-card full">
+      <div className="prumo-card-hd">
+        <div>
+          <div className="prumo-lbl">{"SEGURANÇA"}</div>
+          <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Backups das configurações"}</h3>
+        </div>
+      </div>
+      <div className="prumo-cap" style={{ marginBottom: 12 }}>
+        {"Uma vez por dia, quando você abre o Prumo, uma cópia das suas fixas, categorias, cartões, patrimônio e projeções é guardada (últimos 7 dias). Se algo sumir, restaure daqui."}
+      </div>
+      {list === null ? (
+        <button className="prumo-btn" style={{ width: "100%", padding: "10px 0", borderRadius: 10, fontWeight: 600, cursor: "pointer" }} disabled={busy} onClick={carregar}>
+          {busy ? "Buscando..." : "Ver backups"}
+        </button>
+      ) : list.length === 0 ? (
+        <div className="prumo-cap">{"Nenhum backup ainda — o primeiro é criado na próxima vez que o app carregar com fixas cadastradas."}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {list.map(function(b, i) {
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 10 }}>
+                <div style={{ fontSize: 13, color: "var(--ink)" }}>
+                  <div style={{ fontWeight: 600 }}>{new Date(b.savedAt).toLocaleString("pt-BR")}</div>
+                  <div className="prumo-cap">{b.origem + " · " + String((b.cfg.fixed || []).length) + " fixas"}</div>
+                </div>
+                <button className="prumo-btn" style={{ padding: "6px 14px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }} onClick={function() { restaurar(b); }}>{"Restaurar"}</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══ BACKUPS DOS LANÇAMENTOS (por mês) ══ */
+// Lista os 7 backups diários de um mês e restaura o escolhido por cima do doc do mês. Recarrega o app depois,
+// pra nenhuma tela segurar a versão antiga em memória e gravar por cima.
+function BackupsMes() {
+  var hojeD = new Date();
+  var [mes, sMes] = useState(tk(hojeD.getFullYear(), hojeD.getMonth()));
+  var [list, sList] = useState(null);
+  var [busy, sBusy] = useState(false);
+  var mesLabel = function(k) { var p = String(k).split("-"); return MS[parseInt(p[1], 10) - 1] + "/" + p[0]; };
+  var carregar = function() {
+    if (!mes) return;
+    sBusy(true);
+    var proms = [];
+    for (var d = 0; d < 7; d++) proms.push(ld(bkpKey("fc2-m-" + mes, d), null).catch(function() { return null; }));
+    Promise.all(proms).then(function(r) {
+      var out = r.filter(function(b) { return b && b.data; });
+      out.sort(function(a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+      sList(out); sBusy(false);
+    });
+  };
+  var restaurar = function(b) {
+    var nT = (b.data.tx || []).length;
+    var quando = new Date(b.savedAt).toLocaleString("pt-BR");
+    if (!window.confirm("Restaurar os lançamentos de " + mesLabel(mes) + " como estavam em " + quando + " (" + String(nT) + " lançamentos)?\n\nIsso substitui lançamentos, créditos e fixas pagas desse mês. Os outros meses não mudam.")) return;
+    sBusy(true);
+    sv("fc2-m-" + mes, b.data).then(function(ok) {
+      sBusy(false);
+      if (!ok) { alert("❌ Não consegui gravar agora. Confira a internet e tente de novo."); return; }
+      alert("✅ " + mesLabel(mes) + " restaurado. O app vai recarregar.");
+      window.location.reload();
+    });
+  };
+  return (
+    <div className="prumo-card full">
+      <div className="prumo-card-hd">
+        <div>
+          <div className="prumo-lbl">{"SEGURANÇA"}</div>
+          <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Backups dos lançamentos"}</h3>
+        </div>
+      </div>
+      <div className="prumo-cap" style={{ marginBottom: 12 }}>
+        {"Uma vez por dia, cada mês do ano com lançamentos ganha uma cópia (últimos 7 dias). Escolha o mês para ver as cópias."}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <input className="prumo-input" type="month" value={mes} style={{ flex: 1 }}
+          onChange={function(e) { sMes(e.target.value); sList(null); }} />
+        <button className="prumo-btn" style={{ padding: "8px 16px", borderRadius: 10, fontWeight: 600, cursor: "pointer" }} disabled={busy || !mes} onClick={carregar}>
+          {busy ? "Buscando..." : "Ver backups"}
+        </button>
+      </div>
+      {list !== null && (list.length === 0 ? (
+        <div className="prumo-cap">{"Nenhum backup de " + mesLabel(mes) + " ainda."}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {list.map(function(b, i) {
+            var tot = (b.data.tx || []).reduce(function(a, t) { return a + (t.amount || 0); }, 0);
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 10 }}>
+                <div style={{ fontSize: 13, color: "var(--ink)" }}>
+                  <div style={{ fontWeight: 600 }}>{new Date(b.savedAt).toLocaleString("pt-BR")}</div>
+                  <div className="prumo-cap">{String((b.data.tx || []).length) + " lançamentos · " + fmt(tot)}</div>
+                </div>
+                <button className="prumo-btn" style={{ padding: "6px 14px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }} disabled={busy} onClick={function() { restaurar(b); }}>{"Restaurar"}</button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ══ EXPORTAR TUDO ══ */
+// Baixa um .json com todos os documentos do usuário (cfg, mapas, rollover e os meses 2023–2027 que existem).
+// Se qualquer leitura falhar, não baixa nada — um arquivo pela metade passaria a falsa ideia de backup completo.
+var EXPORT_KEYS_FIXAS = ["fc2-cfg", "fc2-rollover", "fc2-maps", "fc2-splitmaps"];
+function ExportarTudo() {
+  var [busy, sBusy] = useState(false);
+  var exportar = function() {
+    sBusy(true);
+    var keys = EXPORT_KEYS_FIXAS.slice();
+    [2023, 2024, 2025, 2026, 2027].forEach(function(y) { for (var m = 0; m < 12; m++) keys.push("fc2-m-" + tk(y, m)); });
+    Promise.all(keys.map(function(k) { return ld(k, null); })).then(function(vals) {
+      var data = {};
+      var nMeses = 0; var nTx = 0;
+      keys.forEach(function(k, i) {
+        if (vals[i] === null) return;
+        data[k] = vals[i];
+        if (k.indexOf("fc2-m-") === 0) { nMeses++; nTx += (vals[i].tx || []).length; }
+      });
+      var hoje = ymdLocal(new Date());
+      var blob = new Blob([JSON.stringify({ app: "Prumo", exportedAt: new Date().toISOString(), data: data }, null, 1)], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "prumo-backup-" + hoje + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+      sBusy(false);
+      alert("✅ Backup baixado: " + String(nMeses) + (nMeses === 1 ? " mês, " : " meses, ") + String(nTx) + (nTx === 1 ? " lançamento" : " lançamentos") + ". Guarde o arquivo no Google Drive.");
+    }).catch(function() {
+      sBusy(false);
+      alert("❌ Não consegui ler todos os seus dados agora, então não baixei nada. Confira a internet e tente de novo.");
+    });
+  };
+  return (
+    <div className="prumo-card full">
+      <div className="prumo-card-hd">
+        <div>
+          <div className="prumo-lbl">{"SEGURANÇA"}</div>
+          <h3 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Exportar tudo"}</h3>
+        </div>
+      </div>
+      <div className="prumo-cap" style={{ marginBottom: 12 }}>
+        {"Baixa um arquivo com todos os seus dados — configurações, fixas, cartões e todos os lançamentos. Uma cópia sua, fora do app. Vale fazer uma vez por mês."}
+      </div>
+      <button className="prumo-btn brand" style={{ width: "100%", padding: "10px 0", borderRadius: 10, fontWeight: 600, cursor: "pointer" }} disabled={busy} onClick={exportar}>
+        {busy ? "Preparando..." : "⬇ Exportar tudo"}
+      </button>
     </div>
   );
 }
@@ -5992,6 +6375,13 @@ export default function App() {
   var [chatMsgs, sChatMsgs] = useState([]);
   var [chatInput, sChatIn] = useState("");
   var [chatLd, sChatLd] = useState(false);
+  // Assistente (Claude): modo "perguntar" do painel ✦. O histórico da API é só-acréscimo (exigência do
+  // pensamento preservado do modelo) — mora num ref; askMsgs é só o que a tela mostra.
+  var [chatMode, sChatMode] = useState("lancar");
+  var [askMsgs, sAskMsgs] = useState([]);
+  var [askLd, sAskLd] = useState(false);
+  var [askStatus, sAskStatus] = useState("");
+  var askHistRef = useRef([]);
   var [themePref, sThemePref] = useState(getThemePref());
 
   useEffect(function() {
@@ -6043,19 +6433,36 @@ export default function App() {
 
   // CFG é GLOBAL — carrega 1x quando user.uid muda, NUNCA recarrega por mudança de mês
   var [cfgLoaded, sCfgLoaded] = useState(false);
+  // Falha de leitura do servidor: mostra tela de erro com "Tentar de novo" em vez de abrir o app com dados vazios
+  var [loadErr, sLoadErr] = useState(false);
+  var [loadTry, sLoadTry] = useState(0);
   useEffect(function() {
     if (!user || !user.uid) { sCfgLoaded(false); return; }
     var active = true;
     (async function() {
+      sLoadErr(false);
+      var fbCfg = { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } };
       // Cargas em paralelo (eram 4 idas sequenciais ao Firestore — lento em rede móvel)
-      var loaded = await Promise.all([
-        ld("fc2-cfg", { salary: DS, pcts: DP, categories: DC, fixed: [], goals: [], catLimits: {}, netWorth: { balance: 0, history: [] } }),
-        ld("fc2-rollover", {}),
-        ld("fc2-maps", {}),
-        ld("fc2-splitmaps", {}),
-      ]);
+      var loaded;
+      try {
+        loaded = await Promise.all([
+          ld("fc2-cfg", fbCfg),
+          ld("fc2-rollover", {}),
+          ld("fc2-maps", {}),
+          ld("fc2-splitmaps", {}),
+        ]);
+      } catch (e) {
+        if (active) sLoadErr(true);
+        return;
+      }
       var c = loaded[0]; var rv = loaded[1]; var mp = loaded[2]; var smp = loaded[3];
       if (!active) return;
+      // Backup do cfg que veio de verdade do servidor (nunca dos defaults, nunca de um cfg sem fixas)
+      if (c !== fbCfg && (c.fixed || []).length > 0) {
+        var bkp = { savedAt: new Date().toISOString(), cfg: c };
+        bkpDiario("fc2-cfg", bkp);
+        try { localStorage.setItem(CFG_BKP_LOCAL + user.uid, JSON.stringify(bkp)); } catch (e) {}
+      }
       // MIGRAÇÃO: se o cfg existente não tem alguma categoria default nova, adiciona
       var existingCats = c.categories || [];
       var existingIds = existingCats.map(function(x) { return x.id; });
@@ -6100,7 +6507,10 @@ export default function App() {
       sCfg(c); sMp(mp); sSpMp(smp || {}); sSI(String(c.salary)); setRollover(rv); sCfgLoaded(true);
     })();
     return function() { active = false; };
-  }, [user && user.uid]);
+  }, [user && user.uid, loadTry]);
+
+  // Mês cujo doc foi lido com sucesso — saveMd só grava nele (nunca um mês vazio por falha de leitura)
+  var mdKeyRef = useRef(null);
 
   // Dados MENSAIS — recarrega quando muda mês/ano (mas só depois do cfg ter carregado)
   useEffect(function() {
@@ -6108,17 +6518,25 @@ export default function App() {
     var active = true;
     (async function() {
       sLd(true);
+      mdKeyRef.current = null;
       var pMo = mo === 0 ? 11 : mo - 1;
       var pYr = mo === 0 ? yr - 1 : yr;
-      var loadedM = await Promise.all([
-        ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] }),
-        ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} }),
-      ]);
+      var loadedM;
+      try {
+        loadedM = await Promise.all([
+          ld("fc2-m-" + tk(yr, mo), { tx: [], cr: [], fs: {}, debts: [] }),
+          ld("fc2-m-" + tk(pYr, pMo), { tx: [], cr: [], fs: {} }),
+        ]);
+      } catch (e) {
+        if (active) sLoadErr(true);
+        return;
+      }
       if (!active) return;
+      mdKeyRef.current = tk(yr, mo);
       sMd(loadedM[0]); sPv(loadedM[1]); sLd(false);
     })();
     return function() { active = false; };
-  }, [yr, mo, user && user.uid, cfgLoaded]);
+  }, [yr, mo, user && user.uid, cfgLoaded, loadTry]);
 
   useEffect(function() {
     if (!user || !user.uid || !cfgLoaded) return;
@@ -6126,16 +6544,34 @@ export default function App() {
     (async function() {
       // 12 meses em paralelo (era 1 await por mês em fila — principal causa do "Carregando..." longo)
       var proms = [];
+      var fbs = [];
       for (var i = 0; i < 12; i++) {
-        proms.push(ld("fc2-m-" + tk(yr, i), { tx: [], cr: [], fs: {} }));
+        fbs.push({ tx: [], cr: [], fs: {} });
+        proms.push(ld("fc2-m-" + tk(yr, i), fbs[i]));
       }
-      var r = await Promise.all(proms);
-      if (active) sYrD(r);
+      var r;
+      try { r = await Promise.all(proms); } catch (e) {
+        if (active) sLoadErr(true);
+        return;
+      }
+      if (!active) return;
+      sYrD(r);
+      // Backup diário de cada mês que existe no servidor e tem lançamentos ou créditos
+      r.forEach(function(m, i) {
+        if (m === fbs[i] || !((m.tx || []).length || (m.cr || []).length)) return;
+        bkpDiario("fc2-m-" + tk(yr, i), { savedAt: new Date().toISOString(), data: m });
+      });
     })();
     return function() { active = false; };
-  }, [yr, mo, user && user.uid, cfgLoaded]);
+  }, [yr, mo, user && user.uid, cfgLoaded, loadTry]);
 
-  var saveMd = useCallback(function(d) { sMd(d); sv("fc2-m-" + mK, d); }, [mK]);
+  var saveMd = useCallback(function(d) {
+    if (mdKeyRef.current !== mK) {
+      console.warn("[saveMd bloqueado] mês " + mK + " não foi lido do servidor; ignorando para evitar perda de dados");
+      return;
+    }
+    sMd(d); sv("fc2-m-" + mK, d);
+  }, [mK]);
   // GUARDRAIL: saveCfg só salva se cfg já foi carregado do Firebase — impede sobrescrita com defaults durante load
   var saveCfg = useCallback(function(c) {
     if (!cfgLoaded) {
@@ -6194,6 +6630,15 @@ export default function App() {
   }
   if (user === null) {
     return <LoginScreen onLogin={handleLogin} />;
+  }
+  if (loadErr) {
+    return (
+      <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", flexDirection: "column", gap: 14, alignItems: "center", justifyContent: "center", padding: "0 24px", textAlign: "center", fontFamily: "'Inter',sans-serif" }}>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{"Não consegui carregar seus dados"}</div>
+        <div style={{ fontSize: 13, maxWidth: 340 }}>{"A conexão com o servidor falhou. Seus dados estão guardados — nada foi alterado. Confira a internet e tente de novo."}</div>
+        <button className="prumo-btn" style={{ padding: "10px 22px", borderRadius: 10, fontWeight: 700, cursor: "pointer" }} onClick={function() { sLoadErr(false); sLoadTry(loadTry + 1); }}>{"Tentar de novo"}</button>
+      </div>
+    );
   }
   if (loading || !cfg) {
     return <div style={{ background: BGMAIN, color: TM, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif" }}>{"Carregando..."}</div>;
@@ -6453,7 +6898,7 @@ export default function App() {
               return ny;
             });
           }
-        });
+        }).catch(avisaFalhaLeitura);
       };
       for (var ii = ic + 1; ii <= it; ii++) {
         var fmo = (mo + (ii - ic)) % 12;
@@ -6594,6 +7039,144 @@ export default function App() {
     });
   };
 
+  /* ── ASSISTENTE (Claude) ── */
+  // Premissas do ciclo de vida já resolvidas, igual à tela Vida & Projeção (vazio = aporte médio / PL financeiro)
+  var assistCvBase = function() {
+    var cv = { ...CV_DEFAULT, ...((cfg && cfg.cicloVida) || {}) };
+    var ap = cv.aporteBase === undefined || cv.aporteBase === "" ? aporteMedioAno : cvNum(cv.aporteBase);
+    var pl = cv.plInicial === "" || cv.plInicial === undefined ? plFinanceiro : cvNum(cv.plInicial);
+    return { ...cv, aporteBase: ap, plInicialResolvido: pl };
+  };
+  // Retrato dos dados que vai na 1ª pergunta — o resto o modelo busca com as ferramentas
+  var buildAssistSnapshot = function() {
+    var hojeD = new Date();
+    var recvMap = calcRecvByMonth(yrDLive, cfg, yr);
+    var pat = (cfg && cfg.patrimonio) || {};
+    var nwH = ((cfg && cfg.netWorth && cfg.netWorth.history) || []).slice(-12);
+    var historico = [];
+    for (var hi = 0; hi < mo; hi++) {
+      var hm = yrDLive[hi] || {};
+      if (!(hm.tx || []).length) continue;
+      var hc = calcMes(yrDLive, cfg, yr, hi);
+      historico.push({ mes: tk(yr, hi), renda: r2(hc.renda), fixas: r2(hc.fixasTot), parcelas: r2(hc.parcelas), variavel: r2(hc.variavel), sobrou: r2(hc.podeGastar) });
+    }
+    var proximos = [];
+    for (var pi2 = mo + 1; pi2 <= Math.min(11, mo + 3); pi2++) {
+      var pc = calcMes(yrDLive, cfg, yr, pi2); var px = calcCaixaMes(yrDLive, cfg, yr, pi2, recvMap);
+      proximos.push({ mes: tk(yr, pi2), pode_gastar_antes_do_variavel: r2(pc.podeGastar), saldo_na_conta: r2(px.saldo) });
+    }
+    return {
+      hoje: ymdLocal(hojeD), mes_aberto_no_app: tk(yr, mo), salario_mensal: r2((cfg && cfg.salary) || 0),
+      mes_aberto: assistContaMes(yrDLive, cfg, yr, mo, recvMap),
+      proximos_meses: proximos,
+      meses_anteriores_do_ano: historico,
+      fixas_cadastradas: resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, mo)).map(function(f) {
+        return { nome: f.name, valor_sua_parte: r2(fxMine(f)), categoria: assistCatInfo(cats, f.cat).nome, pagamento: f.payment || "", teto: !!f.teto, ate: f.endDate || null };
+      }),
+      patrimonio: {
+        reserva_emergencia: r2(pat.reserva), renda_fixa: r2(pat.invFixed), renda_variavel: r2(pat.invVariable), outros_investimentos: r2(pat.invOther),
+        patrimonio_financeiro: r2(plFinanceiro), imoveis: r2(pat.imoveis), veiculos: r2(pat.veiculos), outros_ativos: r2(pat.outrosAtivos),
+        dividas: { financiamentos: r2(pat.financiamentos), emprestimos: r2(pat.emprestimos), cartao: r2(pat.cartao), outras: r2(pat.outrosPassivos) },
+        historico_patrimonio: nwH.map(function(h) { return { data: String(h.date).slice(0, 10), valor: r2(h.balance) }; }),
+      },
+      aporte_medio_no_ano: r2(aporteMedioAno),
+      metas: (goals || []).map(function(g) { return { nome: g.name, alvo: r2(g.target), guardado: r2(g.saved), prazo: g.deadline || null }; }),
+      alvo_independencia_financeira: ifTarget || null,
+      ciclo_de_vida: assistCicloVida(assistCvBase(), null, hojeD.getFullYear(), hojeD.getMonth()),
+    };
+  };
+  var runAssistTool = function(name, inp) {
+    if (!yrDLive || !cfg) throw new Error("Os dados do app ainda estão carregando.");
+    inp = inp || {};
+    var mesDe = function(s) {
+      var mm = /^(\d{4})-(\d{2})$/.exec(String(s || ""));
+      if (!mm) throw new Error("ano_mes precisa estar no formato AAAA-MM");
+      var y = parseInt(mm[1], 10); var mi = parseInt(mm[2], 10) - 1;
+      if (y !== yr || mi < 0 || mi > 11) throw new Error("Sem dados de " + s + ": o app só carrega o ano de " + String(yr) + ".");
+      return mi;
+    };
+    var hojeD = new Date();
+    if (name === "consultar_mes") return assistContaMes(yrDLive, cfg, yr, mesDe(inp.ano_mes), calcRecvByMonth(yrDLive, cfg, yr));
+    if (name === "listar_lancamentos") return assistLancamentos(yrDLive[mesDe(inp.ano_mes)], cfg, inp.categoria, inp.busca);
+    if (name === "simular_ciclo_vida") {
+      var ov = {};
+      ["idade_aposentadoria", "renda_desejada", "aporte_mensal", "retorno_real", "yield", "patrimonio_inicial"].forEach(function(k) {
+        if (inp[k] === null || inp[k] === undefined) return;
+        var v = Number(inp[k]);
+        if (!isFinite(v) || v < 0) throw new Error(k + " precisa ser um número não negativo");
+        ov[k] = v;
+      });
+      if (inp.estrategia && ["preservacao", "consumir", "legado"].indexOf(inp.estrategia) >= 0) ov.estrategia = inp.estrategia;
+      return assistCicloVida(assistCvBase(), ov, hojeD.getFullYear(), hojeD.getMonth());
+    }
+    if (name === "simular_compra") return assistSimularCompra(yrDLive, cfg, yr, mo, inp);
+    throw new Error("Ferramenta desconhecida: " + name);
+  };
+  var callAssist = async function(messages) {
+    var u = auth && auth.currentUser;
+    var tok = u && u.getIdToken ? await u.getIdToken() : "";
+    var r = await fetch("/api/assistente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok },
+      body: JSON.stringify({ messages: messages }),
+    });
+    var j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok) throw new Error((j && j.erro) || ("o assistente respondeu " + String(r.status)));
+    return j;
+  };
+  var ASSIST_STATUS = { consultar_mes: "Consultando o mês…", listar_lancamentos: "Lendo os lançamentos…", simular_ciclo_vida: "Rodando a projeção do ciclo de vida…", simular_compra: "Simulando a compra no fluxo…" };
+  var askSend = async function(texto) {
+    var q = String(texto !== undefined ? texto : chatInput).trim();
+    if (!q || askLd) return;
+    sChatIn("");
+    var base = askHistRef.current;
+    var userContent = base.length === 0
+      ? [{ type: "text", text: "<dados_do_prumo>\n" + JSON.stringify(buildAssistSnapshot()) + "\n</dados_do_prumo>" }, { type: "text", text: q }]
+      : q;
+    var hist = base.concat([{ role: "user", content: userContent }]);
+    sAskMsgs(function(prev) { return prev.concat([{ role: "user", text: q }]); });
+    sAskLd(true); sAskStatus("Pensando…");
+    var salvar = false;
+    try {
+      for (var passo = 0; passo < 8; passo++) {
+        var resp = await callAssist(hist);
+        if (resp.stop_reason === "refusal") {
+          // Turno recusado não entra no histórico — a próxima pergunta parte do ponto anterior
+          sAskMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Não consigo ajudar com essa pergunta. Tenta reformular?" }]); });
+          break;
+        }
+        var content = assistLimparFallback(resp.content);
+        hist = hist.concat([{ role: "assistant", content: content }]);
+        salvar = true;
+        var txt = content.filter(function(b) { return b.type === "text"; }).map(function(b) { return b.text; }).join("\n\n").trim();
+        if (txt) sAskMsgs(function(prev) { return prev.concat([{ role: "ai", text: txt }]); });
+        if (resp.stop_reason === "tool_use") {
+          var usos = content.filter(function(b) { return b.type === "tool_use"; });
+          if (usos.length === 0) break;
+          sAskStatus(ASSIST_STATUS[usos[0].name] || "Consultando…");
+          // Todas as respostas das ferramentas voltam numa única mensagem
+          var resultados = usos.map(function(u2) {
+            try { return { type: "tool_result", tool_use_id: u2.id, content: JSON.stringify(runAssistTool(u2.name, u2.input)) }; }
+            catch (e) { return { type: "tool_result", tool_use_id: u2.id, content: String((e && e.message) || e), is_error: true }; }
+          });
+          hist = hist.concat([{ role: "user", content: resultados }]);
+          sAskStatus("Pensando…");
+          if (passo === 7) sAskMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Precisei de passos demais pra essa. Tenta uma pergunta mais específica?" }]); });
+          continue;
+        }
+        if (resp.stop_reason === "max_tokens") sAskMsgs(function(prev) { return prev.concat([{ role: "ai", text: "(A resposta ficou longa demais e foi cortada — pergunta de novo de forma mais específica.)" }]); });
+        else if (!txt) sAskMsgs(function(prev) { return prev.concat([{ role: "ai", text: "Fiquei sem resposta pra essa. Tenta reformular?" }]); });
+        break;
+      }
+    } catch (e) {
+      sAskMsgs(function(prev) { return prev.concat([{ role: "ai", text: "⚠️ " + ((e && e.message) || "falha ao falar com o assistente") }]); });
+    }
+    if (salvar) askHistRef.current = hist;
+    sAskLd(false); sAskStatus("");
+  };
+  var askReset = function() { askHistRef.current = []; sAskMsgs([]); sAskStatus(""); };
+
   var updGS = function(id, v) {
     var updated = goals.map(function(g) { return g.id === id ? { ...g, saved: v } : g; });
     saveCfg({ ...cfg, goals: updated });
@@ -6652,7 +7235,7 @@ export default function App() {
         ny[bIdx] = { ...(ny[bIdx] || { tx: [], cr: [], fs: {} }), tx: upd };
         sYrD(ny);
       }
-    });
+    }).catch(avisaFalhaLeitura);
   };
   // Move a dívida para outro mês de recebimento (edita settleMonth no bucket físico do lançamento).
   var setSettle = function(id, bucketKey, newSM) {
@@ -6670,7 +7253,7 @@ export default function App() {
         ny[bIdx] = { ...(ny[bIdx] || { tx: [], cr: [], fs: {} }), tx: upd };
         sYrD(ny);
       }
-    });
+    }).catch(avisaFalhaLeitura);
   };
   var togRe = function(id) {
     var updated = txs.map(function(t) { return t.id === id ? { ...t, reimbursed: !t.reimbursed } : t; });
@@ -6877,7 +7460,7 @@ export default function App() {
           ex.push(ntx);
         });
         sv("fc2-m-" + fKey3, { ...fd, tx: ex });
-      });
+      }).catch(avisaFalhaLeitura);
     });
     sCR(null);
     var creditsMsg = ofxBank && ofxBank.creditsSkipped ? ", " + String(ofxBank.creditsSkipped) + " créditos/estornos ignorados" : "";
@@ -6934,7 +7517,7 @@ export default function App() {
           ny[bIdx] = { ...(ny[bIdx] || { tx: [], cr: [], fs: {} }), tx: kept };
           sYrD(ny);
         }
-      });
+      }).catch(avisaFalhaLeitura);
     });
     saveMd({ ...md, tx: txs.filter(function(t) { return t.src !== "ofx" && t.src !== "csv"; }) });
     var nFut = Object.keys(projRm).length;
@@ -7611,17 +8194,62 @@ export default function App() {
       `}</style>
 
       {chatOpen && (
-        <div className="prumo-root" style={{ position: "fixed", bottom: 88, right: 16, width: 320, maxWidth: "calc(100vw - 32px)", maxHeight: 420, background: "var(--surface)", borderRadius: "var(--r-l)", boxShadow: "var(--shadow-3)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", zIndex: 1000, animation: "slideUp 0.2s ease", overflow: "hidden" }}>
+        <div className="prumo-root" style={{ position: "fixed", bottom: 88, right: 16, width: chatMode === "perguntar" ? 400 : 320, maxWidth: "calc(100vw - 32px)", maxHeight: chatMode === "perguntar" ? "min(640px, calc(100vh - 120px))" : 420, background: "var(--surface)", borderRadius: "var(--r-l)", boxShadow: "var(--shadow-3)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", zIndex: 1000, animation: "slideUp 0.2s ease", overflow: "hidden" }}>
           <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--ink)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>{"✦"}</span>
               <div>
                 <div style={{ color: "var(--surface)", fontWeight: 600, fontSize: 13, fontFamily: "var(--f-display)" }}>{"Assistente Prumo"}</div>
-                <div style={{ color: "var(--surface)", opacity: 0.65, fontSize: 10 }}>{"Diga o que gastou ou recebeu"}</div>
+                <div style={{ display: "inline-flex", marginTop: 4, border: "1px solid color-mix(in oklch, var(--surface) 30%, transparent)", borderRadius: 8, overflow: "hidden" }}>
+                  {[{ m: "lancar", l: "Lançar" }, { m: "perguntar", l: "Perguntar" }].map(function(o) {
+                    var on = chatMode === o.m;
+                    return (
+                      <span key={o.m} onClick={function() { sChatMode(o.m); }}
+                        style={{ padding: "2px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer", background: on ? "var(--surface)" : "transparent", color: on ? "var(--ink)" : "var(--surface)", opacity: on ? 1 : 0.75 }}>{o.l}</span>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+            {chatMode === "perguntar" && askMsgs.length > 0 && !askLd && (
+              <span onClick={askReset} title="Começar uma conversa nova" style={{ color: "var(--surface)", opacity: 0.7, cursor: "pointer", fontSize: 10, fontWeight: 600, marginLeft: "auto", marginRight: 10 }}>{"Nova conversa"}</span>
+            )}
             <span onClick={function() { sChatOpen(false); }} style={{ color: "var(--surface)", opacity: 0.6, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>{"×"}</span>
           </div>
+          {chatMode === "perguntar" ? (
+          <div ref={function(el) { if (el) el.scrollTop = el.scrollHeight; }} style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, minHeight: 160, background: "var(--bg)" }}>
+            {askMsgs.length === 0 && (
+              <div style={{ padding: "12px 4px" }}>
+                <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, fontWeight: 500, textAlign: "center" }}>{"Pergunte sobre seu orçamento, fluxo de caixa, patrimônio ou aposentadoria."}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
+                  {["Quanto posso gastar por dia até o fim do mês?", "Se eu aportar R$ 4.000 por mês, com que idade atinjo a meta?", "Posso comprar algo de R$ 6.000 em 10x no cartão?", "Onde mais gastei nos últimos meses?"].map(function(ex) {
+                    return (
+                      <button key={ex} onClick={function() { askSend(ex); }} className="prumo-btn ghost" style={{ fontSize: 11, padding: "7px 10px", textAlign: "left", justifyContent: "flex-start" }}>{ex}</button>
+                    );
+                  })}
+                </div>
+                <div className="prumo-cap" style={{ fontSize: 10, marginTop: 12, textAlign: "center" }}>{"Respostas do Claude com base nos seus dados do app. Pode errar — confira na tela antes de decidir."}</div>
+              </div>
+            )}
+            {askMsgs.map(function(m, ai) {
+              var isUser = m.role === "user";
+              return (
+                <div key={ai} className="fc-chat-msg" style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                  <div style={{ maxWidth: isUser ? "85%" : "92%", padding: "8px 12px", borderRadius: isUser ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: isUser ? "var(--brand)" : "var(--surface)", border: isUser ? "none" : "1px solid var(--line)", color: isUser ? "var(--surface)" : "var(--ink)", fontSize: 12.5, lineHeight: 1.55 }}>
+                    {isUser ? m.text : <MdLite text={m.text} />}
+                  </div>
+                </div>
+              );
+            })}
+            {askLd && (
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <div style={{ padding: "8px 12px", borderRadius: "12px 12px 12px 2px", background: "var(--surface)", border: "1px solid var(--line)", fontSize: 11, color: "var(--ink-3)", fontStyle: "italic" }}>
+                  {"✦ " + (askStatus || "Pensando…")}
+                </div>
+              </div>
+            )}
+          </div>
+          ) : (
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, minHeight: 120, maxHeight: 260, background: "var(--bg)" }}>
             {chatMsgs.length === 0 && (
               <div style={{ textAlign: "center", padding: "20px 8px" }}>
@@ -7696,15 +8324,16 @@ export default function App() {
               </div>
             )}
           </div>
+          )}
           <div style={{ padding: "10px 12px", borderTop: "1px solid var(--line)", display: "flex", gap: 6, background: "var(--surface)" }}>
             <input className="prumo-input" style={{ flex: 1, fontSize: 12, borderRadius: 999, padding: "9px 14px" }}
-              placeholder="Ex: gastei 80 no ifood pix..."
+              placeholder={chatMode === "perguntar" ? "Pergunte sobre seu dinheiro…" : "Ex: gastei 80 no ifood pix..."}
               value={chatInput}
               onChange={function(e) { sChatIn(e.target.value); }}
-              onKeyDown={function(e) { if (e.key === "Enter") sendChat(); }}
-              disabled={chatLd} />
-            <button onClick={sendChat} disabled={chatLd}
-              style={{ background: chatLd ? "var(--line-2)" : "var(--brand)", border: "none", borderRadius: "50%", width: 38, height: 38, cursor: chatLd ? "default" : "pointer", color: "var(--surface)", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              onKeyDown={function(e) { if (e.key === "Enter") { if (chatMode === "perguntar") askSend(); else sendChat(); } }}
+              disabled={chatMode === "perguntar" ? askLd : chatLd} />
+            <button onClick={function() { if (chatMode === "perguntar") askSend(); else sendChat(); }} disabled={chatMode === "perguntar" ? askLd : chatLd}
+              style={{ background: (chatMode === "perguntar" ? askLd : chatLd) ? "var(--line-2)" : "var(--brand)", border: "none", borderRadius: "50%", width: 38, height: 38, cursor: (chatMode === "perguntar" ? askLd : chatLd) ? "default" : "pointer", color: "var(--surface)", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {"↑"}
             </button>
           </div>
