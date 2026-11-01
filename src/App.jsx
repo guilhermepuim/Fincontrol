@@ -2173,9 +2173,17 @@ function DashboardPrumo(props) {
     return "var(--neg)"; // desejos / não-essenciais
   };
   var topSpend = [];
-  (cats || []).filter(function(c) { return !c.parent; }).forEach(function(p) {
+  // Investimentos entra como UMA linha (Investimentos + Reservas e Metas + o que mais for do grupo),
+  // com o mesmo total do anel do meio — senão a reserva some do ranking.
+  var invRaiz = (cats || []).filter(function(c) { return !c.parent && c.group === "investimentos"; });
+  var invTot = spent.investimentos || 0;
+  if (invRaiz.length > 0 && invTot > 0) {
+    var invCat = invRaiz.filter(function(c) { return c.id === "investimentos_cat"; })[0] || invRaiz[0];
+    topSpend.push({ cat: { id: "grp_investimentos", name: invCat.name, icon: invCat.icon, group: "investimentos" }, total: invTot });
+  }
+  (cats || []).filter(function(c) { return !c.parent && c.group !== "investimentos"; }).forEach(function(p) {
     var own = spC[p.id] || 0;
-    var subTotal = (cats || []).filter(function(c) { return c.parent === p.id; }).reduce(function(a, s) { return a + (spC[s.id] || 0); }, 0);
+    var subTotal = (cats || []).filter(function(c) { return c.parent === p.id && c.group !== "investimentos"; }).reduce(function(a, s) { return a + (spC[s.id] || 0); }, 0);
     var tot = own + subTotal;
     if (tot > 0) topSpend.push({ cat: p, total: tot });
   });
@@ -2858,6 +2866,10 @@ function AnalisePrumo(props) {
   var CATP = ["var(--cat-0)", "var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)", "var(--cat-9)"];
   var catParentOf = {};
   cats.forEach(function(c) { if (c.parent && cats.some(function(p) { return p.id === c.parent; })) catParentOf[c.id] = c.parent; });
+  // Investimentos é uma fatia só (Reservas e Metas e o resto do grupo entram nela), igual ao anel do Dashboard
+  var invRaizes = cats.filter(function(c) { return !c.parent && c.group === "investimentos"; });
+  var invRaiz = invRaizes.filter(function(c) { return c.id === "investimentos_cat"; })[0] || invRaizes[0];
+  if (invRaiz) cats.forEach(function(c) { if (c.group === "investimentos" && c.id !== invRaiz.id) catParentOf[c.id] = invRaiz.id; });
   var rollCats = function(obj) {
     var out = {};
     Object.keys(obj || {}).forEach(function(cid) { var rid = catParentOf[cid] || cid; out[rid] = (out[rid] || 0) + obj[cid]; });
