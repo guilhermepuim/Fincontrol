@@ -2712,6 +2712,7 @@ function AnalisePrumo(props) {
   var cfg = props.cfg;
   var activeInst = props.activeInst || [];
   var totalInstMonthly = props.totalInstMonthly || 0;
+  var instCheio = activeInst.reduce(function(a, it) { return a + it.amount; }, 0); // valor cheio no cartão
   var rmInst = props.rmInst;
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
   var [fluxoSel, sFluxoSel] = useState(null); // mês aberto no popup "extrato caixa" do fluxo
@@ -3441,8 +3442,11 @@ function AnalisePrumo(props) {
               <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Compromissos parcelados"}</h2>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div className="prumo-cap">{"Custo mensal"}</div>
+              <div className="prumo-cap">{"Sua parte por mês"}</div>
               <div className="prumo-big accent" style={{ fontSize: 22 }}>{fmt(totalInstMonthly)}</div>
+              {instCheio - totalInstMonthly > 0.005 && (
+                <div className="prumo-cap" style={{ fontSize: 10 }}>{"no cartão: " + fmt(instCheio) + " · " + fmt(instCheio - totalInstMonthly) + " é de terceiros"}</div>
+              )}
             </div>
           </div>
           {activeInst.map(function(it, idx) {
@@ -3455,8 +3459,11 @@ function AnalisePrumo(props) {
                   <div className="prumo-tx-meta">{String(it.remaining) + " parcelas restantes"}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div className="prumo-tx-amt" style={{ color: "var(--accent-2)" }}>{fmt(it.amount) + "/m"}</div>
-                  <div className="prumo-cap" style={{ fontSize: 10 }}>{"Total: " + fmt(it.amount * it.remaining)}</div>
+                  <div className="prumo-tx-amt" style={{ color: it.mine > 0 ? "var(--accent-2)" : "var(--ink-3)" }}>{fmt(it.mine) + "/m"}</div>
+                  {it.amount - it.mine > 0.005 && (
+                    <div className="prumo-cap" style={{ fontSize: 10 }}>{"de " + fmt(it.amount) + (it.quem.length ? " · " + it.quem.join(", ") : "")}</div>
+                  )}
+                  <div className="prumo-cap" style={{ fontSize: 10 }}>{"Total: " + fmt(it.mine * it.remaining)}</div>
                 </div>
                 {rmInst && (
                   <button onClick={function() { rmInst(it); }} className="prumo-icon-x" title="Remover esta parcela de todas as projeções" style={{ width: 28, height: 28, fontSize: 14, marginLeft: 8, flexShrink: 0 }}>{"×"}</button>
@@ -3466,7 +3473,7 @@ function AnalisePrumo(props) {
           })}
           <div style={{ borderTop: "1px solid var(--line-2)", paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
             <span className="prumo-lbl" style={{ marginBottom: 0, color: "var(--ink)" }}>{"Compromisso total"}</span>
-            <span className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 14 }}>{fmt(activeInst.reduce(function(a, it) { return a + it.amount * it.remaining; }, 0))}</span>
+            <span className="prumo-num" style={{ color: "var(--accent-2)", fontSize: 14 }}>{fmt(activeInst.reduce(function(a, it) { return a + it.mine * it.remaining; }, 0))}</span>
           </div>
         </div>
       )}
@@ -6750,7 +6757,9 @@ export default function App() {
         if (!inst) return;
         var key = nd(tx.desc) + "|" + String(Math.round(tx.amount));
         if (!seen[key]) {
-          seen[key] = { desc: nd(tx.desc), amount: tx.amount, cat: tx.cat, minC: inst.c, t: inst.t };
+          // mine = só a sua parte (mesma régua do "− Parcelas" do Dashboard: tira divisões e reembolsos)
+          var quem = tx.reimbursed ? ["reembolsado"] : gsp(tx).map(function(s) { return s.person; }).filter(Boolean);
+          seen[key] = { desc: nd(tx.desc), amount: tx.amount, mine: myP(tx), quem: quem, cat: tx.cat, minC: inst.c, t: inst.t };
         } else {
           if (inst.c < seen[key].minC) seen[key].minC = inst.c;
           if (inst.t > seen[key].t) seen[key].t = inst.t;
@@ -6761,9 +6770,9 @@ export default function App() {
       it.remaining = it.t - it.minC + 1;
       if (it.remaining > 0) activeInst.push(it);
     });
-    activeInst.sort(function(a, b) { return b.amount - a.amount; });
+    activeInst.sort(function(a, b) { return b.mine - a.mine || b.amount - a.amount; });
   }
-  var totalInstMonthly = activeInst.reduce(function(a, it) { return a + it.amount; }, 0);
+  var totalInstMonthly = activeInst.reduce(function(a, it) { return a + it.mine; }, 0);
 
   // Remove uma parcela ativa de TODOS os meses do ano (varre yrD por desc normalizada + amount)
   var rmInst = function(it) {
