@@ -600,34 +600,55 @@ function calcCashDetailMonth(yrD, cfg, yr, monthIdx) {
   return { cardTx: cardTx, fxCartao: fxCartao, fxCaixa: fxCaixa, varCaixa: varCaixa, cartaoTot: cartaoTot, fixasTot: fixasTot, varTot: varTot, totalOut: cartaoTot + fixasTot + varTot, realInvoice: realInvoice, cartaoTerceiros: cartaoTerceiros, terceirosTot: cartaoTerceiros + fixasTerceiros + varTerceiros };
 }
 
-// Média do resíduo variável dos últimos 3 meses fechados (Abordagem B, decidida 2026-07-01):
-// resíduo = variável lançado (sem proj) − fixas-cartão do mês. Média negativa vira 0.
-function calcEstVarFuturo(yrD, cfg, yr, mo) {
-  var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+// Média do variável dos últimos 3 meses fechados, ABERTA POR CATEGORIA (sub soma na principal, só a minha parte).
+// Fica de fora o que os meses futuros já trazem por outro caminho — senão conta em dobro:
+//   • parcelas ("x/y" na descrição): já estão na fatura futura como projeção
+//   • investimentos/reserva: é aporte, não gasto
+//   • fixas de cartão e o que uma fixa "teto" fora do cartão já cobre (ex.: iFood até R$600)
+// Cada categoria tem piso 0 no mês. (Revisto 2026-11-01: antes somava tudo e a média do usuário dava R$12,2k em vez de ~R$5k.)
+function calcEstVarDetalhe(yrD, cfg, yr, mo) {
+  var res = { total: 0, cats: [], meses: [] };
+  if (!yrD || !cfg) return res;
+  var paysList = cfg.payments ? cfg.payments : DEFAULT_PAYMENTS;
   var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
   var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
-  var histResiduos = [];
-  if (yrD && cfg) {
-    for (var hmi = mo - 1; hmi >= 0 && histResiduos.length < 3; hmi--) {
-      var hmb = yrD[hmi];
-      if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
-      var hVar = (hmb.tx || []).filter(function(t) { return t.src !== "proj"; }).reduce(function(a, t) { return a + myP(t); }, 0);
-      var hFxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, hmi));
-      var hFxCartao = hFxList
-        .filter(function(f) { return isCredit(f.payment); })
-        .reduce(function(a, f) { return a + (f.hasSplit ? f.amount - spt(f) : f.amount); }, 0);
-      // Gasto que já foi coberto por fixa teto fora do cartão (ex.: iFood até R$600): a fixa entra cheia nos
-      // meses futuros, então a média do variável não pode trazer esse gasto de novo
-      var hCatsL = (cfg && cfg.categories) ? cfg.categories : DC;
-      var hTeto = hFxList
-        .filter(function(f) { return f.teto && !isCredit(f.payment); })
-        .reduce(function(a, f) { return a + Math.min(fxMine(f), fxTetoUsado(f, hmb.tx, hCatsL)); }, 0);
-      histResiduos.push(hVar - hFxCartao - hTeto);
-    }
+  var catsL = cfg.categories ? cfg.categories : DC;
+  var byId = {};
+  catsL.forEach(function(c) { byId[c.id] = c; });
+  var raizDe = function(cid) { var c = byId[cid]; return (c && c.parent && byId[c.parent]) ? c.parent : (cid || "_sem"); };
+  var ehInvest = function(rid) { var c = byId[rid]; return !!(c && c.group === "investimentos"); };
+  var porMes = [];
+  for (var hmi = mo - 1; hmi >= 0 && porMes.length < 3; hmi--) {
+    var hmb = yrD[hmi];
+    if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
+    var pc = {};
+    (hmb.tx || []).forEach(function(t) {
+      if (t.src === "proj" || pi(t.desc || "")) return;
+      var rid = raizDe(t.cat);
+      if (ehInvest(rid)) return;
+      pc[rid] = (pc[rid] || 0) + myP(t);
+    });
+    resolveFixedListForMonth(cfg.fixed || [], tk(yr, hmi)).forEach(function(f) {
+      var rid = raizDe(f.cat);
+      if (pc[rid] === undefined) return;
+      if (isCredit(f.payment)) pc[rid] -= fxMine(f);
+      else if (f.teto) pc[rid] -= Math.min(fxMine(f), fxTetoUsado(f, hmb.tx, catsL));
+    });
+    Object.keys(pc).forEach(function(k) { if (pc[k] < 0) pc[k] = 0; });
+    porMes.push({ mi: hmi, pc: pc });
   }
-  if (histResiduos.length === 0) return 0;
-  var med = histResiduos.reduce(function(a, v) { return a + v; }, 0) / histResiduos.length;
-  return med < 0 ? 0 : med;
+  if (porMes.length === 0) return res;
+  porMes.reverse(); // mais antigo primeiro
+  var ids = {};
+  porMes.forEach(function(m) { Object.keys(m.pc).forEach(function(k) { ids[k] = true; }); });
+  res.meses = porMes.map(function(m) { return m.mi; });
+  res.cats = Object.keys(ids).map(function(rid) {
+    var vals = porMes.map(function(m) { return m.pc[rid] || 0; });
+    var c = byId[rid];
+    return { id: rid, name: c ? c.name : "Sem categoria", icon: c ? c.icon : "🏷️", vals: vals, avg: vals.reduce(function(a, v) { return a + v; }, 0) / porMes.length };
+  }).filter(function(x) { return x.avg >= 0.5; }).sort(function(a, b) { return b.avg - a.avg; });
+  res.total = res.cats.reduce(function(a, x) { return a + x.avg; }, 0);
+  return res;
 }
 
 /* ══ A CONTA DO MÊS — fonte ÚNICA do "pode gastar" (decidido 2026-10-01) ══
@@ -2717,6 +2738,7 @@ function AnalisePrumo(props) {
   var [selCat, sSelCat] = useState(null); // categoria isolada no gráfico "Categorias mês a mês"
   var [fluxoSel, sFluxoSel] = useState(null); // mês aberto no popup "extrato caixa" do fluxo
   var [fluxoView, sFluxoView] = useState("caixa"); // popup: "caixa" (extrato) | "cenario" (real × média 3m)
+  var [fluxoFora, sFluxoFora] = useState({}); // cenário: categorias desmarcadas (id → true)
   var [pieSel, sPieSel] = useState(null); // grupo expandido no card Real vs Meta
   var [paceSelMap, sPaceSelMap] = useState({}); // meses passados visíveis no Ritmo do mês (mi → true)
   var [rvSel, sRvSel] = useState(null); // mês expandido no card Recorrente vs Variável
@@ -2725,8 +2747,11 @@ function AnalisePrumo(props) {
   /* Fluxo de caixa: saldo caixa dos próximos meses (linhas clicáveis → popup extrato) + cenário média 3m */
   var fluxoEstVar = 0;
   var fluxoMeses = [];
+  var fluxoEstDet = { total: 0, cats: [], meses: [] };
   if (yrD && cfg) {
-    fluxoEstVar = calcEstVarFuturo(yrD, cfg, yr, mo);
+    fluxoEstDet = calcEstVarDetalhe(yrD, cfg, yr, mo);
+    // categorias que o usuário tirou do cenário (gasto pontual, ex.: viagem)
+    fluxoEstVar = fluxoEstDet.cats.reduce(function(a, x) { return a + (fluxoFora[x.id] ? 0 : x.avg); }, 0);
     // Mesma conta do alerta do Dashboard (calcCaixaMes) — inclui o "a receber" do cartão dividido, que antes só o Dashboard somava
     var fluxoRecv = calcRecvByMonth(yrD, cfg, yr);
     for (var fmi = mo; fmi <= 11 && fluxoMeses.length < 4; fmi++) {
@@ -3265,7 +3290,30 @@ function AnalisePrumo(props) {
               </div>
             ) : (
               <div style={{ marginTop: 4 }}>
-                <div className="prumo-cap" style={{ marginBottom: 12 }}>{"Variável médio (últimos 3 meses fechados): " + fmt(fluxoEstVar) + "/mês · aplicado só em meses futuros"}</div>
+                <div className="prumo-cap" style={{ marginBottom: 8 }}>
+                  {"Seu gasto variável médio dos últimos 3 meses fechados" + (fluxoEstDet.meses.length ? " (" + fluxoEstDet.meses.map(function(m9) { return MA[m9]; }).join(", ") + ")" : "") + ", por categoria. Desmarque o que foi pontual."}
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  {fluxoEstDet.cats.length === 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{"Ainda não há meses fechados com lançamentos."}</div>}
+                  {fluxoEstDet.cats.map(function(c9) {
+                    var dentro = !fluxoFora[c9.id];
+                    return (
+                      <label key={c9.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid var(--line)", cursor: "pointer", opacity: dentro ? 1 : 0.45 }}>
+                        <input type="checkbox" checked={dentro} onChange={function() { var nx = { ...fluxoFora }; if (dentro) nx[c9.id] = true; else delete nx[c9.id]; sFluxoFora(nx); }} />
+                        <span style={{ fontSize: 14 }}>{c9.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c9.name}</div>
+                          <div className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)" }}>{c9.vals.map(function(v9, i9) { return MA[fluxoEstDet.meses[i9]] + " " + fK(v9); }).join(" · ")}</div>
+                        </div>
+                        <span className="prumo-num" style={{ fontSize: 13, textDecoration: dentro ? "none" : "line-through" }}>{fmt(c9.avg)}</span>
+                      </label>
+                    );
+                  })}
+                  <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>
+                    <span>{"Variável médio no cenário"}</span><span className="prumo-num">{fmt(fluxoEstVar) + "/mês"}</span>
+                  </div>
+                  <div className="prumo-cap" style={{ fontSize: 10, marginTop: 4 }}>{"Fora da média, porque o mês futuro já traz por outro caminho: parcelas (já estão na fatura), investimentos e reserva (são aporte) e o que as fixas já cobrem (ex.: teto do iFood)."}</div>
+                </div>
                 <div className="prumo-mini-stat-row cols-2">
                   <div className="prumo-mini-stat" style={{ textAlign: "left" }}>
                     <div className="lbl">{"Real · fixas + parcelas"}</div>
