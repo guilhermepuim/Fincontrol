@@ -5045,6 +5045,14 @@ function FixasPrumo(props) {
     if (newEndDate === "") delete updatedFx.endDate;
     else if (newEndDate) updatedFx.endDate = newEndDate;
     if (editFx.teto) updatedFx.teto = true; else delete updatedFx.teto;
+    if (editFx.hs) {
+      var spEd = (editFx.sp || []).filter(function(s) { return s.person && String(s.person).trim() && s.pct > 0; }).map(function(s) { return { person: String(s.person).trim().slice(0, 100), pct: Math.min(99, Math.max(1, parseInt(s.pct, 10) || 0)) }; });
+      updatedFx.splits = spEd;
+      updatedFx.hasSplit = spEd.length > 0;
+    } else {
+      updatedFx.splits = [];
+      updatedFx.hasSplit = false;
+    }
     var newFxd = fxdRaw.slice();
     newFxd[fxIdx] = updatedFx;
     saveCfg({ ...cfg, fixed: newFxd });
@@ -5210,7 +5218,7 @@ function FixasPrumo(props) {
                     <button onClick={function() {
                       var fxdRaw = cfg.fixed || [];
                       var orig = fxdRaw.find(function(x) { return x.id === f.id; }) || f;
-                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "month", origName: f.name, teto: !!orig.teto, hasCat: !!orig.cat });
+                      sEditFx({ id: f.id, amount: String(f.amount).replace(".", ","), startDate: orig.startDate || "", endDate: orig.endDate || "", scope: "month", origName: f.name, teto: !!orig.teto, hasCat: !!orig.cat, hs: !!orig.hasSplit, sp: (orig.splits && orig.splits.length > 0) ? orig.splits.map(function(s) { return { person: s.person, pct: s.pct }; }) : [{ person: "", pct: 0 }] });
                     }}
                       style={{ background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: 8, color: "var(--ink-3)", width: 32, height: 32, cursor: "pointer", fontSize: 14, fontFamily: "var(--f-ui)" }}
                       title="Editar valor / prazo">{"✎"}</button>
@@ -5325,6 +5333,13 @@ function FixasPrumo(props) {
                     ? "Os lançamentos do mês na categoria desta fixa abatem o valor — nas projeções só entra o que ainda falta gastar, sem contar o iFood duas vezes."
                     : "Precisa de uma categoria na fixa pra saber quais lançamentos abatem."}
                 </div>
+              </div>
+              <div>
+                <label className="prumo-check">
+                  <input type="checkbox" checked={!!editFx.hs} onChange={function(e) { sEditFx({ ...editFx, hs: e.target.checked, sp: (editFx.sp && editFx.sp.length > 0) ? editFx.sp : [{ person: "", pct: 0 }] }); }} />{"Dividir com outra pessoa"}
+                </label>
+                {editFx.hs && <SE prumo splits={editFx.sp || [{ person: "", pct: 0 }]} onChange={function(s) { sEditFx({ ...editFx, sp: s }); }} />}
+                <div className="prumo-cap" style={{ fontSize: 11, marginTop: 4 }}>{"A divisão vale para todos os meses dessa fixa. Sua parte é o que sobra depois dos %."}</div>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                 <button className="prumo-btn brand" style={{ flex: 1, padding: "12px 18px" }} onClick={applyFxEdit}>{"Salvar"}</button>
