@@ -6873,7 +6873,8 @@ export default function App() {
     var cR = cfg.categories || DC;
     var fRRaw = cfg.fixed || [];
     for (var ci = 0; ci < 12; ci++) {
-      var mDt = yrD[ci] || { tx: [], cr: [], fs: {} };
+      // Mês aberto vem ao vivo (md) — yrD é o retrato do banco e não reflete o que acabou de ser pago/lançado
+      var mDt = ((yrDLive || yrD)[ci]) || { tx: [], cr: [], fs: {} };
       var mTx = mDt.tx || [];
       var mCr = mDt.cr || [];
       var mFs = mDt.fs || {};
