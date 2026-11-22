@@ -130,7 +130,30 @@ function fxRestante(f, mTx, cats) {
 function fmt(v) { return (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function pct(v) { return String(((v || 0) * 100).toFixed(1)) + "%"; }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-function tk(y, m) { return String(y) + "-" + String(m + 1).padStart(2, "0"); }
+// Aceita mês fora de 0..11 e vira o ano sozinho: tk(2026, 12) = "2027-01", tk(2027, -1) = "2026-12".
+function tk(y, m) {
+  if (m < 0 || m > 11) { y = y + Math.floor(m / 12); m = ((m % 12) + 12) % 12; }
+  return String(y) + "-" + String(m + 1).padStart(2, "0");
+}
+/* ══ JANELA DE MESES (virada de ano, 2026-11-21) ══
+   As contas de fatura/caixa recebem uma lista de meses onde o ÍNDICE é o mês contado a partir de janeiro do ano
+   aberto (yr): 0..11 = o próprio ano, 12..23 = o ano seguinte. Os últimos meses do ano anterior vão em D.prev,
+   de trás pra frente (prev[0] = dezembro = índice −1). Uma lista comum de 12 meses continua valendo — é a janela
+   sem vizinhos. Só leitura: nada aqui grava no banco. */
+function bkt(D, i) { if (!D) return null; return i >= 0 ? (D[i] || null) : ((D.prev || [])[-i - 1] || null); }
+function eachBkt(D, fn) {
+  if (!D) return;
+  (D.prev || []).forEach(function(b, j) { if (b) fn(b, -j - 1); });
+  D.forEach(function(b, i) { if (b) fn(b, i); });
+}
+function mIdx(i) { return ((i % 12) + 12) % 12; }
+// Nome do mês de um índice da janela; fora do ano aberto leva o ano junto ("Janeiro 2027" / "Jan/27")
+function mLbl(yr, i, curto) {
+  var nome = (curto ? MA : MS)[mIdx(i)];
+  if (i >= 0 && i <= 11) return nome;
+  var y = yr + Math.floor(i / 12);
+  return curto ? nome + "/" + String(y).slice(2) : nome + " " + String(y);
+}
 // Dada uma chave "YYYY-MM", retorna a do mês seguinte (com virada de ano). Usado como default de settleMonth.
 function nextMonthOfKey(key) {
   var parts = String(key || "").split("-");
@@ -479,11 +502,8 @@ function invoiceKeyForYMD(y, mo0, day, closingDay) {
   var cd = (typeof closingDay === "number" && closingDay >= 1 && closingDay <= 31) ? closingDay : 1;
   // Borda: o próprio dia do fechamento já pertence à fatura do mês seguinte.
   // Confirmado pelo OFX do Nubank (fatura vai de DTSTART=dia-fechamento a DTEND=dia-fechamento do mês seguinte).
-  if (day >= cd) {
-    mo0 = mo0 + 1;
-    if (mo0 > 11) { mo0 = 0; y = y + 1; }
-  }
-  return tk(y, mo0);
+  if (day >= cd) mo0 = mo0 + 1;
+  return tk(y, mo0); // tk vira o ano quando passa de dezembro
 }
 // Retorna o dia de fechamento se o nome bater com um pagamento tipo crédito; senão null (não é cartão).
 function creditClosingFor(paymentName, payments) {
@@ -499,13 +519,13 @@ function creditClosingFor(paymentName, payments) {
   }
   return null;
 }
-// Varre os 12 meses do ano (yrD) e consolida as faturas de cartão por mês de vencimento.
+// Varre a janela de meses (yrD — ver "JANELA DE MESES") e consolida as faturas de cartão por mês de vencimento.
 // Retorna { "YYYY-MM": { gross, net } }. gross = total que sai da conta; net = parte própria (myP, após splits/reembolsos).
 // Transações projetadas (src:proj, sem data) assumem dia 15 do balde como referência — limitação conhecida.
 function calcInvoices(yrD, year, payments) {
   var byMonth = {};
   if (!yrD || yrD.length === 0) return byMonth;
-  yrD.forEach(function(mData, bucketMo) {
+  eachBkt(yrD, function(mData, bucketMo) {
     var txList = (mData && mData.tx) || [];
     txList.forEach(function(t) {
       var closing = creditClosingFor(t.payment, payments);
@@ -535,7 +555,7 @@ function calcCashOutMonth(yrD, cfg, yr, monthIdx) {
   var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
   var invByMonth = calcInvoices(yrD, yr, paysList);
   var realInvoiceMonths = {};
-  (yrD || []).forEach(function(mb2, bidx) {
+  eachBkt(yrD, function(mb2, bidx) {
     (mb2.tx || []).forEach(function(t) {
       if (t.src === "proj" || !isCredit(t.payment)) return;
       var yy, mm, dd;
@@ -545,7 +565,7 @@ function calcCashOutMonth(yrD, cfg, yr, monthIdx) {
     });
   });
   var key = tk(yr, monthIdx);
-  var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
+  var mb = bkt(yrD, monthIdx) || { tx: [], cr: [] };
   // net = só a minha parte da fatura (splits/reembolsos fora) — a visão é "o que é realmente meu"
   var cartao = (invByMonth[key] || { net: 0 }).net;
   var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
@@ -569,7 +589,7 @@ function calcCashDetailMonth(yrD, cfg, yr, monthIdx) {
   // Fatura: toda tx de cartão (de qualquer mês) cuja fatura vence neste mês
   var cardTx = [];
   var realInvoice = false;
-  (yrD || []).forEach(function(mb2, bidx) {
+  eachBkt(yrD, function(mb2, bidx) {
     (((mb2 || {}).tx) || []).forEach(function(t) {
       var closing = creditClosingFor(t.payment, paysList);
       if (closing === null) return;
@@ -583,7 +603,7 @@ function calcCashDetailMonth(yrD, cfg, yr, monthIdx) {
   });
   var fxList = resolveFixedListForMonth((cfg && cfg.fixed) || [], key);
   var fxCartao = realInvoice ? [] : fxList.filter(function(f) { return isCredit(f.payment); });
-  var mb = (yrD && yrD[monthIdx]) || { tx: [], cr: [] };
+  var mb = bkt(yrD, monthIdx) || { tx: [], cr: [] };
   var catsL = (cfg && cfg.categories) ? cfg.categories : DC;
   // Fixa teto: leva junto quanto já foi gasto e quanto ainda entra (o popup mostra o saldo, não o valor cheio)
   var fxCaixa = fxList.filter(function(f) { return !isCredit(f.payment); }).map(function(f) {
@@ -618,8 +638,9 @@ function calcEstVarDetalhe(yrD, cfg, yr, mo) {
   var raizDe = function(cid) { var c = byId[cid]; return (c && c.parent && byId[c.parent]) ? c.parent : (cid || "_sem"); };
   var ehInvest = function(rid) { var c = byId[rid]; return !!(c && c.group === "investimentos"); };
   var porMes = [];
-  for (var hmi = mo - 1; hmi >= 0 && porMes.length < 3; hmi--) {
-    var hmb = yrD[hmi];
+  // Em jan–mar os meses fechados estão no ano anterior (yrD.prev) — antes a média ficava vazia na virada
+  for (var hmi = mo - 1; hmi >= -((yrD.prev || []).length) && porMes.length < 3; hmi--) {
+    var hmb = bkt(yrD, hmi);
     if (!hmb || !(hmb.tx || []).length) continue; // mês sem lançamento não conta como fechado
     var pc = {};
     (hmb.tx || []).forEach(function(t) {
@@ -662,7 +683,7 @@ function calcMes(yrD, cfg, yr, mo, hoje) {
   var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
   var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
   var isCredit = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
-  var mb = (yrD && yrD[mo]) || { tx: [], cr: [], fs: {} };
+  var mb = bkt(yrD, mo) || { tx: [], cr: [], fs: {} };
   var txs = mb.tx || [];
   var fs = mb.fs || {};
   var sal = (cfg && cfg.salary) || 0;
@@ -718,6 +739,81 @@ function calcMes(yrD, cfg, yr, mo, hoje) {
   };
 }
 
+/* ══ ANO MÊS A MÊS — a conta do gráfico anual (Projeção/Análise), agora reaproveitada no "Ano a ano" ══
+   Extraída do App sem mudar a regra (2026-11-21). data = 12 meses do ano; moRef = mês de referência:
+   antes dele, mês sem lançamento fica zerado; dele em diante, sem lançamento, entra a projeção das fixas.
+   Ano fechado → moRef 12; ano que vem → moRef 0. */
+function calcAnoMeses(data, cfg, yr, mo) {
+  var out = [];
+  if (!data || !cfg) return out;
+  var sal = cfg.salary || DS;
+  var cR = cfg.categories || DC;
+  var fRRaw = cfg.fixed || [];
+  for (var ci = 0; ci < 12; ci++) {
+    // Mês aberto vem ao vivo (md) — yrD é o retrato do banco e não reflete o que acabou de ser pago/lançado
+    var mDt = (data[ci]) || { tx: [], cr: [], fs: {} };
+    var mTx = mDt.tx || [];
+    var mCr = mDt.cr || [];
+    var mFs = mDt.fs || {};
+    var fR = resolveFixedListForMonth(fRRaw, tk(yr, ci));
+    var es = 0; var iv = 0; var de = 0;
+    var mC = sal + mCr.reduce(function(a2, c2) { return a2 + c2.amount; }, 0);
+    var catBk = {};
+    function aCB(cid, val) { if (!catBk[cid]) catBk[cid] = 0; catBk[cid] += val; }
+    var hasRT = mTx.some(function(t2) { return t2.src !== "proj"; });
+    var hasRFs = Object.keys(mFs).filter(function(k) { return !k.endsWith("_p") && !k.endsWith("_r"); }).length > 0;
+    var hasR = hasRT || hasRFs;
+    var isPastNoData = ci < mo && !hasR;
+    mTx.forEach(function(t2) {
+      var ct = cR.find(function(c2) { return c2.id === t2.cat; });
+      if (ct && !t2.reimbursed) {
+        var v2 = myP(t2);
+        if (ct.group === "essenciais") es += v2;
+        else if (ct.group === "investimentos") iv += v2;
+        else de += v2;
+        aCB(ct.id, v2);
+      }
+    });
+    if (hasR && !isPastNoData) {
+      fR.forEach(function(f2) {
+        if ((f2.mode || "budget") !== "budget") return;
+        var ct = cR.find(function(c2) { return c2.id === f2.cat; });
+        if (!ct) return;
+        var parts = mFs[f2.id + "_p"] || [];
+        var pS = parts.reduce(function(a3, p3) { return a3 + p3.amount; }, 0);
+        var v2 = 0;
+        if (mFs[f2.id] === "paid" && !f2.teto) { // teto: o gasto real já veio dos lançamentos (mesma regra do calcSpent)
+          v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
+        } else if (pS > 0) {
+          // pagamento parcial: mesma regra do ranking (calcSpent), senão gráfico e ranking divergem
+          var myPc = f2.hasSplit ? (1 - gsp(f2).reduce(function(a4, s) { return a4 + s.pct / 100; }, 0)) : 1;
+          v2 = pS * myPc;
+        }
+        if (v2 > 0) {
+          if (ct.group === "essenciais") es += v2;
+          else if (ct.group === "investimentos") iv += v2;
+          else de += v2;
+          aCB(ct.id, v2);
+        }
+      });
+    } else if (!isPastNoData && ci >= mo) {
+      fR.forEach(function(f2) {
+        var ct = cR.find(function(c2) { return c2.id === f2.cat; });
+        if (ct) {
+          var v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
+          if (ct.group === "essenciais") es += v2;
+          else if (ct.group === "investimentos") iv += v2;
+          else de += v2;
+          aCB(ct.id, v2);
+        }
+      });
+    }
+    var tD = Math.round(es + iv + de);
+    out.push({ mes: MA[ci], e: Math.round(es), i: Math.round(iv), d: Math.round(de), td: tD, cr: Math.round(mC), s: Math.round(mC - tD), real: hasR, cats: catBk });
+  }
+  return out;
+}
+
 // Variável lançado (sem parcelas) até o dia N do mês — pra comparar períodos iguais, não 1 dia × mês fechado
 function calcVarAteDia(mData, dia) {
   return ((mData && mData.tx) || []).reduce(function(a, t) {
@@ -736,7 +832,7 @@ function calcVarAteDia(mData, dia) {
 function calcRecvByMonth(yrD, cfg, yr) {
   var paysList = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
   var recv = {};
-  (yrD || []).forEach(function(mb3, bidx3) {
+  eachBkt(yrD, function(mb3, bidx3) {
     ((mb3 && mb3.tx) || []).forEach(function(t) {
       if (creditClosingFor(t.payment, paysList) === null) return;
       if (gsp(t).length === 0) return;
@@ -752,7 +848,7 @@ function calcRecvByMonth(yrD, cfg, yr) {
 
 // Caixa do mês (o que entra e sai da CONTA) — fonte única do fluxo de caixa no Dashboard e na Análise
 function calcCaixaMes(yrD, cfg, yr, mi, recvMap) {
-  var mb = (yrD && yrD[mi]) || { tx: [], cr: [] };
+  var mb = bkt(yrD, mi) || { tx: [], cr: [] };
   var rec = ((cfg && cfg.salary) || 0) + (mb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
   var recv = (recvMap || {})[tk(yr, mi)] || 0;
   var out = calcCashOutMonth(yrD, cfg, yr, mi);
@@ -774,7 +870,7 @@ function assistContaMes(yrD, cfg, yr, mi, recvMap) {
   var cm = calcMes(yrD, cfg, yr, mi);
   var cx = calcCaixaMes(yrD, cfg, yr, mi, recvMap);
   var porCat = {};
-  (((yrD[mi] || {}).tx) || []).forEach(function(t) {
+  (((bkt(yrD, mi) || {}).tx) || []).forEach(function(t) {
     var info = assistCatInfo(cats, t.cat);
     var pc = (cats.find(function(x) { return x.id === info.pai; }) || {}).name || info.nome;
     porCat[pc] = (porCat[pc] || 0) + myP(t);
@@ -853,14 +949,17 @@ function assistSimularCompra(yrD, cfg, yr, mo, inp) {
   if (!(valor > 0)) throw new Error("valor_total precisa ser maior que zero");
   if (!(n >= 1 && n <= 48)) throw new Error("parcelas precisa estar entre 1 e 48");
   var m = /^(\d{4})-(\d{2})$/.exec(String(inp.ano_mes_inicio || ""));
-  if (!m || parseInt(m[1], 10) !== yr) throw new Error("ano_mes_inicio precisa ser um mês de " + yr + " (o app só projeta o ano corrente)");
-  var ini = parseInt(m[2], 10) - 1;
+  // ini/i são índices da janela de meses: 0..11 = ano aberto, 12+ = ano seguinte (até onde o app carregou)
+  var fim = yrD.length - 1;
+  var mesIni = m ? parseInt(m[2], 10) - 1 : -1;
+  var ini = (m && mesIni >= 0 && mesIni <= 11) ? (parseInt(m[1], 10) - yr) * 12 + mesIni : NaN;
+  if (!(ini >= 0 && ini <= fim)) throw new Error("ano_mes_inicio precisa estar entre " + tk(yr, mo) + " e " + tk(yr, fim) + " (é até onde o app projeta)");
   if (ini < mo) throw new Error("o mês da compra não pode ser anterior ao mês aberto (" + tk(yr, mo) + ")");
   var pays = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
   var cartao = pays.find(function(p) { return p && p.type === "credito"; });
   var usaCartao = inp.forma === "cartao" && !!cartao;
   var hoje = new Date();
-  var dia = (ini === hoje.getMonth() && yr === hoje.getFullYear()) ? hoje.getDate() : 10;
+  var dia = (tk(yr, ini) === tk(hoje.getFullYear(), hoje.getMonth())) ? hoje.getDate() : 10;
   var parcela = valor / n;
   var simD = yrD.map(function(mb, i) {
     var k = i - ini;
@@ -870,20 +969,23 @@ function assistSimularCompra(yrD, cfg, yr, mo, inp) {
     if (k > 0) t.src = "proj";
     return { ...(mb || { cr: [], fs: {} }), tx: ((mb && mb.tx) || []).concat([t]) };
   });
+  simD.prev = yrD.prev; // .map não leva os meses do ano anterior junto
   var recvMap = calcRecvByMonth(yrD, cfg, yr);
   var meses = [];
-  for (var i = mo; i <= 11; i++) {
+  // Até dezembro do ano aberto, ou um mês depois da última parcela (a fatura dela) se a compra cruza o ano
+  var ate = Math.min(fim, Math.max(11, ini + n));
+  for (var i = mo; i <= ate; i++) {
     var a = calcMes(yrD, cfg, yr, i); var b = calcMes(simD, cfg, yr, i);
     var ca = calcCaixaMes(yrD, cfg, yr, i, recvMap); var cb = calcCaixaMes(simD, cfg, yr, i, recvMap);
     meses.push({ mes: tk(yr, i), pode_gastar_antes: r2(a.podeGastar), pode_gastar_depois: r2(b.podeGastar),
       saldo_na_conta_antes: r2(ca.saldo), saldo_na_conta_depois: r2(cb.saldo) });
   }
   var pior = meses.reduce(function(p, x) { return !p || x.saldo_na_conta_depois < p.saldo_na_conta_depois ? x : p; }, null);
-  var fora = Math.max(0, ini + n - 12);
+  var fora = Math.max(0, ini + n - yrD.length);
   return {
     compra: { valor_total: r2(valor), parcelas: n, valor_parcela: r2(parcela), forma: usaCartao ? "cartão (" + cartao.name + ")" : "pix/débito" },
     meses: meses, mes_mais_apertado_na_conta: pior,
-    observacao: [fora > 0 ? String(fora) + " parcela(s) caem no ano seguinte e não entram na projeção." : null,
+    observacao: [fora > 0 ? String(fora) + " parcela(s) caem depois de " + tk(yr, fim) + " e não entram na projeção." : null,
       inp.forma === "cartao" && !cartao ? "Não há cartão de crédito cadastrado — simulei como pix." : null,
       "Os meses futuros ainda não têm gasto variável lançado; o pode gastar deles é o teto antes do dia a dia."].filter(Boolean).join(" "),
   };
@@ -1982,7 +2084,10 @@ function DashboardPrumo(props) {
   var hasAnyCard = paysList.some(function(p) { return p && p.type === "credito"; });
   var creditNames = paysList.filter(function(p) { return p && p.type === "credito"; }).map(function(p) { return String(p.name).toLowerCase().trim(); });
   var isCreditPay = function(name) { return creditNames.indexOf(String(name || "").toLowerCase().trim()) >= 0; };
-  var invByMonth = calcInvoices(yrD, yr, paysList);
+  // Janela de meses (ano aberto + seguinte + fim do anterior) — fatura e caixa cruzam a virada do ano por ela
+  var yrX = props.yrX || yrD;
+  var winLen = yrX ? yrX.length : 12;
+  var invByMonth = calcInvoices(yrX, yr, paysList);
 
   /* ─── Hero: UM número — "pode gastar" (calcMes, competência). O antigo seletor caixa/competência saiu:
      duas réguas no mesmo lugar davam respostas diferentes pra mesma pergunta. ─── */
@@ -2145,14 +2250,15 @@ function DashboardPrumo(props) {
   var invoiceList = [];
   for (var ik = 1; ik <= 6; ik++) {
     var imo = mo + ik;
-    if (imo > 11) break; // fatura que cruza o ano fica fora (limitação de cross-year já combinada)
+    if (imo >= winLen) break; // só vai até onde a janela carregou (normalmente dezembro do ano seguinte)
     var inv = invByMonth[tk(yr, imo)] || { gross: 0, net: 0, parc: 0 };
-    invoiceList.push({ mo0: imo, label: MS[imo], gross: inv.gross, net: inv.net, parc: inv.parc || 0 });
+    invoiceList.push({ mo0: imo, label: mLbl(yr, imo), gross: inv.gross, net: inv.net, parc: inv.parc || 0 });
   }
   var curInvoice = invoiceList.length > 0 ? invoiceList[0] : null;
   var nextInvoices = invoiceList.slice(1);
   var pctCur = (curInvoice && sal > 0) ? Math.min(curInvoice.gross / sal, 1) : 0;
-  var curCrossesYear = (mo === 11); // dez → próxima fatura vence em janeiro do ano seguinte
+  // dez → a próxima fatura vence em janeiro. Só vira aviso se o ano seguinte não carregou (janela de 12 meses).
+  var curCrossesYear = (mo === 11) && winLen <= 12;
 
   /* ─── A receber por mês (caixa): partes divididas de compras no CARTÃO, no mês do settleMonth.
      Só cartão: a fatura sai CHEIA (gross) da conta e o reembolso entra depois — sem isso os meses
@@ -2163,26 +2269,26 @@ function DashboardPrumo(props) {
      próximos meses fecha negativo na conta (mesma conta da Análise: calcCaixaMes), explicando por que difere
      do "pode gastar" — normalmente é a fatura do mês anterior, que já foi contada lá. ─── */
   var caixaAlerta = null;
-  if (yrD && cfg) {
-    var recvMap = calcRecvByMonth(yrD, cfg, yr);
+  if (yrX && cfg) {
+    var recvMap = calcRecvByMonth(yrX, cfg, yr);
     for (var cfi = 0; cfi < 4 && !caixaAlerta; cfi++) {
-      var tgtMo = mo + cfi;
-      if (tgtMo > 11) break; // não cruza o ano (limitação de cross-year já combinada)
-      var cx = calcCaixaMes(yrD, cfg, yr, tgtMo, recvMap);
+      var tgtMo = mo + cfi; // índice da janela: passa de 11 quando entra no ano seguinte
+      if (tgtMo >= winLen) break;
+      var cx = calcCaixaMes(yrX, cfg, yr, tgtMo, recvMap);
       if (cx.saldo < 0) {
         var tgtKey = tk(yr, tgtMo);
-        var det = calcCashDetailMonth(yrD, cfg, yr, tgtMo);
+        var det = calcCashDetailMonth(yrX, cfg, yr, tgtMo);
         // Fatura que vence no mês, só a parte de compras de meses anteriores (as do próprio mês antes do fechamento ficam fora)
         var faturaAntes = det.cardTx.filter(function(t) { return !t.date || String(t.date).slice(0, 7) < tgtKey; }).reduce(function(a, t) { return a + myP(t); }, 0);
         // Compras no cartão deste mês que caem numa fatura posterior (depois do fechamento)
-        var cartaoDepois = ((yrD[tgtMo] || {}).tx || []).filter(function(t) {
+        var cartaoDepois = ((bkt(yrX, tgtMo) || {}).tx || []).filter(function(t) {
           var cl = creditClosingFor(t.payment, paysList);
           if (cl === null || !t.date) return false;
           var dt = new Date(t.date);
           if (isNaN(dt.getTime())) return false;
           return invoiceKeyForYMD(dt.getFullYear(), dt.getMonth(), dt.getDate(), cl) !== tgtKey;
         }).reduce(function(a, t) { return a + myP(t); }, 0);
-        caixaAlerta = { mo0: tgtMo, label: MS[tgtMo], saldo: cx.saldo, fatura: faturaAntes, cartaoDoMes: cartaoDepois };
+        caixaAlerta = { mo0: tgtMo, label: mLbl(yr, tgtMo), saldo: cx.saldo, fatura: faturaAntes, cartaoDoMes: cartaoDepois };
       }
     }
   }
@@ -2455,7 +2561,7 @@ function DashboardPrumo(props) {
           </div>
 
           {(curCrossesYear || !curInvoice) ? (
-            <div className="prumo-cap" style={{ padding: "12px 0" }}>{"⚠ A próxima fatura vence em janeiro e cruza o ano — navegue até janeiro pra ver o detalhe."}</div>
+            <div className="prumo-cap" style={{ padding: "12px 0" }}>{curCrossesYear ? "⚠ A próxima fatura vence em janeiro e os dados do ano seguinte não carregaram agora — navegue até janeiro pra ver o detalhe." : "Sem próximas faturas pra mostrar a partir deste mês."}</div>
           ) : (
             <div>
               {/* FATURA ATUAL — a próxima a fechar/vencer (destaque) */}
@@ -2723,11 +2829,273 @@ function DashboardPrumo(props) {
 }
 
 /* ══ ANÁLISE PRUMO ══ */
+/* ══ ANO A ANO (2026-11-21) ══
+   Compara os anos lado a lado com a MESMA conta do gráfico anual (calcAnoMeses). O ano aberto e o seguinte vêm ao
+   vivo (props); os anteriores são lidos do banco — SÓ LEITURA, nada é gravado — e os já encerrados ficam em cache
+   na sessão. Anos sem lançamento ficam de fora. Renda não entra: o app só guarda o salário atual, sem histórico.
+   Ano que ainda não começou entra só como comprometido (fixas + parcelas), tracejado no gráfico. */
+var ANO_A_ANO_DESDE = 2023; // mesmo início do "Exportar tudo"
+var _yoyCache = {}; // "uid|ano" → 12 meses (só anos encerrados)
+// Cores dos anos: fora do azul/dourado/marinho dos grupos (essenciais/não essenciais/investido) da barra empilhada
+var YOY_CORES = ["var(--cat-3)", "var(--cat-2)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-9)"];
+function AnoAAnoPrumo(props) {
+  var yr = props.yr;
+  var cfg = props.cfg;
+  var cats = props.cats || DC;
+  var hoje = new Date();
+  var anoHoje = hoje.getFullYear();
+  var mesHoje = hoje.getMonth();
+  var [lidos, sLidos] = useState({}); // ano → 12 meses lidos do banco
+  var [carregando, sCarregando] = useState(false);
+  var [falhou, sFalhou] = useState(false);
+
+  // Anos a ler: do início até o ano de hoje, menos os que já chegam ao vivo (o aberto e o seguinte)
+  var anosLer = [];
+  for (var y0 = ANO_A_ANO_DESDE; y0 <= anoHoje; y0++) { if (y0 !== yr && y0 !== yr + 1) anosLer.push(y0); }
+  var chaveLer = anosLer.join(",");
+  useEffect(function() {
+    if (!_uid) return;
+    var ativo = true;
+    var jaTem = {};
+    var faltam = [];
+    anosLer.forEach(function(y) {
+      var ck = _uid + "|" + String(y);
+      if (y < anoHoje && _yoyCache[ck]) jaTem[y] = _yoyCache[ck]; else faltam.push(y);
+    });
+    sLidos(jaTem);
+    sFalhou(false);
+    if (!faltam.length) { sCarregando(false); return; }
+    sCarregando(true);
+    var proms = [];
+    faltam.forEach(function(y) { for (var m = 0; m < 12; m++) proms.push(ld("fc2-m-" + tk(y, m), null)); });
+    Promise.all(proms).then(function(r) {
+      if (!ativo) return;
+      var nv = Object.assign({}, jaTem);
+      faltam.forEach(function(y, yi) {
+        var meses = r.slice(yi * 12, yi * 12 + 12).map(function(b) { return b || { tx: [], cr: [], fs: {} }; });
+        nv[y] = meses;
+        if (y < anoHoje) _yoyCache[_uid + "|" + String(y)] = meses;
+      });
+      sLidos(nv);
+      sCarregando(false);
+    }).catch(function() { if (ativo) { sCarregando(false); sFalhou(true); } });
+    return function() { ativo = false; };
+  }, [chaveLer]);
+
+  if (!cfg) return null;
+
+  // Fontes: anos lidos + o aberto (ao vivo) + o seguinte (janela)
+  var fontes = {};
+  Object.keys(lidos).forEach(function(k) { fontes[k] = lidos[k]; });
+  if (props.yrD && props.yrD.length >= 12) fontes[yr] = props.yrD.slice(0, 12);
+  if (props.yrNext && props.yrNext.length === 12) fontes[yr + 1] = props.yrNext;
+
+  var byId = {};
+  cats.forEach(function(c) { byId[c.id] = c; });
+  var raiz = function(cid) { var c = byId[cid]; return (c && c.parent && byId[c.parent]) ? c.parent : cid; };
+
+  // Até o ano que vem: com 2027 aberto a janela também traz 2028, que só teria fixas repetidas
+  var anos = Object.keys(fontes).map(Number).filter(function(y) { return y <= anoHoje + 1; }).sort(function(a, b) { return a - b; }).map(function(y) {
+    var futuro = y > anoHoje;
+    var moRef = y < anoHoje ? 12 : (y === anoHoje ? mesHoje : 0);
+    var meses = calcAnoMeses(fontes[y], cfg, y, moRef);
+    // Ano real: só meses com lançamento (o ano em curso para no mês de hoje — compra lançada adiantada não conta).
+    // Ano futuro: o que já está comprometido em cada mês.
+    var usa = meses.map(function(d, i) { return futuro ? d.td > 0 : (!!d.real && (y !== anoHoje || i <= mesHoje)); });
+    var a = { ano: y, futuro: futuro, emCurso: y === anoHoje, meses: meses, usa: usa, n: 0, ess: 0, des: 0, inv: 0, cats: {}, ultimo: -1 };
+    meses.forEach(function(d, i) {
+      if (!usa[i]) return;
+      a.n += 1; a.ess += d.e; a.des += d.d; a.inv += d.i; a.ultimo = i;
+      Object.keys(d.cats || {}).forEach(function(cid) {
+        var c = byId[cid];
+        if (c && c.group === "investimentos") return;
+        var rid = raiz(cid);
+        a.cats[rid] = (a.cats[rid] || 0) + d.cats[cid];
+      });
+    });
+    a.gasto = a.ess + a.des;
+    return a;
+  }).filter(function(a) { return a.n > 0; });
+
+  var reais = anos.filter(function(a) { return !a.futuro; });
+  // Mesmo período: compara com o ano anterior nos mesmos meses (ano em curso: jan até o mês de hoje)
+  var porAno = {};
+  anos.forEach(function(a) { porAno[a.ano] = a; });
+  anos.forEach(function(a) {
+    var p = porAno[a.ano - 1];
+    if (a.futuro || !p || p.futuro) return;
+    var ate = a.emCurso ? mesHoje : 11;
+    var sA = 0; var sP = 0;
+    for (var i = 0; i <= ate; i++) {
+      if (a.usa[i]) sA += a.meses[i].e + a.meses[i].d;
+      if (p.usa[i]) sP += p.meses[i].e + p.meses[i].d;
+    }
+    if (sP > 0) a.vsAnt = { pct: (sA - sP) / sP, ate: ate, ano: p.ano };
+  });
+
+  // Gráfico mês a mês: gasto (sem investimentos) de cada ano
+  var gMax = 1;
+  anos.forEach(function(a) { a.meses.forEach(function(d, i) { if (a.usa[i] && d.e + d.d > gMax) gMax = d.e + d.d; }); });
+  var gx = function(i) { return 30 + i * (300 / 11); };
+  var gy = function(v) { return 124 - (v / gMax) * 108; };
+  var segmentos = function(a) {
+    var segs = []; var cur = [];
+    a.meses.forEach(function(d, i) {
+      if (a.usa[i]) cur.push(String(Math.round(gx(i))) + "," + String(Math.round(gy(d.e + d.d))));
+      else if (cur.length) { segs.push(cur); cur = []; }
+    });
+    if (cur.length) segs.push(cur);
+    return segs;
+  };
+
+  // Categorias: média por mês com lançamento (anos parciais ficam comparáveis), últimos 3 anos reais
+  var anosCat = reais.slice(-3);
+  var ultReal = anosCat.length ? anosCat[anosCat.length - 1] : null;
+  var penReal = anosCat.length > 1 ? anosCat[anosCat.length - 2] : null;
+  var catRows = [];
+  if (ultReal && anosCat.length > 1) {
+    var ids = {};
+    anosCat.forEach(function(a) { Object.keys(a.cats).forEach(function(k) { ids[k] = true; }); });
+    catRows = Object.keys(ids).map(function(cid) {
+      var c = byId[cid];
+      var vals = anosCat.map(function(a) { return a.n > 0 ? (a.cats[cid] || 0) / a.n : 0; });
+      var vU = vals[vals.length - 1]; var vP = vals[vals.length - 2];
+      return { id: cid, name: c ? c.name : "Sem categoria", icon: c && c.icon ? c.icon : "🏷️", vals: vals, delta: vP > 0 ? (vU - vP) / vP : null, peso: Math.max(vU, vP) };
+    }).filter(function(r) { return r.peso >= 1; }).sort(function(a, b) { return b.peso - a.peso; }).slice(0, 8);
+  }
+
+  var maxTot = Math.max.apply(null, anos.map(function(a) { return a.gasto + a.inv; }).concat([1]));
+  var corDe = function(idx) { return YOY_CORES[idx % YOY_CORES.length]; };
+  var perLbl = function(ate) { return ate >= 11 ? "o ano todo" : "jan–" + MA[ate].toLowerCase(); };
+
+  return (
+    <div className="prumo-card l-brand full">
+      <div className="prumo-card-hd">
+        <div>
+          <div className="prumo-lbl">{"Ano a ano"}</div>
+          <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Como os anos se comparam"}</h2>
+        </div>
+        <span style={{ fontSize: 22 }}>{"📆"}</span>
+      </div>
+      <div className="prumo-cap" style={{ marginBottom: 12, lineHeight: 1.5 }}>
+        {"Gasto é a sua parte, sem investimentos. O ano em curso conta até " + MS[mesHoje].toLowerCase() + "; o ano que vem entra só com o que já está comprometido."}
+        {carregando ? " Buscando anos anteriores…" : ""}
+        {falhou ? " Não consegui ler os anos anteriores agora." : ""}
+      </div>
+
+      {anos.length === 0 && <div className="prumo-cap">{"Ainda não há lançamentos pra comparar."}</div>}
+
+      {/* Resumo por ano */}
+      {anos.map(function(a, ai) {
+        var tot = a.gasto + a.inv;
+        var w = function(v) { return String(Math.max(0, (v / maxTot) * 100)) + "%"; };
+        var piorou = a.vsAnt && a.vsAnt.pct > 0;
+        return (
+          <div key={a.ano} style={{ padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: corDe(ai), flexShrink: 0 }}></span>
+                <span className="prumo-num" style={{ fontSize: 15, color: "var(--ink)" }}>{String(a.ano)}</span>
+                <span className={"prumo-chip" + (a.futuro ? " warn" : a.emCurso ? " brand" : "")} style={{ fontSize: 10 }}>{a.futuro ? "comprometido" : a.emCurso ? "até " + MA[mesHoje].toLowerCase() : "fechado"}</span>
+              </div>
+              <span className="prumo-num" style={{ fontSize: 15, color: "var(--ink)" }}>{fmt(a.gasto)}</span>
+            </div>
+            <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--surface-2)", margin: "7px 0 5px" }}>
+              <div title={"Essenciais " + fmt(a.ess)} style={{ width: w(a.ess), background: GR[0].color }}></div>
+              <div title={"Não essenciais " + fmt(a.des)} style={{ width: w(a.des), background: GR[2].color }}></div>
+              <div title={"Investido " + fmt(a.inv)} style={{ width: w(a.inv), background: GR[1].color }}></div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <span className="prumo-cap" style={{ fontSize: 11 }}>{fmt(a.gasto / a.n) + " por mês · " + String(a.n) + (a.n === 1 ? " mês" : " meses") + " · investido " + fmt(a.inv)}</span>
+              {a.vsAnt && (
+                <span className={"prumo-chip " + (piorou ? "neg" : "pos")} style={{ fontSize: 10 }} title={"Gasto de " + perLbl(a.vsAnt.ate) + " comparado com o mesmo período de " + String(a.vsAnt.ano)}>
+                  {(piorou ? "▲ " : "▼ ") + String(Math.abs(Math.round(a.vsAnt.pct * 100))) + "% vs " + String(a.vsAnt.ano) + (a.vsAnt.ate < 11 ? " (" + perLbl(a.vsAnt.ate) + ")" : "")}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {anos.length > 0 && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+          {[{ l: "Essenciais", c: GR[0].color }, { l: "Não essenciais", c: GR[2].color }, { l: "Investido", c: GR[1].color }].map(function(lg) {
+            return <span key={lg.l} className="prumo-cap" style={{ fontSize: 10, display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: lg.c }}></span>{lg.l}</span>;
+          })}
+        </div>
+      )}
+
+      {/* Mês a mês, um traço por ano */}
+      {anos.length > 0 && (
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <div className="prumo-lbl">{"Mês a mês"}</div>
+          <svg viewBox="0 0 340 146" style={{ width: "100%", maxWidth: 460, height: "auto", display: "block", margin: "4px auto 0" }} role="img"
+            aria-label={"Gasto por mês de cada ano: " + anos.map(function(a) { return String(a.ano) + " " + fmt(a.gasto); }).join(", ")}>
+            {[0, 0.5, 1].map(function(f) {
+              var yv = gy(gMax * f);
+              return (
+                <g key={f}>
+                  <line x1="30" x2="330" y1={yv} y2={yv} stroke="var(--line)" strokeWidth="1" />
+                  <text x="26" y={yv + 3} textAnchor="end" fontSize="8" fill="var(--ink-4)" fontFamily="var(--f-mono)">{fK(gMax * f)}</text>
+                </g>
+              );
+            })}
+            {MA.map(function(m, i) {
+              return <text key={m} x={gx(i)} y="140" textAnchor="middle" fontSize="8" fill="var(--ink-3)" fontFamily="var(--f-mono)">{m.slice(0, 1)}</text>;
+            })}
+            {anos.map(function(a, ai) {
+              return segmentos(a).map(function(sg, si) {
+                return sg.length > 1
+                  ? <polyline key={String(a.ano) + "-" + String(si)} points={sg.join(" ")} fill="none" stroke={corDe(ai)} strokeWidth="2" strokeDasharray={a.futuro ? "4 3" : "none"} strokeLinejoin="round" strokeLinecap="round" />
+                  : <circle key={String(a.ano) + "-" + String(si)} cx={sg[0].split(",")[0]} cy={sg[0].split(",")[1]} r="2.5" fill={corDe(ai)} />;
+              });
+            })}
+          </svg>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {anos.map(function(a, ai) {
+              return <span key={a.ano} className="prumo-cap" style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 0, borderTop: "2px " + (a.futuro ? "dashed " : "solid ") + corDe(ai) }}></span>{String(a.ano) + (a.futuro ? " (comprometido)" : "")}</span>;
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Por categoria: média por mês */}
+      {catRows.length > 0 && (
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <div className="prumo-lbl">{"Por categoria · média por mês"}</div>
+          <div className="prumo-cap" style={{ marginBottom: 6 }}>{"Média dos meses com lançamento, pra comparar ano fechado com ano em curso."}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--line)" }}>
+            <span style={{ flex: 1 }}></span>
+            {anosCat.map(function(a) { return <span key={a.ano} className="prumo-lbl" style={{ width: 52, textAlign: "right", margin: 0 }}>{String(a.ano)}</span>; })}
+            <span className="prumo-lbl" style={{ width: 50, textAlign: "right", margin: 0 }}>{"Δ"}</span>
+          </div>
+          {catRows.map(function(r) {
+            var sobe = r.delta !== null && r.delta > 0;
+            return (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.icon + " " + r.name}</span>
+                {r.vals.map(function(v, vi) {
+                  return <span key={vi} className="prumo-num" style={{ width: 52, textAlign: "right", fontSize: 11, color: vi === r.vals.length - 1 ? "var(--ink)" : "var(--ink-3)" }}>{v > 0 ? fK(v) : "—"}</span>;
+                })}
+                <span className="prumo-num" style={{ width: 50, textAlign: "right", fontSize: 11, color: r.delta === null ? "var(--ink-4)" : sobe ? "var(--neg)" : "var(--pos)" }}>
+                  {r.delta === null ? "novo" : (sobe ? "▲" : "▼") + String(Math.abs(Math.round(r.delta * 100))) + "%"}
+                </span>
+              </div>
+            );
+          })}
+          {penReal && <div className="prumo-cap" style={{ fontSize: 10, marginTop: 6 }}>{"Δ = " + String(ultReal.ano) + " contra " + String(penReal.ano) + "."}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AnalisePrumo(props) {
   var chD = props.chD;
   var mo = props.mo;
   var yr = props.yr;
   var yrD = props.yrD;
+  // Janela de meses (ano aberto + seguinte + fim do anterior): só o fluxo de caixa usa — o resto da Análise é "do ano"
+  var yrX = props.yrX || yrD;
   var cats = props.cats;
   var myP = props.myP;
   var cfg = props.cfg;
@@ -2748,19 +3116,20 @@ function AnalisePrumo(props) {
   var fluxoEstVar = 0;
   var fluxoMeses = [];
   var fluxoEstDet = { total: 0, cats: [], meses: [] };
-  if (yrD && cfg) {
-    fluxoEstDet = calcEstVarDetalhe(yrD, cfg, yr, mo);
+  if (yrX && cfg) {
+    fluxoEstDet = calcEstVarDetalhe(yrX, cfg, yr, mo);
     // categorias que o usuário tirou do cenário (gasto pontual, ex.: viagem)
     fluxoEstVar = fluxoEstDet.cats.reduce(function(a, x) { return a + (fluxoFora[x.id] ? 0 : x.avg); }, 0);
     // Mesma conta do alerta do Dashboard (calcCaixaMes) — inclui o "a receber" do cartão dividido, que antes só o Dashboard somava
-    var fluxoRecv = calcRecvByMonth(yrD, cfg, yr);
-    for (var fmi = mo; fmi <= 11 && fluxoMeses.length < 4; fmi++) {
-      var fcx = calcCaixaMes(yrD, cfg, yr, fmi, fluxoRecv);
+    var fluxoRecv = calcRecvByMonth(yrX, cfg, yr);
+    // fmi é índice da janela: passa de 11 quando o fluxo entra no ano seguinte (ex.: nov, dez, jan/27, fev/27)
+    for (var fmi = mo; fmi < yrX.length && fluxoMeses.length < 4; fmi++) {
+      var fcx = calcCaixaMes(yrX, cfg, yr, fmi, fluxoRecv);
       var fIsCur = fmi === mo;
-      fluxoMeses.push({ mo0: fmi, label: MA[fmi], rec: fcx.rec + fcx.recv, recv: fcx.recv, out: fcx.out, real: fcx.saldo, comMedia: fIsCur ? fcx.saldo : fcx.saldo - fluxoEstVar, isCur: fIsCur });
+      fluxoMeses.push({ mo0: fmi, label: mLbl(yr, fmi, true), rec: fcx.rec + fcx.recv, recv: fcx.recv, out: fcx.out, real: fcx.saldo, comMedia: fIsCur ? fcx.saldo : fcx.saldo - fluxoEstVar, isCur: fIsCur });
     }
   }
-  var fluxoDet = (fluxoSel !== null && yrD && cfg) ? calcCashDetailMonth(yrD, cfg, yr, fluxoSel) : null;
+  var fluxoDet = (fluxoSel !== null && yrX && cfg) ? calcCashDetailMonth(yrX, cfg, yr, fluxoSel) : null;
   var fluxoSelMes = fluxoSel !== null ? fluxoMeses.find(function(f2) { return f2.mo0 === fluxoSel; }) : null;
   // Agrupa lançamentos por categoria principal (sub soma na mãe, igual ChartTip); vFn = valor bruto (fatura) ou minha parte (caixa)
   var groupCashTx = function(txList, vFn) {
@@ -3091,7 +3460,7 @@ function AnalisePrumo(props) {
     var bad2 = pp2.goodAbove ? -dv2 : dv2; // desvio na direção ruim
     if (bad2 > 3 && (!pieWorst || bad2 > pieWorst.bad)) pieWorst = { p: pp2, bad: bad2, dv: dv2 };
   });
-  if (pieWorst) {
+  if (pieWorst && pieT > 0) { // sem gasto real no ano (ex.: ano que ainda não começou) toda meta daria "−X pp"
     insights.push({ ico: "🎯", txt: pieWorst.p.label + " está " + (pieWorst.dv >= 0 ? "+" : "") + String(pieWorst.dv.toFixed(0)) + "pp fora da meta de " + String(pieWorst.p.meta) + "% no acumulado do ano." });
   }
   if (savData.length > 0) {
@@ -3109,8 +3478,113 @@ function AnalisePrumo(props) {
   }
   insights = insights.slice(0, 6);
 
+  /* ── Seletor de ano + ano futuro (virada de ano, 2026-11-21) ──
+     Trocar o ano muda o mês aberto no app (irAno). Num ano que ainda não começou não há gasto real — os cards de
+     gasto somem sozinhos (dependem de meses reais) e entra o "em perspectiva": fixas + parcelas + faturas. */
+  var anoHoje = props.anoHoje || nowDt.getFullYear();
+  var anosSel = [];
+  if (props.temAnoAnt) anosSel.push(anoHoje - 1);
+  anosSel.push(anoHoje, anoHoje + 1);
+  if (anosSel.indexOf(yr) < 0) { anosSel.push(yr); anosSel.sort(function(a, b) { return a - b; }); }
+  var anoFuturo = yr > anoHoje;
+  var anoSemDado = !anoFuturo && chD.length === 12 && !chD.some(function(d) { return d.real; });
+  var compAno = null;
+  if (anoFuturo && yrD && cfg) {
+    var paysA = cfg.payments || DEFAULT_PAYMENTS;
+    var invA = calcInvoices(yrX, yr, paysA); // janela: a fatura de janeiro já traz as compras de dezembro
+    compAno = { fixas: 0, parc: 0, renda: 0, ultParc: -1, faturas: [], temCartao: paysA.some(function(p) { return p && p.type === "credito"; }) };
+    for (var ai = 0; ai < 12; ai++) {
+      var amb = yrD[ai] || {};
+      compAno.fixas += resolveFixedListForMonth(cfg.fixed || [], tk(yr, ai)).reduce(function(a, f) { return a + fxMine(f); }, 0);
+      var pcM = (amb.tx || []).filter(function(t) { return t.src === "proj" && !t.reimbursed; }).reduce(function(a, t) { return a + myP(t); }, 0);
+      compAno.parc += pcM;
+      if (pcM > 0) compAno.ultParc = ai;
+      compAno.renda += (cfg.salary || 0) + (amb.cr || []).reduce(function(a, c) { return a + (c.amount || 0); }, 0);
+      var fa = invA[tk(yr, ai)];
+      compAno.faturas.push({ mi: ai, val: fa ? fa.gross : 0, parc: fa ? (fa.parc || 0) : 0 });
+    }
+    compAno.total = compAno.fixas + compAno.parc;
+    compAno.sobra = compAno.renda - compAno.total;
+    compAno.fatMax = Math.max.apply(null, compAno.faturas.map(function(f) { return f.val; }).concat([1]));
+    compAno.fatTot = compAno.faturas.reduce(function(a, f) { return a + f.val; }, 0);
+    // Alguma parcela já projetada passa de dezembro? (só dá pra saber se o ano seguinte carregou na janela)
+    compAno.parcDepois = !!(yrX && yrX.length > 12 && yrX.slice(12).some(function(b) { return ((b && b.tx) || []).some(function(t) { return t.src === "proj"; }); }));
+  }
+
   return (
     <div className="prumo-form-grid">
+      {/* ⓪a ANO DA ANÁLISE — seletor (muda o mês aberto no app) */}
+      {props.irAno && (
+        <div className="prumo-card full" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <div className="prumo-lbl">{"Ano da análise"}</div>
+            <div className="prumo-cap">{anoFuturo ? "Ainda não começou — mostra só o que já está comprometido" : anoSemDado ? "Sem lançamentos neste ano" : yr === anoHoje ? "Ano corrente" : "Ano encerrado"}</div>
+          </div>
+          <div role="group" aria-label="Escolher o ano da análise" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {anosSel.map(function(ay) {
+              var on = ay === yr;
+              return (
+                <button key={ay} type="button" className={"prumo-chip" + (on ? " brand" : "")} aria-pressed={on}
+                  onClick={function() { if (!on) props.irAno(ay); }}
+                  style={{ cursor: on ? "default" : "pointer", fontSize: 13, padding: "7px 16px", fontFamily: "var(--f-mono)", fontWeight: on ? 800 : 600 }}>
+                  {String(ay)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ⓪a′ ANO FUTURO EM PERSPECTIVA — fixas + parcelas + faturas do cartão (sem gasto real ainda) */}
+      {compAno && (
+        <div className="prumo-card l-accent full">
+          <div className="prumo-card-hd">
+            <div>
+              <div className="prumo-lbl">{String(yr) + " em perspectiva"}</div>
+              <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"O que já está comprometido"}</h2>
+            </div>
+            <span style={{ fontSize: 22 }}>{"🔭"}</span>
+          </div>
+          <div className="prumo-cap" style={{ marginBottom: 12, lineHeight: 1.5 }}>{"O ano ainda não começou: aqui entram só as fixas cadastradas e as parcelas já lançadas. Ranking, top compras e os outros gráficos de gasto aparecem conforme você lançar."}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+            {[
+              { l: "Comprometido no ano", v: compAno.total, s: compAno.renda > 0 ? pct(compAno.total / compAno.renda) + " da renda prevista" : "" },
+              { l: "Fixas", v: compAno.fixas, s: fmt(compAno.fixas / 12) + " por mês" },
+              { l: "Parcelas", v: compAno.parc, s: compAno.ultParc < 0 ? "nenhuma lançada" : compAno.parcDepois ? "seguem para " + String(yr + 1) : "a última cai em " + MS[compAno.ultParc].toLowerCase() },
+              { l: "Sobra pro variável", v: compAno.sobra, s: fmt(compAno.sobra / 12) + " por mês", neg: compAno.sobra < 0 },
+            ].map(function(tl) {
+              return (
+                <div key={tl.l} style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", minWidth: 0 }}>
+                  <div className="prumo-lbl">{tl.l}</div>
+                  <div className="prumo-num" style={{ fontSize: 17, color: tl.neg ? "var(--neg)" : "var(--ink)" }}>{fmt(tl.v)}</div>
+                  {tl.s && <div className="prumo-cap" style={{ fontSize: 11, marginTop: 2 }}>{tl.s}</div>}
+                </div>
+              );
+            })}
+          </div>
+          {compAno.temCartao && compAno.fatTot > 0 && (
+            <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <div className="prumo-lbl">{"Faturas do cartão em " + String(yr)}</div>
+              <div className="prumo-cap" style={{ marginBottom: 8 }}>{"Pelo mês em que vencem. Janeiro já traz as compras de dezembro."}</div>
+              {compAno.faturas.map(function(fa2) {
+                return (
+                  <div key={fa2.mi} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                    <span style={{ width: 34, flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase" }}>{MA[fa2.mi]}</span>
+                    <div style={{ flex: 1, height: 8, borderRadius: 4, background: "var(--surface-2)", overflow: "hidden" }}>
+                      <div style={{ width: String(Math.round((fa2.val / compAno.fatMax) * 100)) + "%", height: "100%", background: "var(--accent)", borderRadius: 4 }}></div>
+                    </div>
+                    <span className="prumo-num" style={{ width: 96, flexShrink: 0, textAlign: "right", fontSize: 12, color: fa2.val > 0 ? "var(--ink-2)" : "var(--ink-4)" }}>{fa2.val > 0 ? fmt(fa2.val) : "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ⓪a″ ANO A ANO — os anos lado a lado (anteriores lidos sob demanda, só leitura) */}
+      <AnoAAnoPrumo yr={yr} yrD={yrD} yrNext={yrX && yrX.length >= 24 ? yrX.slice(12, 24) : null} cfg={cfg} cats={cats} />
+
       {/* ⓪ FLUXO DE CAIXA · EXTRATO POR MÊS (popup) + CENÁRIO REAL × MÉDIA 3M */}
       <div className="prumo-card l-brand full">
         <div className="prumo-card-hd">
@@ -3126,7 +3600,7 @@ function AnalisePrumo(props) {
           return (
             <div key={fx2.mo0} onClick={function() { sFluxoSel(fx2.mo0); sFluxoView("caixa"); }}
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 4px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}>
-              <span style={{ width: 38, flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: fx2.isCur ? 800 : 600, color: fx2.isCur ? "var(--ink)" : "var(--ink-3)", textTransform: "uppercase" }}>{fx2.label}</span>
+              <span style={{ width: fx2.label.length > 3 ? 50 : 38, flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: fx2.isCur ? 800 : 600, color: fx2.isCur ? "var(--ink)" : "var(--ink-3)", textTransform: "uppercase" }}>{fx2.label}</span>
               {fx2.isCur && <span className="prumo-chip brand" style={{ fontSize: 9, flexShrink: 0 }}>{"agora"}</span>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
@@ -3156,7 +3630,7 @@ function AnalisePrumo(props) {
             <div className="prumo-sheet-handle"></div>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
               <div>
-                <div className="prumo-sheet-h">{MS[fluxoSel] + " · regime caixa"}</div>
+                <div className="prumo-sheet-h">{mLbl(yr, fluxoSel) + " · regime caixa"}</div>
                 <div className="prumo-sheet-sub">{fluxoSelMes.isCur ? "Mês atual — o que já entrou e o que sai da conta" : "Projeção — fatura, fixas e parcelas já conhecidas"}</div>
               </div>
               <button className="prumo-btn ghost" onClick={function() { sFluxoSel(null); }} style={{ padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>{"Fechar"}</button>
@@ -3172,7 +3646,7 @@ function AnalisePrumo(props) {
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
                     <span>{"💼 Salário"}</span><span className="prumo-num">{fmt((cfg && cfg.salary) || 0)}</span>
                   </div>
-                  {(((yrD && yrD[fluxoSel]) || {}).cr || []).map(function(c3, ci3) {
+                  {((bkt(yrX, fluxoSel) || {}).cr || []).map(function(c3, ci3) {
                     return (
                       <div key={ci3} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-2)", padding: "2px 0" }}>
                         <span>{"➕ " + (c3.desc || c3.type || "Crédito")}</span><span className="prumo-num">{fmt(c3.amount || 0)}</span>
@@ -3291,7 +3765,7 @@ function AnalisePrumo(props) {
             ) : (
               <div style={{ marginTop: 4 }}>
                 <div className="prumo-cap" style={{ marginBottom: 8 }}>
-                  {"Seu gasto variável médio dos últimos 3 meses fechados" + (fluxoEstDet.meses.length ? " (" + fluxoEstDet.meses.map(function(m9) { return MA[m9]; }).join(", ") + ")" : "") + ", por categoria. Desmarque o que foi pontual."}
+                  {"Seu gasto variável médio dos últimos 3 meses fechados" + (fluxoEstDet.meses.length ? " (" + fluxoEstDet.meses.map(function(m9) { return MA[mIdx(m9)]; }).join(", ") + ")" : "") + ", por categoria. Desmarque o que foi pontual."}
                 </div>
                 <div style={{ marginBottom: 12 }}>
                   {fluxoEstDet.cats.length === 0 && <div className="prumo-cap" style={{ fontSize: 11 }}>{"Ainda não há meses fechados com lançamentos."}</div>}
@@ -3303,7 +3777,7 @@ function AnalisePrumo(props) {
                         <span style={{ fontSize: 14 }}>{c9.icon}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c9.name}</div>
-                          <div className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)" }}>{c9.vals.map(function(v9, i9) { return MA[fluxoEstDet.meses[i9]] + " " + fK(v9); }).join(" · ")}</div>
+                          <div className="prumo-cap" style={{ fontSize: 10, fontFamily: "var(--f-mono)" }}>{c9.vals.map(function(v9, i9) { return MA[mIdx(fluxoEstDet.meses[i9])] + " " + fK(v9); }).join(" · ")}</div>
                         </div>
                         <span className="prumo-num" style={{ fontSize: 13, textDecoration: dentro ? "none" : "line-through" }}>{fmt(c9.avg)}</span>
                       </label>
@@ -3335,7 +3809,7 @@ function AnalisePrumo(props) {
       )}
 
       {/* ⓪b INSIGHTS DO ANO — resumo executivo por regras locais */}
-      {insights.length > 0 && (
+      {insights.length > 0 && !anoFuturo && (
         <div className="prumo-card l-accent full">
           <div className="prumo-card-hd">
             <div>
@@ -3454,7 +3928,7 @@ function AnalisePrumo(props) {
               <div className="prumo-lbl">{"Recorrente vs variável"}</div>
               <h2 style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, margin: "4px 0 0", color: "var(--ink)" }}>{"Quanto do gasto já está comprometido"}</h2>
             </div>
-            <div className="prumo-chip">{"comprometido: " + String((rvCompPct * 100).toFixed(0)) + "% do ano"}</div>
+            {(rvTotComp + rvTotVar) > 0 && <div className="prumo-chip">{"comprometido: " + String((rvCompPct * 100).toFixed(0)) + "% do ano"}</div>}
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--ink-2)" }}><div style={{ width: 10, height: 10, borderRadius: 2, background: "var(--brand)" }} /><span>{"Comprometido (fixas + parcelas)"}</span></div>
@@ -3870,7 +4344,7 @@ function AnalisePrumo(props) {
       )}
 
       {/* Destaques por Categoria */}
-      {yrD && catStats.length > 0 && (
+      {yrD && catStats.length > 0 && !anoFuturo && (
         <div className="prumo-card l-pos">
           <div className="prumo-card-hd">
             <div>
@@ -6323,15 +6797,21 @@ function BackupsMes() {
 }
 
 /* ══ EXPORTAR TUDO ══ */
-// Baixa um .json com todos os documentos do usuário (cfg, mapas, rollover e os meses 2023–2027 que existem).
+// Baixa um .json com todos os documentos do usuário (cfg, mapas, rollover e os meses que existem, de 2023 até
+// 4 anos à frente — parcelas projetadas vão até 48×; a lista fixa "2023–2027" deixaria 2028 fora do backup).
 // Se qualquer leitura falhar, não baixa nada — um arquivo pela metade passaria a falsa ideia de backup completo.
 var EXPORT_KEYS_FIXAS = ["fc2-cfg", "fc2-rollover", "fc2-maps", "fc2-splitmaps"];
+function anosExportar() {
+  var anos = [];
+  for (var y = 2023; y <= new Date().getFullYear() + 4; y++) anos.push(y);
+  return anos;
+}
 function ExportarTudo() {
   var [busy, sBusy] = useState(false);
   var exportar = function() {
     sBusy(true);
     var keys = EXPORT_KEYS_FIXAS.slice();
-    [2023, 2024, 2025, 2026, 2027].forEach(function(y) { for (var m = 0; m < 12; m++) keys.push("fc2-m-" + tk(y, m)); });
+    anosExportar().forEach(function(y) { for (var m = 0; m < 12; m++) keys.push("fc2-m-" + tk(y, m)); });
     Promise.all(keys.map(function(k) { return ld(k, null); })).then(function(vals) {
       var data = {};
       var nMeses = 0; var nTx = 0;
@@ -6412,6 +6892,8 @@ export default function App() {
   var [maps, sMp] = useState({});
   var [splitMaps, sSpMp] = useState({});
   var [yrD, sYrD] = useState(null);
+  // Vizinhos do ano aberto, só leitura: { yr, prev: [dez, nov, out do ano anterior], next: [12 meses do ano seguinte] }
+  var [extD, sExtD] = useState(null);
   var [pvMd, sPv] = useState(null);
   var [loading, sLd] = useState(true);
   var [eSal, sES] = useState(false);
@@ -6647,6 +7129,55 @@ export default function App() {
     return function() { active = false; };
   }, [yr, mo, user && user.uid, cfgLoaded, loadTry]);
 
+  // Vizinhos do ano aberto: os 3 últimos meses do ano anterior + os 12 do seguinte. Junto com o yrD formam a
+  // "janela de meses" que deixa fatura, fluxo de caixa e assistente cruzarem a virada do ano.
+  // SÓ LEITURA — nada daqui é gravado de volta. Se a leitura falhar, o app segue só com o ano aberto (como antes).
+  useEffect(function() {
+    if (!user || !user.uid || !cfgLoaded) return;
+    var active = true;
+    (async function() {
+      var proms = [];
+      for (var pv = 1; pv <= 3; pv++) proms.push(ld("fc2-m-" + tk(yr, -pv), null));
+      for (var nx = 12; nx < 24; nx++) proms.push(ld("fc2-m-" + tk(yr, nx), null));
+      var r;
+      try { r = await Promise.all(proms); } catch (e) {
+        if (active) sExtD(null);
+        return;
+      }
+      if (!active) return;
+      var cheio = function(b) { return b || { tx: [], cr: [], fs: {} }; };
+      sExtD({ yr: yr, prev: r.slice(0, 3).map(cheio), next: r.slice(3).map(cheio) });
+    })();
+    return function() { active = false; };
+  }, [yr, mo, user && user.uid, cfgLoaded, loadTry]);
+
+  // Seletor de ano da Análise: o ano anterior só vira opção se tiver lançamento. Olha out–dez dele, que já vêm
+  // na janela quando o app abre no ano de hoje (heurística: quem começou a usar em jan–set do ano passado não aparece).
+  var [temAnoAnt, sTemAnoAnt] = useState(false);
+  useEffect(function() {
+    if (!extD || extD.yr !== new Date().getFullYear()) return;
+    sTemAnoAnt(extD.prev.some(function(b) { return ((b && b.tx) || []).length > 0; }));
+  }, [extD]);
+
+  // Reflete na janela uma gravação feita num mês vizinho do ano aberto (mesma ideia do sYrD dos meses do ano).
+  // Só mexe na memória; quem grava no banco é quem chamou.
+  var espelhaExt = function(key, fnTx) {
+    var kp = String(key).split("-");
+    var ki = (parseInt(kp[0], 10) - yr) * 12 + parseInt(kp[1], 10) - 1;
+    if (isNaN(ki) || (ki >= 0 && ki <= 11)) return;
+    sExtD(function(prev) {
+      if (!prev || prev.yr !== yr) return prev;
+      var lado = ki >= 12 ? "next" : "prev";
+      var pos = ki >= 12 ? ki - 12 : -ki - 1;
+      if (pos >= prev[lado].length) return prev;
+      var arr = prev[lado].slice();
+      arr[pos] = { ...arr[pos], tx: fnTx(arr[pos].tx || []) };
+      var nv = { ...prev };
+      nv[lado] = arr;
+      return nv;
+    });
+  };
+
   var saveMd = useCallback(function(d) {
     if (mdKeyRef.current !== mK) {
       console.warn("[saveMd bloqueado] mês " + mK + " não foi lido do servidor; ignorando para evitar perda de dados");
@@ -6683,6 +7214,7 @@ export default function App() {
       sMd(EMPTY_MONTH);
       sPv({ tx: [], cr: [], fs: {} });
       sYrD(null);
+      sExtD(null);
       setRollover({});
       alert("✅ Dados operacionais zerados. Configurações, categorias, fixas e patrimônio foram preservados.");
     }).catch(function(e) {
@@ -6805,6 +7337,13 @@ export default function App() {
   var prevSp = pvMd ? calcSpent(pvMd, cats, fxd).spent : null;
   // yrD vem do banco e não acompanha os lançamentos do mês aberto — o "pode gastar" e o fluxo precisam reagir na hora
   var yrDLive = (yrD && !loading) ? yrD.map(function(mDt, i) { return i === mo ? md : mDt; }) : yrD;
+  // Janela de meses: o ano aberto + o seguinte (índices 12..23) + fim do anterior (.prev). É o que fatura, fluxo de
+  // caixa e assistente usam pra cruzar a virada. As análises "do ano" continuam no yrD/yrDLive de 12 meses.
+  var yrX = yrDLive;
+  if (yrDLive && extD && extD.yr === yr) {
+    yrX = yrDLive.concat(extD.next);
+    yrX.prev = extD.prev;
+  }
 
   /* Active installments — projeções a partir do mês visualizado. "Restantes" vem da NUMERAÇÃO
      da parcela (total − menor nº visível + 1), não da contagem de meses no yrD — que só cobre
@@ -6865,75 +7404,11 @@ export default function App() {
   var patCV = (cfg && cfg.patrimonio) || {};
   var plFinanceiro = (patCV.reserva || 0) + (patCV.invFixed || 0) + (patCV.invVariable || 0) + (patCV.invOther || 0);
 
-  /* Annual chart */
-  var chD = [];
+  /* Annual chart — conta em calcAnoMeses (a mesma do "Ano a ano") */
+  var chD = (yrD && cfg) ? calcAnoMeses(yrDLive || yrD, cfg, yr, mo) : [];
   var chMx = 1;
   var chMs = 1;
-  if (yrD && cfg) {
-    var cR = cfg.categories || DC;
-    var fRRaw = cfg.fixed || [];
-    for (var ci = 0; ci < 12; ci++) {
-      // Mês aberto vem ao vivo (md) — yrD é o retrato do banco e não reflete o que acabou de ser pago/lançado
-      var mDt = ((yrDLive || yrD)[ci]) || { tx: [], cr: [], fs: {} };
-      var mTx = mDt.tx || [];
-      var mCr = mDt.cr || [];
-      var mFs = mDt.fs || {};
-      var fR = resolveFixedListForMonth(fRRaw, tk(yr, ci));
-      var es = 0; var iv = 0; var de = 0;
-      var mC = sal + mCr.reduce(function(a2, c2) { return a2 + c2.amount; }, 0);
-      var catBk = {};
-      function aCB(cid, val) { if (!catBk[cid]) catBk[cid] = 0; catBk[cid] += val; }
-      var hasRT = mTx.some(function(t2) { return t2.src !== "proj"; });
-      var hasRFs = Object.keys(mFs).filter(function(k) { return !k.endsWith("_p") && !k.endsWith("_r"); }).length > 0;
-      var hasR = hasRT || hasRFs;
-      var isPastNoData = ci < mo && !hasR;
-      mTx.forEach(function(t2) {
-        var ct = cR.find(function(c2) { return c2.id === t2.cat; });
-        if (ct && !t2.reimbursed) {
-          var v2 = myP(t2);
-          if (ct.group === "essenciais") es += v2;
-          else if (ct.group === "investimentos") iv += v2;
-          else de += v2;
-          aCB(ct.id, v2);
-        }
-      });
-      if (hasR && !isPastNoData) {
-        fR.forEach(function(f2) {
-          if ((f2.mode || "budget") !== "budget") return;
-          var ct = cR.find(function(c2) { return c2.id === f2.cat; });
-          if (!ct) return;
-          var parts = mFs[f2.id + "_p"] || [];
-          var pS = parts.reduce(function(a3, p3) { return a3 + p3.amount; }, 0);
-          var v2 = 0;
-          if (mFs[f2.id] === "paid" && !f2.teto) { // teto: o gasto real já veio dos lançamentos (mesma regra do calcSpent)
-            v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
-          } else if (pS > 0) {
-            // pagamento parcial: mesma regra do ranking (calcSpent), senão gráfico e ranking divergem
-            var myPc = f2.hasSplit ? (1 - gsp(f2).reduce(function(a4, s) { return a4 + s.pct / 100; }, 0)) : 1;
-            v2 = pS * myPc;
-          }
-          if (v2 > 0) {
-            if (ct.group === "essenciais") es += v2;
-            else if (ct.group === "investimentos") iv += v2;
-            else de += v2;
-            aCB(ct.id, v2);
-          }
-        });
-      } else if (!isPastNoData && ci >= mo) {
-        fR.forEach(function(f2) {
-          var ct = cR.find(function(c2) { return c2.id === f2.cat; });
-          if (ct) {
-            var v2 = f2.hasSplit ? f2.amount - spt(f2) : f2.amount;
-            if (ct.group === "essenciais") es += v2;
-            else if (ct.group === "investimentos") iv += v2;
-            else de += v2;
-            aCB(ct.id, v2);
-          }
-        });
-      }
-      var tD = Math.round(es + iv + de);
-      chD.push({ mes: MA[ci], e: Math.round(es), i: Math.round(iv), d: Math.round(de), td: tD, cr: Math.round(mC), s: Math.round(mC - tD), real: hasR, cats: catBk });
-    }
+  if (chD.length) {
     chMx = Math.max.apply(null, chD.map(function(d) { return Math.max(d.td, d.cr); }).concat([1]));
     chMs = Math.max.apply(null, chD.map(function(d) { return Math.abs(d.s); }).concat([1]));
   }
@@ -6949,6 +7424,11 @@ export default function App() {
   var goNext = function() {
     if (mo === 11) { sMo(0); sYr(function(y) { return y + 1; }); }
     else { sMo(function(m) { return m + 1; }); }
+  };
+  // Seletor de ano da Análise — muda o mês aberto no app: ano de hoje → mês de hoje; futuro → janeiro; passado → dezembro
+  var irParaAno = function(y) {
+    var h = new Date(); var ah = h.getFullYear();
+    sYr(y); sMo(y === ah ? h.getMonth() : (y > ah ? 0 : 11));
   };
 
   /* ── Actions ── */
@@ -6982,6 +7462,8 @@ export default function App() {
               ny[bIdx] = { ...mPrev, tx: (mPrev.tx || []).concat([projTx]) };
               return ny;
             });
+          } else {
+            espelhaExt(fKey, function(tx) { return tx.concat([projTx]); }); // parcela que cai no ano seguinte
           }
         }).catch(avisaFalhaLeitura);
       };
@@ -7135,7 +7617,7 @@ export default function App() {
   // Retrato dos dados que vai na 1ª pergunta — o resto o modelo busca com as ferramentas
   var buildAssistSnapshot = function() {
     var hojeD = new Date();
-    var recvMap = calcRecvByMonth(yrDLive, cfg, yr);
+    var recvMap = calcRecvByMonth(yrX, cfg, yr);
     var pat = (cfg && cfg.patrimonio) || {};
     var nwH = ((cfg && cfg.netWorth && cfg.netWorth.history) || []).slice(-12);
     var historico = [];
@@ -7146,13 +7628,15 @@ export default function App() {
       historico.push({ mes: tk(yr, hi), renda: r2(hc.renda), fixas: r2(hc.fixasTot), parcelas: r2(hc.parcelas), variavel: r2(hc.variavel), sobrou: r2(hc.podeGastar) });
     }
     var proximos = [];
-    for (var pi2 = mo + 1; pi2 <= Math.min(11, mo + 3); pi2++) {
-      var pc = calcMes(yrDLive, cfg, yr, pi2); var px = calcCaixaMes(yrDLive, cfg, yr, pi2, recvMap);
+    // pi2 é índice da janela de meses: passa de 11 quando os próximos meses caem no ano seguinte
+    for (var pi2 = mo + 1; pi2 <= Math.min(yrX.length - 1, mo + 3); pi2++) {
+      var pc = calcMes(yrX, cfg, yr, pi2); var px = calcCaixaMes(yrX, cfg, yr, pi2, recvMap);
       proximos.push({ mes: tk(yr, pi2), pode_gastar_antes_do_variavel: r2(pc.podeGastar), saldo_na_conta: r2(px.saldo) });
     }
     return {
       hoje: ymdLocal(hojeD), mes_aberto_no_app: tk(yr, mo), salario_mensal: r2((cfg && cfg.salary) || 0),
-      mes_aberto: assistContaMes(yrDLive, cfg, yr, mo, recvMap),
+      meses_com_dados: { de: tk(yr, -((yrX.prev || []).length)), ate: tk(yr, yrX.length - 1) },
+      mes_aberto: assistContaMes(yrX, cfg, yr, mo, recvMap),
       proximos_meses: proximos,
       meses_anteriores_do_ano: historico,
       fixas_cadastradas: resolveFixedListForMonth((cfg && cfg.fixed) || [], tk(yr, mo)).map(function(f) {
@@ -7177,12 +7661,15 @@ export default function App() {
       var mm = /^(\d{4})-(\d{2})$/.exec(String(s || ""));
       if (!mm) throw new Error("ano_mes precisa estar no formato AAAA-MM");
       var y = parseInt(mm[1], 10); var mi = parseInt(mm[2], 10) - 1;
-      if (y !== yr || mi < 0 || mi > 11) throw new Error("Sem dados de " + s + ": o app só carrega o ano de " + String(yr) + ".");
-      return mi;
+      // Devolve o índice na janela de meses: 0..11 = ano aberto, 12+ = ano seguinte, negativo = fim do ano anterior
+      var wi = (y - yr) * 12 + mi;
+      var wMin = -((yrX.prev || []).length); var wMax = yrX.length - 1;
+      if (mi < 0 || mi > 11 || wi < wMin || wi > wMax) throw new Error("Sem dados de " + s + ": o app carrega de " + tk(yr, wMin) + " a " + tk(yr, wMax) + ".");
+      return wi;
     };
     var hojeD = new Date();
-    if (name === "consultar_mes") return assistContaMes(yrDLive, cfg, yr, mesDe(inp.ano_mes), calcRecvByMonth(yrDLive, cfg, yr));
-    if (name === "listar_lancamentos") return assistLancamentos(yrDLive[mesDe(inp.ano_mes)], cfg, inp.categoria, inp.busca);
+    if (name === "consultar_mes") return assistContaMes(yrX, cfg, yr, mesDe(inp.ano_mes), calcRecvByMonth(yrX, cfg, yr));
+    if (name === "listar_lancamentos") return assistLancamentos(bkt(yrX, mesDe(inp.ano_mes)), cfg, inp.categoria, inp.busca);
     if (name === "simular_ciclo_vida") {
       var ov = {};
       ["idade_aposentadoria", "renda_desejada", "aporte_mensal", "retorno_real", "yield", "patrimonio_inicial"].forEach(function(k) {
@@ -7194,7 +7681,7 @@ export default function App() {
       if (inp.estrategia && ["preservacao", "consumir", "legado"].indexOf(inp.estrategia) >= 0) ov.estrategia = inp.estrategia;
       return assistCicloVida(assistCvBase(), ov, hojeD.getFullYear(), hojeD.getMonth());
     }
-    if (name === "simular_compra") return assistSimularCompra(yrDLive, cfg, yr, mo, inp);
+    if (name === "simular_compra") return assistSimularCompra(yrX, cfg, yr, mo, inp);
     throw new Error("Ferramenta desconhecida: " + name);
   };
   var callAssist = async function(messages) {
@@ -7312,6 +7799,7 @@ export default function App() {
     ld("fc2-m-" + bk, { tx: [], cr: [], fs: {} }).then(function(fd) {
       var upd = (fd.tx || []).map(function(t) { return t.id === id ? { ...t, received: !t.received } : t; });
       sv("fc2-m-" + bk, { ...fd, tx: upd });
+      espelhaExt(bk, function() { return upd; });
       var bParts = String(bk).split("-");
       var bY = parseInt(bParts[0], 10);
       var bIdx = parseInt(bParts[1], 10) - 1;
@@ -7330,6 +7818,7 @@ export default function App() {
     ld("fc2-m-" + bk, { tx: [], cr: [], fs: {} }).then(function(fd) {
       var upd = apply(fd.tx || []);
       sv("fc2-m-" + bk, { ...fd, tx: upd });
+      espelhaExt(bk, function() { return upd; });
       var bParts = String(bk).split("-");
       var bY = parseInt(bParts[0], 10);
       var bIdx = parseInt(bParts[1], 10) - 1;
@@ -7545,6 +8034,7 @@ export default function App() {
           ex.push(ntx);
         });
         sv("fc2-m-" + fKey3, { ...fd, tx: ex });
+        espelhaExt(fKey3, function() { return ex; });
       }).catch(avisaFalhaLeitura);
     });
     sCR(null);
@@ -7594,6 +8084,7 @@ export default function App() {
           return !marks.some(function(mk2) { return mk2.nrm === n3 && mk2.pc === ei.c; });
         });
         sv("fc2-m-" + fKey, { ...fd, tx: kept });
+        espelhaExt(fKey, function() { return kept; });
         var bParts = String(fKey).split("-");
         var bY = parseInt(bParts[0], 10);
         var bIdx = parseInt(bParts[1], 10) - 1;
@@ -7756,7 +8247,7 @@ export default function App() {
             savR={savR} dRcv={dRcv} debtors={debtors} txs={txs} crs={crs} fxd={fxd}
             catLimits={catLimits} goals={goals} chD={chD} chMx={chMx} hovM={hovM} sHM={sHM} mo={mo} yr={yr}
             sTab={goTab} eSal={eSal} sES={sES} salI={salI} sSI={sSI} saveCfg={saveCfg}
-            yrD={yrDLive} myP={myP} pvMd={pvMd}
+            yrD={yrDLive} yrX={yrX} myP={myP} pvMd={pvMd}
           />
         )}
 
@@ -7786,7 +8277,8 @@ export default function App() {
 
         {/* ═══ ANÁLISE ═══ */}
         {tab === "analise" && (
-          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrDLive} cats={cats} myP={myP} cfg={cfg} activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst} />
+          <AnalisePrumo chD={chD} mo={mo} yr={yr} yrD={yrDLive} yrX={yrX} cats={cats} myP={myP} cfg={cfg} activeInst={activeInst} totalInstMonthly={totalInstMonthly} rmInst={rmInst}
+            anoHoje={now.getFullYear()} temAnoAnt={temAnoAnt} irAno={irParaAno} />
         )}
 
         {/* ═══ LANÇAMENTOS (INPUT) ═══ */}
