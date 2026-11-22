@@ -152,7 +152,7 @@ export default async function handler(req, res) {
 
   try {
     const response = await client.beta.messages.create({
-      model: "claude-opus-5-5",
+      model: "claude-sonnet-5-5", // Sonnet: metade do preço do Opus, suficiente pra perguntas sobre os dados do app
       max_tokens: 16000,
       // Recusa por classificador de segurança: refaz no modelo recomendado em vez de devolver a recusa
       betas: ["server-side-fallback-2026-07-01"],
