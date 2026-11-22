@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/assistente.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/__/auth/:path*",
