@@ -865,6 +865,23 @@ function assistCatInfo(cats, id) {
   var p = c && c.parent ? (cats || []).find(function(x) { return x.id === c.parent; }) : null;
   return { nome: c ? (p ? p.name + " › " : "") + c.name : "Sem categoria", grupo: c ? c.group : "", pai: p ? p.id : (c ? c.id : "") };
 }
+// Fatura do cartão que VENCE no mês — mesmos números do Dashboard (calcInvoices) e do extrato caixa (calcCashDetailMonth).
+// null quando não há cartão de crédito cadastrado. (2026-11-21: antes o assistente estimava a fatura por subtração.)
+function assistFaturaMes(yrD, cfg, yr, mi) {
+  var pays = (cfg && cfg.payments) ? cfg.payments : DEFAULT_PAYMENTS;
+  if (!pays.some(function(p) { return p && p.type === "credito"; })) return null;
+  var inv = calcInvoices(yrD, yr, pays)[tk(yr, mi)] || { gross: 0, net: 0, parc: 0 };
+  var det = calcCashDetailMonth(yrD, cfg, yr, mi);
+  var fxCartao = (det.fxCartao || []).reduce(function(a, f) { return a + fxMine(f); }, 0);
+  return {
+    vence_em: tk(yr, mi),
+    valor_cheio: r2(inv.gross), // o que o banco cobra
+    sua_parte: r2(inv.net), // sem as partes divididas e os reembolsos
+    parcelado: r2(inv.parc || 0),
+    fixas_no_cartao_previstas: fxCartao > 0 ? r2(fxCartao) : null, // fatura ainda sem compra real: o caixa soma as fixas de cartão
+    sua_parte_no_caixa: r2(det.cartaoTot), // o que o "sai" do caixa conta para o cartão neste mês
+  };
+}
 function assistContaMes(yrD, cfg, yr, mi, recvMap) {
   var cats = (cfg && cfg.categories) ? cfg.categories : DC;
   var cm = calcMes(yrD, cfg, yr, mi);
@@ -882,6 +899,7 @@ function assistContaMes(yrD, cfg, yr, mi, recvMap) {
     por_dia: cm.diasRest > 0 ? r2(cm.porDia) : null, dias_restantes: cm.diasRest,
     ritmo: cm.estado === "atual" ? (cm.ritmo > 1 ? "acima do ritmo em " + fmt(cm.ritmo) : "no ritmo, folga de " + fmt(-cm.ritmo)) : null,
     caixa: { entra: r2(cx.rec), a_receber: r2(cx.recv), sai: r2(cx.out), saldo_na_conta: r2(cx.saldo) },
+    fatura_cartao: assistFaturaMes(yrD, cfg, yr, mi),
     gasto_por_categoria: Object.keys(porCat).map(function(k) { return { categoria: k, valor: r2(porCat[k]) }; })
       .filter(function(x) { return x.valor > 0; }).sort(function(a, b) { return b.valor - a.valor; }).slice(0, 15),
     fixas_detalhe: cm.fixas.map(function(x) {
@@ -7631,7 +7649,8 @@ export default function App() {
     // pi2 é índice da janela de meses: passa de 11 quando os próximos meses caem no ano seguinte
     for (var pi2 = mo + 1; pi2 <= Math.min(yrX.length - 1, mo + 3); pi2++) {
       var pc = calcMes(yrX, cfg, yr, pi2); var px = calcCaixaMes(yrX, cfg, yr, pi2, recvMap);
-      proximos.push({ mes: tk(yr, pi2), pode_gastar_antes_do_variavel: r2(pc.podeGastar), saldo_na_conta: r2(px.saldo) });
+      var pf = assistFaturaMes(yrX, cfg, yr, pi2);
+      proximos.push({ mes: tk(yr, pi2), pode_gastar_antes_do_variavel: r2(pc.podeGastar), saldo_na_conta: r2(px.saldo), fatura_cartao_valor_cheio: pf ? pf.valor_cheio : null });
     }
     return {
       hoje: ymdLocal(hojeD), mes_aberto_no_app: tk(yr, mo), salario_mensal: r2((cfg && cfg.salary) || 0),
