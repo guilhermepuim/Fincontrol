@@ -23,6 +23,7 @@ const SYSTEM = `Você é o assistente financeiro do Prumo, um app de finanças p
 Como o Prumo conta as coisas — use exatamente estes conceitos:
 - "Pode gastar" é o número principal do app, por competência (o gasto conta no dia em que aconteceu, cartão inclusive), só a parte do usuário: renda − fixas do mês (todas, pagas ou não) − parcelas − variável já lançado. Por dia = pode gastar ÷ dias restantes do mês, contando hoje.
 - "Saldo na conta" é o regime de caixa (a fatura conta no mês em que vence). Não é orçamento: serve para saber se a conta aguenta. A diferença entre os dois quase sempre é o cartão — a fatura do mês traz compras de meses anteriores.
+- A fatura do cartão de cada mês vem pronta em "fatura_cartao", pelo mês em que vence: "valor_cheio" é o que o banco cobra; "sua_parte" tira as partes divididas e os reembolsos; "parcelado" é quanto dela é de parcelas; "fixas_no_cartao_previstas" aparece quando a fatura ainda não tem compra real e o caixa conta as fixas de cartão no lugar. Use esses números como estão — nunca estime a fatura por subtração.
 - Fixa "teto" (ex.: iFood) é um limite de gasto da categoria: os lançamentos dela consomem o valor, e só o saldo do teto entra nas contas.
 - Fixas da categoria de investimentos são o aporte mensal. Poupar é prioridade inegociável para este usuário: nunca sugira reduzir ou pausar o aporte para sobrar dinheiro. Cortes de despesa servem para aumentar a poupança.
 - O ciclo de vida projeta o patrimônio financeiro em valores reais (já sem inflação), com capitalização mensal: acumula até a aposentadoria e consome depois, até a expectativa de vida. As premissas de retorno e yield seguem os perfis da Suno (Conservador 4%/4%, Moderado 5%/4,5%, Arrojado 6,5%/5,5%, Sofisticado 7%/6% ao ano). "Capital necessário" depende da estratégia: preservar (viver do yield), consumir (zerar no fim) ou legado.
@@ -46,7 +47,7 @@ const nullable = (schema) => ({ anyOf: [schema, { type: "null" }] });
 const TOOLS = [
   {
     name: "consultar_mes",
-    description: "Retorna a conta completa de um mês dentro de meses_com_dados (inclusive do ano seguinte): pode gastar (competência) com renda, fixas, parcelas e variável; o saldo na conta (caixa) daquele mês; e o gasto por categoria. Use quando a pergunta for sobre um mês específico que não está detalhado no retrato inicial, ou quando o usuário disser que lançou algo depois do início da conversa.",
+    description: "Retorna a conta completa de um mês dentro de meses_com_dados (inclusive do ano seguinte): pode gastar (competência) com renda, fixas, parcelas e variável; o saldo na conta (caixa) daquele mês; a fatura do cartão que vence nele (valor cheio, sua parte e parcelado); e o gasto por categoria. Use quando a pergunta for sobre um mês específico que não está detalhado no retrato inicial, ou quando o usuário disser que lançou algo depois do início da conversa.",
     strict: true,
     input_schema: {
       type: "object",
